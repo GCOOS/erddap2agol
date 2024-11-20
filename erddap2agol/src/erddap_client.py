@@ -21,9 +21,12 @@ def getTempDir():
 
 def cleanTemp() -> None:
     filepath = os.path.join('/arcgis/home', 'e2a_temp')
-    for file in os.listdir(filepath):
-        if file.endswith(".csv"):
-            os.remove(os.path.join(filepath, file))
+    if os.path.exists(filepath):
+        for file in os.listdir(filepath):
+            if file.endswith(".csv"):
+                os.remove(os.path.join(filepath, file))
+    else:
+        pass
 
 #Sometimes the directory or file isnt created 
 def getErddapConfDir() -> str:
