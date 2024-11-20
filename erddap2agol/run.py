@@ -20,7 +20,7 @@ def cui():
         elif user_choice == "2":
             nrt_creation()
         else:
-            print("Invalid input. Please try again.")
+            print("\nInvalid input. Please try again.")
 
 def create_erddap_item_menu():
     print("\nCreate ERDDAP Item")
@@ -31,10 +31,16 @@ def create_erddap_item_menu():
         cui()
         return
 
-    print("Enter the datasetid(s) for the dataset you want to create an AGOL item for.")
+    print("\nEnter the datasetid(s) for the dataset you want to create an AGOL item for.")
     print("Separate multiple dataset IDs with commas (e.g., dataset1, dataset2).")
+    print("Type show to show all available datasets on the server.")
     print("2. back")
     datasetid = input(": ")
+
+    if datasetid == "show":
+        dataset_list = core.selectDatasetFromList(gcload)
+        core.processListInput(dataset_list, gcload, 0)
+
 
     if datasetid == "2":
         cui()

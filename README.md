@@ -1,20 +1,20 @@
-# ERDDAP2AGOL v.0.4.2 
+# ERDDAP2AGOL v.0.4.7 
 
-## Alert: I am aware of the disruptions caused by the new AGOL update and will be working to ensure compatibility with the new Python 11.0 Runtime in addition to 10.0 & 9.0 Runtime compatibility.   
+### Alert: I am aware of the disruptions caused by the new AGOL update and will be working to ensure compatibility with the new Python 11.0 Runtime in addition to 10.0 & 9.0 Runtime compatibility. It works    
 
 The goal of this project is to establish a connection between ERDDAP services and ArcGIS Online (AGOL). Erddap2agol will be a "hands-off" ETL program to automatically update and manage ERDDAP data hosted on ArcGIS Online. 
-Erddap2agol is a service provided by the Gulf of Mexico Ocean Observing System (GCOOS) and is intended for use by other IOOS regional associations or data providers using ERDDAP. As this project is in active development, please
+Erddap2agol is a service provided by the Gulf of Mexico Ocean Observing System (GCOOS) and is intended for use by other data providers using ERDDAP, or individuals who wish to study ERDDAP data on a GIS platform. As this project is in active development, please
 see the "roadmap" section.
 
 ## Roadmap
-The ERDDAP2AGOL tool is under active development, and is not ready to be deployed. To be notified when the tool is ready for use. <br />
+The ERDDAP2AGOL tool is under active development. Stable features are indicated by the readme and version number. Currently, at version 0.4, NRT add is considered stable. To be notified when the tool is ready for use. <br />
 
-**please monitor the GCOOS newsletter for an announcment of the product release.** <br />
+**Please monitor the GCOOS newsletter for an announcment of the product release.** <br />
 
 
 ## What to expect
 * Your ERDDAP data will be available in three product levels.         
-- NRT: 7 day moving window, Level 1. (Version 0.4)
+- NRT: 7 day moving window, Level 1. (Available now!)
 - Historical: Updated weekly, contains all data, Level 2. (Version 0.5) 
 - QC Historical: QC Flags, low quality records removed, Level 3. (Version 0.6) <br />
 
@@ -44,9 +44,9 @@ A feature service is created and populated with the dataset returned by the ERDD
 ## Additional Functionality
 
 -Add ERDDAP data to ArcGIS Online with just an ERDDAP DatasetID  <br />
--ERDDAP2AGOL uses information contained within the metadata of the DAS (Data Attribute Structure) to fully populate AGOL item fields. <br />
+-ERDDAP2AGOL uses information contained within the metadata of the DAS (Data Attribute Structure) to fully populate AGOL item fields (Coming soon). <br />
 -Ensure visibility of updates with update logs <br />
--Read configuration file and/or database to identify items for update <br />  
+-Use state change or database log query to identify items for update<br />  
 
 ### Attributions
 Update / Overwrite Feature Service v2.1.4 <br />

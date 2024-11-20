@@ -1,3 +1,6 @@
+#This doesnt do anything and probably should be deleted.
+
+
 validFileTypes = [
     "asc", "csv", "csvp", "csv0", "dataTable", "das",
     "dds", "dods", "esriCsv", "fgdc", "geoJson", "graph",

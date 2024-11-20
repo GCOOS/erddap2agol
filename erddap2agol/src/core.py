@@ -1,5 +1,5 @@
 #Runtime logic consolidated here
-
+import sys, os
 from . import erddap_client as ec
 from . import das_client as dc
 from . import ago_wrapper as aw
@@ -13,7 +13,15 @@ from arcgis.gis import GIS
 ###### CUI Wrapper Functions ######
 ###################################
 
-# check for mult input and convert to list functions
+# Disable print
+def blockPrint():
+    sys.stdout = open(os.devnull, 'w')
+
+# Restore print
+def enablePrint():
+    sys.stdout = sys.__stdout__
+
+
 def checkInputForList(user_input):
     return ',' in user_input
 
@@ -26,18 +34,89 @@ def erddapSelection():
     ec.getErddapList()
     ec.showErddapList()
     uc = input("\nSelect an ERDDAP server to use: ")
-    gcload = ec.ERDDAPHandler.setErddap(ec.custom_server, int(uc))
-    print(f"\nSelected server: {gcload.server}")
-    uc = input("Proceed with server selection? (y/n): ")
+    if uc:
+        gcload = ec.ERDDAPHandler.setErddap(ec.custom_server, int(uc))
+        print(f"\nSelected server: {gcload.server}")
+        uc = input("Proceed with server selection? (y/n): ")
 
-    if uc.lower() == "y":
-        print("\nContinuing with selected server...")
-        return gcload
+        if uc.lower() == "y":
+            print("\nContinuing with selected server...")
+            return gcload
+        else:
+            print("\nReturning to main menu...")
+            return None
     else:
-        print("\nReturning to main menu...")
+        print("\nInput cannot be none")
         return None
 
+# Select dataset from list and return list of datasets
+# This includes logic not found elsewhere, not a wrapper like other core funcs.
+# need to handle misinputs
+def selectDatasetFromList(gcload) -> list:
+    dataset_id_list = ec.ERDDAPHandler.getDatasetIDList(gcload)
+    print(f"{dataset_id_list}")
+    
+    if len(dataset_id_list) >= 100:
+        print(f"\n There are greater than 100 datasets available on this server.")
+        print(f"Datasets are shown 100 datasets at a time.")
+        print(f"Enter the number(s) of the datasets you want.")
+        print(f"To move forward one page type next, to move backwards type back.")
+        
+        import math
+        num_pages = math.ceil(len(dataset_id_list) / 100)
+        current_page = 1
+        input_list = []
+        
+        while True:
+            start_index = (current_page - 1) * 100
+            end_index = start_index + 100
+            current_page_datasets = dataset_id_list[start_index:end_index]
+            
+            print(f"\nPage {current_page} of {num_pages}")
+            for index, dataset in enumerate(current_page_datasets):
+                print(f"{start_index + index + 1}. {dataset}")
+
+            print("\nEnter the number of the dataset(s) you want to select...")
+            idx_select = input(": ")
+            
+            if idx_select == "next":
+                if current_page < num_pages:
+                    current_page += 1
+                else:
+                    print("No more pages.")
+            
+            elif idx_select == "back":
+                if current_page > 1:
+                    current_page -= 1
+                else:
+                    print("Already at the first page.")
+            
+            elif idx_select == "exit":
+                break
+            
+            elif idx_select == "done":
+                print("\nPassing the following datasets to the next step...")
+                print(f"{input_list}")
+                return input_list
+            
+            else:
+                try:
+                    idx_select = int(idx_select)
+                    if 1 <= idx_select <= len(dataset_id_list):
+                        selected_dataset = dataset_id_list[idx_select - 1]
+                        input_list.append(selected_dataset)
+                        print(f"Added {selected_dataset} to the list.")
+                    else:
+                        print("Invalid input")
+                except ValueError:
+                    print("You need to type a valid number or input.")
+    
+            
+            
+
+
 # DAS parsing and attribute definitions for non-NRT datasets
+# Wraps getDas, parseDasResponse, convertToDict, saveToJson, openDasJson, getActualAttributes, convertFromUnix, displayAttributes
 def parseDas(gcload, dataset):
     das_resp = ec.ERDDAPHandler.getDas(gcload, dataset)
     if das_resp is None:

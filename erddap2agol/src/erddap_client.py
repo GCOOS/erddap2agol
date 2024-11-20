@@ -66,6 +66,7 @@ def showErddapList() -> None:
         print(f"{index}. ERDDAP Server: {erddap['name']}")
 
 
+
 #--------------------------------------------------------------------------------
 class ERDDAPHandler:
     def __init__(self, server, serverInfo, datasetid, attributes, fileType, longitude, latitude, time, start_time, end_time, geoParams):
@@ -94,7 +95,7 @@ class ERDDAPHandler:
         dataset_id_list = [row[dataset_id_index] for row in rows if row[dataset_id_index] != "allDatasets"]
         
         return dataset_id_list
-    
+
     def getDas(self, datasetid: str) -> str:
         dataset_id_list = self.getDatasetIDList()
         if datasetid not in dataset_id_list:
@@ -156,8 +157,8 @@ class ERDDAPHandler:
                 except requests.exceptions.HTTPError as http_err:
                     print(f"HTTP error {http_err} occurred when connecting to {baseurl}")
                     return None
-
-            
+                
+                
     # Generates URL for ERDDAP request based on class object attributes
     def generate_url(self, isSeed: bool, additionalAttr: list = None) -> str:
         # Initialize the attribute list
@@ -250,7 +251,7 @@ class ERDDAPHandler:
 
 
 
-    #Works and important
+    #Works and important. Breaks when no lat or lon lol. 
     def responseToCsv(self, response: any) -> str:
         csvResponse = response
         csvData = StringIO(csvResponse)
