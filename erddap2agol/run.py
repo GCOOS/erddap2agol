@@ -39,8 +39,12 @@ def create_erddap_item_menu():
 
     if datasetid == "show":
         dataset_list = core.selectDatasetFromList(gcload)
-        core.processListInput(dataset_list, gcload, 0)
-
+        if dataset_list:
+            core.processListInput(dataset_list, gcload, 0)
+        else:
+            print("\nERROR: No Dataset List. Returning to main menu...")
+            cui()
+            return
 
     if datasetid == "2":
         cui()
@@ -48,7 +52,12 @@ def create_erddap_item_menu():
 
     if core.checkInputForList(datasetid):
         dataset_list = core.inputToList(datasetid)
-        core.processListInput(dataset_list, gcload, 0)
+        if dataset_list:
+            core.processListInput(dataset_list, gcload, 0)
+        else:
+            print("\nERROR: No Dataset List. Returning to main menu...")
+            cui()
+            return
     else:
         attribute_list = core.parseDas(gcload, datasetid)
         if attribute_list:

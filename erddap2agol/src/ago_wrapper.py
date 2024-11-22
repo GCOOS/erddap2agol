@@ -20,7 +20,7 @@ def makeItemProperties(erddapObj: "ec.ERDDAPHandler", accessLevel = None) -> dic
     dataid = erddapObj.datasetid
     attribute_tags = erddapObj.attributes
 
-    tags = ["erddap2agol", f"{dataid}"]
+    tags = ["erddap2agol", f"{dataid}", f"{erddapObj.server}"]
 
     if attribute_tags is not None:
         tags.extend(attribute_tags)
@@ -48,26 +48,34 @@ def defineGeoParams(erddapObj: ec.ERDDAPHandler) -> dict:
 
     attribute_list = erddapObj.attributes
     #This doesnt work, we might have to publish first, then update the properties
-    for attribute in attribute_list:
-        if "depth" in attribute or "z" in attribute:
-            geom_params["hasZ"] = True
+    # for attribute in attribute_list:
+    #     if "depth" in attribute or "z" in attribute:
+    #         geom_params["hasZ"] = True
         
 
     return geom_params
         
 
 #Also important and should be improved 
-def publishTable(item_prop: dict, geom_params: dict, path):
-    publish_params = geom_params
-    
+def publishTable(item_prop: dict, geom_params: dict, path, erddapObj: ec.ERDDAPHandler):
     try:
+        # Remove 'hasStaticData' from geom_params if present
+        geom_params.pop('hasStaticData', None)
+        
         item = gis.content.add(item_prop, path, HasGeometry=True)
-        published_item = item.publish(publish_parameters=publish_params)
+        published_item = item.publish(publish_parameters=erddapObj.geoParams)
+
+        # Disable editing by updating layer capabilities
+        fl = published_item.layers[0]
+        fl.manager.update_definition({"capabilities": "Query"})
+
         print(f"\nSuccessfully uploaded {item_prop['title']} to ArcGIS Online")
         print(f"Item ID: {published_item.id}")
         return published_item.id
     except Exception as e:
         print(f"An error occurred adding the item: {e}")
+
+
 
 def searchContentByTag(tag: str) -> list:
     try:
@@ -90,6 +98,19 @@ def searchContentByTag(tag: str) -> list:
     
     except Exception as e:
         print(f"An error occurred while searching for items: {e}")
+
+def disable_editing(item_id):
+    item = gis.content.get(item_id)
+    if item is None:
+        print(f"Item {item_id} not found")
+        return
+
+    # Get the FeatureLayerCollection from the item
+    flc = FeatureLayerCollection.fromitem(item)
+
+    # Update the capabilities to disable editing
+    flc.manager.update_definition({"capabilities": "Query"})
+    print(f"Editing successfully disabled for item {item_id}")
 
 
 

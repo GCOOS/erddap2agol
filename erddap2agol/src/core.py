@@ -1,9 +1,10 @@
 #Runtime logic consolidated here
-import sys, os
+import sys, os, requests
 from . import erddap_client as ec
 from . import das_client as dc
 from . import ago_wrapper as aw
 from . import level_manager as lm
+from erddap2agol import run
 from logs import updatelog as ul
 from src.utils import OverwriteFS
 
@@ -20,6 +21,7 @@ def blockPrint():
 # Restore print
 def enablePrint():
     sys.stdout = sys.__stdout__
+
 
 
 def checkInputForList(user_input):
@@ -48,7 +50,7 @@ def erddapSelection():
     else:
         print("\nInput cannot be none")
         return None
-
+    
 # Select dataset from list and return list of datasets
 # This includes logic not found elsewhere, not a wrapper like other core funcs.
 # need to handle misinputs
@@ -93,7 +95,7 @@ def selectDatasetFromList(gcload) -> list:
                     print("Already at the first page.")
             
             elif idx_select == "exit":
-                break
+                run.cui()
             
             elif idx_select == "done":
                 print("\nPassing the following datasets to the next step...")
@@ -118,8 +120,7 @@ def selectDatasetFromList(gcload) -> list:
                 except ValueError:
                     print("You need to type a valid number or input.")
     
-            
-            
+        
 
 
 # DAS parsing and attribute definitions for non-NRT datasets
@@ -196,11 +197,11 @@ def agolPublish(gcload, attribute_list, isNRT: int) -> None:
     response = ec.ERDDAPHandler.return_response(full_url)
     filepath = ec.ERDDAPHandler.responseToCsv(gcload, response)
 
-    gis = aw.agoConnect()
+   
     propertyDict = aw.makeItemProperties(gcload)
-    geom_params = aw.defineGeoParams(gcload)
+    
 
-    table_id = aw.publishTable(propertyDict, geom_params, filepath)
+    table_id = aw.publishTable(propertyDict, gcload.geoParams, filepath, gcload)
     ul.updateLog(gcload.datasetid, table_id, "None", full_url, gcload.end_time, ul.get_current_time(), isNRT)
     ec.cleanTemp()
 

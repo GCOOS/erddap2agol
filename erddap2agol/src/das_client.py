@@ -42,9 +42,7 @@ def parseDasResponse(response_text):
 def getConfDir():
 
     agol_home = os.getenv('AGOL_HOME', '/arcgis/home')
-
     base_dir = agol_home
-
     das_conf_dir = os.path.join(base_dir, 'e2a_das_conf')
 
     os.makedirs(das_conf_dir, exist_ok=True)
@@ -114,9 +112,13 @@ def checkDataValidity(dasJson) -> bool:
                 return True
     
 def convertFromUnix(time):
-    start = datetime.datetime.utcfromtimestamp(time[0]).strftime('%Y-%m-%dT%H:%M:%S') 
-    end = datetime.datetime.utcfromtimestamp(time[1]).strftime('%Y-%m-%dT%H:%M:%S')
-    return start, end
+    try:
+        start = datetime.datetime.utcfromtimestamp(time[0]).strftime('%Y-%m-%dT%H:%M:%S') 
+        end = datetime.datetime.utcfromtimestamp(time[1]).strftime('%Y-%m-%dT%H:%M:%S')
+        return start, end
+    except Exception as e:
+        print(f"Error converting from Unix, probably a bad server response: {e}")
+        return None
 
 def convertFromUnixDT(time_tuple):
     start_unix, end_unix = time_tuple

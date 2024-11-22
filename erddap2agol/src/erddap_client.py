@@ -22,11 +22,15 @@ def getTempDir():
 def cleanTemp() -> None:
     filepath = os.path.join('/arcgis/home', 'e2a_temp')
     if os.path.exists(filepath):
-        for file in os.listdir(filepath):
-            if file.endswith(".csv"):
-                os.remove(os.path.join(filepath, file))
+        for filename in os.listdir(filepath):
+            if filename.endswith(".csv"):
+                full_path = os.path.join(filepath, filename)
+                try:
+                    os.remove(full_path)
+                except Exception as e:
+                    print(f"An unexpected error occurred while deleting {full_path}: {e}")
     else:
-        pass
+        print(f"The directory {filepath} does not exist.")
 
 #Sometimes the directory or file isnt created 
 def getErddapConfDir() -> str:
@@ -87,6 +91,24 @@ class ERDDAPHandler:
 
     
     def getDatasetIDList(self) -> list:
+        url = f"{self.serverInfo}"
+        try:
+            response = requests.get(url)
+            data = response.json()
+
+        
+            column_names = data['table']['columnNames']
+            dataset_id_index = column_names.index("Dataset ID")
+            
+            rows = data['table']['rows']
+            dataset_id_list = [row[dataset_id_index] for row in rows if row[dataset_id_index] != "allDatasets"]
+            
+            return dataset_id_list
+        except Exception as e:
+            print(f"Error fetching dataset ID list: {e}")
+            return None
+    
+    def spatialFilter(self) -> list:
         url = f"{self.serverInfo}"
         response = requests.get(url)
         data = response.json()
@@ -257,16 +279,20 @@ class ERDDAPHandler:
     #Works and important. Breaks when no lat or lon lol. 
     def responseToCsv(self, response: any) -> str:
         csvResponse = response
-        csvData = StringIO(csvResponse)
+        try:
+            csvData = StringIO(csvResponse)
 
-        df = pd.read_csv(csvData, header=None, low_memory=False)
+            df = pd.read_csv(csvData, header=None, low_memory=False)
 
-        temp_dir = getTempDir()
-        file_path = os.path.join(temp_dir, f"{self.datasetid}.csv")
+            temp_dir = getTempDir()
+            file_path = os.path.join(temp_dir, f"{self.datasetid}.csv")
 
-        df.to_csv(file_path, index=False, header=False)
+            df.to_csv(file_path, index=False, header=False)
 
-        return file_path
+            return file_path
+        except Exception as e:
+            print(f"Error converting response to CSV: {e}")
+            return None
 
     #Works and important
     def responseToJson(self, response: any) -> str:
@@ -401,7 +427,6 @@ class ERDDAPHandler:
 # Below we can specify different configurations for the ERDDAP object.
 
 # Since lat/lon and time are essentially default parameters, we can set them here.
-# No. change that.
 
 erddapGcoos = ERDDAPHandler(
     server='https://erddap.gcoos.org/erddap/tabledap/',
@@ -435,8 +460,6 @@ coastwatch = ERDDAPHandler(
         "longitudeFieldName": "longitude (degrees_east)"}
     )
 
-#https://erddap.secoora.org/erddap/info/index.json?itemsPerPage=10000
-
 custom_server = ERDDAPHandler(
     server= None,
     serverInfo = None,
@@ -448,7 +471,12 @@ custom_server = ERDDAPHandler(
     time = 'time',
     start_time = None,
     end_time= None,
-    geoParams = {"locationType": "coordinates",
-        "latitudeFieldName": "latitude (degrees_north)",
-        "longitudeFieldName": "longitude (degrees_east)"}
-    )
+    geoParams = {
+    "locationType": "coordinates",
+    "latitudeFieldName": "latitude__degrees_north_",
+    "longitudeFieldName": "longitude__degrees_east_",
+    "timeFieldName": "time__UTC_",
+    }
+)
+
+    
