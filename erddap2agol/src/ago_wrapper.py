@@ -37,7 +37,7 @@ def makeItemProperties(erddapObj: "ec.ERDDAPHandler", accessLevel = None) -> dic
     if "license" in metadata and metadata["license"] is not None:
         ItemProperties["licenseInfo"] = metadata["license"].get("value", "")
 
-    print(ItemProperties)
+    #print(ItemProperties)
     return ItemProperties
 
 def defineGeoParams(erddapObj: ec.ERDDAPHandler) -> dict:
@@ -63,9 +63,8 @@ def publishTable(item_prop: dict, geom_params: dict, path):
     try:
         item = gis.content.add(item_prop, path, HasGeometry=True)
         published_item = item.publish(publish_parameters=publish_params)
-        print(f"Successfully uploaded {item_prop['title']} to ArcGIS Online")
-        print(f"Item Details -> \n"
-              f"Item ID: {published_item.id}")
+        print(f"\nSuccessfully uploaded {item_prop['title']} to ArcGIS Online")
+        print(f"Item ID: {published_item.id}")
         return published_item.id
     except Exception as e:
         print(f"An error occurred adding the item: {e}")

@@ -73,6 +73,7 @@ def selectDatasetFromList(gcload) -> list:
             current_page_datasets = dataset_id_list[start_index:end_index]
             
             print(f"\nPage {current_page} of {num_pages}")
+            print(f"Cart: {len(input_list)} datasets")
             for index, dataset in enumerate(current_page_datasets):
                 print(f"{start_index + index + 1}. {dataset}")
 
@@ -99,6 +100,12 @@ def selectDatasetFromList(gcload) -> list:
                 print(f"{input_list}")
                 return input_list
             
+            elif idx_select == "all":
+                for dataset in current_page_datasets:
+                    input_list.append(dataset)
+                
+                print(f"Added all datasets on page {current_page} to the list.")
+                            
             else:
                 try:
                     idx_select = int(idx_select)
