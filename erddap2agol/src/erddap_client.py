@@ -186,18 +186,16 @@ class ERDDAPHandler:
                 
     # Generates URL for ERDDAP request based on class object attributes
     def generate_url(self, isSeed: bool, additionalAttr: list = None) -> str:
-        # Initialize the attribute list
+        # the attribute list
         attrs = []
 
-        # If 'depth' is in additionalAttr, remove it and place it first
         if additionalAttr and 'depth' in additionalAttr:
             additionalAttr.remove('depth')
-            attrs.append('depth')
+            #--- Hotfix 1 for depth attribute ---
+            #attrs.append('depth')
 
-        # Then add 'longitude' and 'latitude'
         attrs.extend([self.longitude, self.latitude])
 
-        # Then add the rest of additionalAttr
         if additionalAttr:
             attrs.extend(additionalAttr)
 

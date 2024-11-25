@@ -1,6 +1,7 @@
 # ERDDAP2AGOL v.0.4.8 
 
 ### Pending functionality for the latest ERDDAP Update (2.25_1)
+### Hotfix 1 11/25/2024: Issue is caused by depth and (probably) max time constraints. Depth has been temporarily removed from valid attributes list to maintain basic functionality. Please standby for full fix. 
 
 The goal of this project is to establish a connection between ERDDAP services and ArcGIS Online (AGOL). Erddap2agol will be a "hands-off" ETL program to automatically update and manage ERDDAP data hosted on ArcGIS Online. 
 Erddap2agol is a service provided by the Gulf of Mexico Ocean Observing System (GCOOS) and is intended for use by other data providers using ERDDAP, or individuals who wish to study ERDDAP data on a GIS platform. As this project is in active development, please
