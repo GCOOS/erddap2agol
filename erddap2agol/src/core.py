@@ -237,27 +237,30 @@ def NRTUpdateAGOL() -> None:
     gcload = ec.erddapGcoos    
 
     nrt_dict  = lm.NRTFindAGOL()
-
     for datasetid, itemid in nrt_dict.items():
-        # try: 
-        startWindow, endWindow = lm.movingWindow(isStr=True)
-        das_resp = ec.ERDDAPHandler.getDas(gcload, datasetid)
-        parsed_response = dc.convertToDict(dc.parseDasResponse(das_resp))
-        fp = dc.saveToJson(parsed_response, datasetid)
-        das_data = dc.openDasJson(datasetid)
-        attribute_list = dc.getActualAttributes(das_data, gcload)
+        if datasetid and itemid:
+            try: 
+                startWindow, endWindow = lm.movingWindow(isStr=True)
+                das_resp = ec.ERDDAPHandler.getDas(gcload, datasetid)
+                parsed_response = dc.convertToDict(dc.parseDasResponse(das_resp))
+                fp = dc.saveToJson(parsed_response, datasetid)
+                das_data = dc.openDasJson(datasetid)
+                attribute_list = dc.getActualAttributes(das_data, gcload)
 
-        setattr(gcload, "start_time", startWindow)
-        setattr(gcload, "end_time", endWindow)
-        setattr(gcload, "datasetid", datasetid)
-        setattr(gcload, "attributes", attribute_list)
+                setattr(gcload, "start_time", startWindow)
+                setattr(gcload, "end_time", endWindow)
+                setattr(gcload, "datasetid", datasetid)
+                setattr(gcload, "attributes", attribute_list)
 
-        url = gcload.generate_url(False, attribute_list)
+                url = gcload.generate_url(False, attribute_list)
 
-        gis = aw.agoConnect()
-        
-        content = gis.content.get(itemid)
+                gis = aw.agoConnect()
+                
+                content = gis.content.get(itemid)
 
-        OverwriteFS.overwriteFeatureService(content, url, noProps=True, verbose=True, ignoreAge = True)
-        # except Exception as e:
+                OverwriteFS.overwriteFeatureService(content, url, verbose=True, noProps=True, ignoreAge = True)
+            
+            except Exception as e:
+                    print(f"Error: {e}")
+                    pass
     
