@@ -73,6 +73,7 @@ def nrt_creation():
     print("Select which option you would like")
     print("1. Create NRT item with dataset ID(s)")
     print("2. Find ALL valid NRT datasets in a server and add to AGOL")
+    print("3. Glider DAC *Special* Menu")
     print("3. Back")
 
     user_choice = input(": ")

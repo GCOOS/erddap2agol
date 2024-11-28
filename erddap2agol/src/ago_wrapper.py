@@ -55,6 +55,39 @@ def defineGeoParams(erddapObj: ec.ERDDAPHandler) -> dict:
 
     return geom_params
         
+def pointTableToGeojsonLine(df, X="longitude (degrees_east)", Y="latitude (degrees_north)"):
+    features = []
+    data_columns = [col for col in df.columns if col not in [X, Y]]
+    num_points = len(df)
+
+    for i in range(num_points - 1):
+        # Coordinates for the line segment
+        point_start = [df.loc[i, X], df.loc[i, Y]]
+        point_end = [df.loc[i + 1, X], df.loc[i + 1, Y]]
+        coordinates = [point_start, point_end]
+
+        # Properties from the last point of the segment
+        properties = df.loc[i + 1, data_columns].to_dict()
+
+        # Create the GeoJSON feature for the line segment
+        feature = {
+            "type": "Feature",
+            "geometry": {
+                "type": "LineString",
+                "coordinates": coordinates
+            },
+            "properties": properties
+        }
+
+        features.append(feature)
+
+    # Assemble the FeatureCollection
+    geojson = {
+        "type": "FeatureCollection",
+        "features": features
+    }
+
+    return geojson
 
 #Also important and should be improved 
 def publishTable(item_prop: dict, geom_params: dict, path, erddapObj: ec.ERDDAPHandler):
