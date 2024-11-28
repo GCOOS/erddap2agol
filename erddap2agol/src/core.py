@@ -258,6 +258,6 @@ def NRTUpdateAGOL() -> None:
         
         content = gis.content.get(itemid)
 
-        OverwriteFS.overwriteFeatureService(content, url, preserveProps=False, verbose=True, ignoreAge = True)
+        OverwriteFS.overwriteFeatureService(content, url, noProps=True, verbose=True, ignoreAge = True)
         # except Exception as e:
     
