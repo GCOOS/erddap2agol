@@ -20,7 +20,7 @@ def makeItemProperties(erddapObj: "ec.ERDDAPHandler", accessLevel = None) -> dic
     dataid = erddapObj.datasetid
     attribute_tags = erddapObj.attributes
 
-    tags = ["erddap2agol", f"{dataid}", f"{erddapObj.server}"]
+    tags = ["erddap2agol", f"{dataid}"]
 
     if attribute_tags is not None:
         tags.extend(attribute_tags)

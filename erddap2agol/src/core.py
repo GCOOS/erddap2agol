@@ -258,7 +258,7 @@ def NRTUpdateAGOL() -> None:
                 
                 content = gis.content.get(itemid)
 
-                OverwriteFS.overwriteFeatureService(content, url, verbose=True, noProps=True, ignoreAge = True)
+                OverwriteFS.overwriteFeatureService(content, url, verbose=True, preserveProps=False, ignoreAge = True)
             
             except Exception as e:
                     print(f"Error: {e}")
