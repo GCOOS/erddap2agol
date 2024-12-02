@@ -185,7 +185,7 @@ class ERDDAPHandler:
                 
                 
     # Generates URL for ERDDAP request based on class object attributes
-    def generate_url(self, isSeed: bool, additionalAttr: list = None) -> str:
+    def generate_url(self, isSeed: bool, additionalAttr: list = None, dataformat="csvp") -> str:
         # the attribute list
         attrs = []
 
@@ -225,7 +225,7 @@ class ERDDAPHandler:
 
         # Construct the full URL
         url = (
-            f"{self.server}{self.datasetid}.csvp?"
+            f"{self.server}{self.datasetid}.{dataformat}?"
             f"{attrs_str}"
             f"{time_constraints}&orderBy(%22{self.time}%22)"
         )

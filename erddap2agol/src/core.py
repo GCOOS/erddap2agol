@@ -1,5 +1,5 @@
 #Runtime logic consolidated here
-import sys, os, requests
+import sys, os, requests, json
 from . import erddap_client as ec
 from . import das_client as dc
 from . import ago_wrapper as aw
@@ -56,7 +56,6 @@ def erddapSelection():
 # need to handle misinputs
 def selectDatasetFromList(gcload) -> list:
     dataset_id_list = ec.ERDDAPHandler.getDatasetIDList(gcload)
-    print(f"{dataset_id_list}")
     
     if len(dataset_id_list) >= 100:
         print(f"\n There are greater than 100 datasets available on this server.")
@@ -183,10 +182,11 @@ def parseDasNRT(gcload, dataset) -> list:
         dc.displayAttributes(timeintv, attribute_list)
         
         return attribute_list
+    
 
 # AGOL publishing and log updating
 # Terminal
-def agolPublish(gcload, attribute_list, isNRT: int) -> None:
+def agolPublish(gcload, attribute_list:list, isNRT: int, dataformat="csvp") -> None:
     if isNRT == 0:
         seed_choice = input("Would you like to create a seed file? (y/n): ").lower()
         seedbool = seed_choice
@@ -207,7 +207,7 @@ def agolPublish(gcload, attribute_list, isNRT: int) -> None:
 
 # When users provide multiple datasets for manual upload 
 # Terminal
-def processListInput(dataset_list, gcload, isNRT: int):
+def agolPublishList(dataset_list, gcload, isNRT: int):
     if isNRT == 0:
         for dataset in dataset_list:
             attribute_list = parseDas(gcload, dataset)
@@ -226,6 +226,22 @@ def processListInput(dataset_list, gcload, isNRT: int):
             agolPublish(gcload, attribute_list, isNRT)           
         ec.cleanTemp()
 
+def agolPublishGlider(gcload, attribute_list:list, isNRT: int, dataformat="csvp") -> None:
+
+    full_url = gcload.generate_url(0, attribute_list)
+    response = ec.ERDDAPHandler.return_response(full_url)
+    filepath = ec.ERDDAPHandler.responseToCsv(gcload, response)
+
+    geojson = aw.pointTableToGeojsonLine(filepath)
+
+    geojson = json.dumps(geojson, os.getcwd())
+
+    propertyDict = aw.makeItemProperties(gcload)
+    
+
+    table_id = aw.publishTable(propertyDict, gcload.geoParams, geojson, gcload)
+    ul.updateLog(gcload.datasetid, table_id, "None", full_url, gcload.end_time, ul.get_current_time(), isNRT)
+    ec.cleanTemp()
 
 
 

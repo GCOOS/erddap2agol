@@ -55,7 +55,7 @@ def defineGeoParams(erddapObj: ec.ERDDAPHandler) -> dict:
 
     return geom_params
         
-def pointTableToGeojsonLine(df, X="longitude (degrees_east)", Y="latitude (degrees_north)"):
+def pointTableToGeojsonLine(df, X="longitude (degrees_east)", Y="latitude (degrees_north)") -> json:
     features = []
     data_columns = [col for col in df.columns if col not in [X, Y]]
     num_points = len(df)

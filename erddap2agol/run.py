@@ -12,6 +12,7 @@ def cui():
         print("GCOOS GIS, 2024.")
         print("\n1. Create ERDDAP Items Individually.")
         print("2. Create ERDDAP NRT Items")
+        print("3. Glider DAC *Special* Menu")
 
         user_choice = input(": ")  
 
@@ -19,6 +20,8 @@ def cui():
             create_erddap_item_menu()
         elif user_choice == "2":
             nrt_creation()
+        elif user_choice == "3":
+            glider_menu()
         else:
             print("\nInvalid input. Please try again.")
 
@@ -53,7 +56,7 @@ def create_erddap_item_menu():
     if core.checkInputForList(datasetid):
         dataset_list = core.inputToList(datasetid)
         if dataset_list:
-            core.processListInput(dataset_list, gcload, 0)
+            core.DIDListToPublish(dataset_list, gcload, 0)
         else:
             print("\nERROR: No Dataset List. Returning to main menu...")
             cui()
@@ -73,7 +76,6 @@ def nrt_creation():
     print("Select which option you would like")
     print("1. Create NRT item with dataset ID(s)")
     print("2. Find ALL valid NRT datasets in a server and add to AGOL")
-    print("3. Glider DAC *Special* Menu")
     print("3. Back")
 
     user_choice = input(": ")
@@ -132,6 +134,52 @@ def nrt_creation():
                 core.processListInput(NRT_IDs, gcload, 1)
         else:
             core.processListInput(NRT_IDs, gcload, 1)
+
+def glider_menu():
+    print("\nWelcome to the *Special* Glider DAC Menu.")
+    print("Select the server of the dataset you want to create an AGOL item for.")
+
+    gcload = core.erddapSelection()
+    if not gcload:
+        cui()
+        return
+
+    print("\nEnter the datasetid(s) for the dataset you want to create an AGOL item for.")
+    print("Separate multiple dataset IDs with commas (e.g., dataset1, dataset2).")
+    print("Type show to show all available datasets on the server.")
+    print("2. back")
+    datasetid = input(": ")
+
+    if datasetid == "show":
+        dataset_list = core.selectDatasetFromList(gcload)
+        if dataset_list:
+            core.agolPublishList(dataset_list, gcload, 0)
+        else:
+            print("\nERROR: No Dataset List. Returning to main menu...")
+            cui()
+            return
+
+    if datasetid == "2":
+        cui()
+        return
+
+    if core.checkInputForList(datasetid):
+        dataset_list = core.inputToList(datasetid)
+        if dataset_list:
+            core.agolPublishList(dataset_list, gcload, 0)
+        else:
+            print("\nERROR: No Dataset List. Returning to main menu...")
+            cui()
+            return
+    else:
+        attribute_list = core.parseDas(gcload, datasetid)
+        if attribute_list:
+            core.agolPublishGlider(gcload, attribute_list, 0)
+
+    print("\nReturning to main menu...")
+    cui()
+    
+    
         
 
 def exit_program():
