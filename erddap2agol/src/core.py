@@ -54,23 +54,23 @@ def erddapSelection():
 # Select dataset from list and return list of datasets
 # This includes logic not found elsewhere, not a wrapper like other core funcs.
 # need to handle misinputs
-def selectDatasetFromList(gcload) -> list:
+def selectDatasetFromList(gcload, dispLength= 50) -> list:
     dataset_id_list = ec.ERDDAPHandler.getDatasetIDList(gcload)
     
-    if len(dataset_id_list) >= 100:
-        print(f"\n There are greater than 100 datasets available on this server.")
-        print(f"Datasets are shown 100 datasets at a time.")
+    if len(dataset_id_list) >= dispLength:
+        print(f"\n There are greater than {dispLength} datasets available on this server.")
+        print(f"Datasets are shown {dispLength} datasets at a time.")
         print(f"Enter the number(s) of the datasets you want.")
         print(f"To move forward one page type next, to move backwards type back.")
         
         import math
-        num_pages = math.ceil(len(dataset_id_list) / 100)
+        num_pages = math.ceil(len(dataset_id_list) / dispLength)
         current_page = 1
         input_list = []
         
         while True:
-            start_index = (current_page - 1) * 100
-            end_index = start_index + 100
+            start_index = (current_page - 1) * dispLength
+            end_index = start_index + dispLength
             current_page_datasets = dataset_id_list[start_index:end_index]
             
             print(f"\nPage {current_page} of {num_pages}")
@@ -186,7 +186,7 @@ def parseDasNRT(gcload, dataset) -> list:
 
 # AGOL publishing and log updating
 # Terminal
-def agolPublish(gcload, attribute_list:list, isNRT: int, dataformat="csvp") -> None:
+def agolPublish(gcload, attribute_list:list, isNRT: int) -> None:
     if isNRT == 0:
         seed_choice = input("Would you like to create a seed file? (y/n): ").lower()
         seedbool = seed_choice
@@ -226,7 +226,7 @@ def agolPublishList(dataset_list, gcload, isNRT: int):
             agolPublish(gcload, attribute_list, isNRT)           
         ec.cleanTemp()
 
-def agolPublishGlider(gcload, attribute_list:list, isNRT: int, dataformat="csvp") -> None:
+def agolPublish_glider(gcload, attribute_list:list, isNRT: int, dataformat="geojson") -> None:
 
     full_url = gcload.generate_url(0, attribute_list)
     response = ec.ERDDAPHandler.return_response(full_url)
@@ -234,14 +234,33 @@ def agolPublishGlider(gcload, attribute_list:list, isNRT: int, dataformat="csvp"
 
     geojson = aw.pointTableToGeojsonLine(filepath)
 
-    geojson = json.dumps(geojson, os.getcwd())
+    geojson = json.dumps(geojson)
 
     propertyDict = aw.makeItemProperties(gcload)
     
 
-    table_id = aw.publishTable(propertyDict, gcload.geoParams, geojson, gcload)
+    table_id = aw.publishTable(propertyDict, gcload.geoParams, geojson, gcload, inputDataType= dataformat)
     ul.updateLog(gcload.datasetid, table_id, "None", full_url, gcload.end_time, ul.get_current_time(), isNRT)
     ec.cleanTemp()
+
+def agolPublishList_glider(dataset_list, gcload, isNRT: int):
+    if isNRT == 0:
+        for dataset in dataset_list:
+            attribute_list = parseDas(gcload, dataset)
+            if attribute_list is None:
+                print(f"\nNo data found for dataset {dataset}, trying next.")
+                continue
+            else:
+                agolPublish_glider(gcload, attribute_list, isNRT)           
+        ec.cleanTemp()
+    else:
+        for dataset in dataset_list:
+            attribute_list = parseDasNRT(gcload, dataset)
+            if attribute_list is None:
+                continue
+            
+            agolPublish_glider(gcload, attribute_list, isNRT)           
+        ec.cleanTemp()
 
 
 
@@ -279,4 +298,3 @@ def NRTUpdateAGOL() -> None:
             except Exception as e:
                     print(f"Error: {e}")
                     pass
-    

@@ -2,7 +2,7 @@ from arcgis.gis import GIS
 from arcgis.features import FeatureLayer, FeatureLayerCollection
 from . import erddap_client as ec
 from . import das_client as dc
-import copy, json
+import copy, json, pandas as pd
 
 gis = GIS("home")
 
@@ -55,7 +55,8 @@ def defineGeoParams(erddapObj: ec.ERDDAPHandler) -> dict:
 
     return geom_params
         
-def pointTableToGeojsonLine(df, X="longitude (degrees_east)", Y="latitude (degrees_north)") -> json:
+def pointTableToGeojsonLine(filepath, X="longitude (degrees_east)", Y="latitude (degrees_north)") -> json:
+    df = pd.read_csv(filepath)
     features = []
     data_columns = [col for col in df.columns if col not in [X, Y]]
     num_points = len(df)
@@ -90,13 +91,13 @@ def pointTableToGeojsonLine(df, X="longitude (degrees_east)", Y="latitude (degre
     return geojson
 
 #Also important and should be improved 
-def publishTable(item_prop: dict, geom_params: dict, path, erddapObj: ec.ERDDAPHandler):
+def publishTable(item_prop: dict, geom_params: dict, path, erddapObj: ec.ERDDAPHandler, inputDataType = "csv") -> str:
     try:
         # Remove 'hasStaticData' from geom_params if present
         geom_params.pop('hasStaticData', None)
         
         item = gis.content.add(item_prop, path, HasGeometry=True)
-        published_item = item.publish(publish_parameters=erddapObj.geoParams)
+        published_item = item.publish(publish_parameters=erddapObj.geoParams, file_type=inputDataType)
 
         # Disable editing by updating layer capabilities
         fl = published_item.layers[0]

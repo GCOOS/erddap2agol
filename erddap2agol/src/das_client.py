@@ -153,8 +153,8 @@ def getActualAttributes(dasJson, erddapObject: ec.ERDDAPHandler) -> list:
     for var_name, var_attrs in dasJson.items():
         if not isinstance(var_attrs, dict):
             continue
-
-        if "_qc_" in var_name or var_name in {"latitude", "longitude", "time"}:
+            # Added qartod to ignore (12/2) 
+        if "_qc_" in var_name or "qartod_" in var_name or var_name in {"latitude", "longitude", "time"}:
             continue
 
         coverage_content_type_entry = var_attrs.get('coverage_content_type', {})

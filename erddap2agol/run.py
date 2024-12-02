@@ -153,7 +153,7 @@ def glider_menu():
     if datasetid == "show":
         dataset_list = core.selectDatasetFromList(gcload)
         if dataset_list:
-            core.agolPublishList(dataset_list, gcload, 0)
+            core.agolPublishList_glider(dataset_list, gcload, 0)
         else:
             print("\nERROR: No Dataset List. Returning to main menu...")
             cui()
@@ -166,7 +166,7 @@ def glider_menu():
     if core.checkInputForList(datasetid):
         dataset_list = core.inputToList(datasetid)
         if dataset_list:
-            core.agolPublishList(dataset_list, gcload, 0)
+            core.agolPublishList_glider(dataset_list, gcload, 0)
         else:
             print("\nERROR: No Dataset List. Returning to main menu...")
             cui()
@@ -174,7 +174,7 @@ def glider_menu():
     else:
         attribute_list = core.parseDas(gcload, datasetid)
         if attribute_list:
-            core.agolPublishGlider(gcload, attribute_list, 0)
+            core.agolPublish_glider(gcload, attribute_list, 0)
 
     print("\nReturning to main menu...")
     cui()
