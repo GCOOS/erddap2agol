@@ -2,7 +2,7 @@ from arcgis.gis import GIS
 from arcgis.features import FeatureLayer, FeatureLayerCollection
 from . import erddap_client as ec
 from . import das_client as dc
-import copy, json, pandas as pd
+import copy, json, sys, pandas as pd
 
 gis = GIS("home")
 
@@ -56,48 +56,51 @@ def defineGeoParams(erddapObj: ec.ERDDAPHandler) -> dict:
     return geom_params
         
 def pointTableToGeojsonLine(filepath, X="longitude (degrees_east)", Y="latitude (degrees_north)") -> json:
-    df = pd.read_csv(filepath)
-    features = []
-    data_columns = [col for col in df.columns if col not in [X, Y]]
-    num_points = len(df)
+    if filepath:
+        df = pd.read_csv(filepath)
+        features = []
+        data_columns = [col for col in df.columns if col not in [X, Y]]
+        num_points = len(df)
 
-    for i in range(num_points - 1):
-        # Coordinates for the line segment
-        point_start = [df.loc[i, X], df.loc[i, Y]]
-        point_end = [df.loc[i + 1, X], df.loc[i + 1, Y]]
-        coordinates = [point_start, point_end]
+        for i in range(num_points - 1):
+            # Coordinates for the line segment
+            point_start = [df.loc[i, X], df.loc[i, Y]]
+            point_end = [df.loc[i + 1, X], df.loc[i + 1, Y]]
+            coordinates = [point_start, point_end]
 
-        # Properties from the last point of the segment
-        properties = df.loc[i + 1, data_columns].to_dict()
+            # Properties from the last point of the segment
+            properties = df.loc[i + 1, data_columns].to_dict()
 
-        # Create the GeoJSON feature for the line segment
-        feature = {
-            "type": "Feature",
-            "geometry": {
-                "type": "LineString",
-                "coordinates": coordinates
-            },
-            "properties": properties
+            # Create the GeoJSON feature for the line segment
+            feature = {
+                "type": "Feature",
+                "geometry": {
+                    "type": "LineString",
+                    "coordinates": coordinates
+                },
+                "properties": properties
+            }
+
+            features.append(feature)
+
+        # Assemble the FeatureCollection
+        geojson = {
+            "type": "FeatureCollection",
+            "features": features
         }
 
-        features.append(feature)
-
-    # Assemble the FeatureCollection
-    geojson = {
-        "type": "FeatureCollection",
-        "features": features
-    }
-
-    return geojson
+        return geojson
+    else:
+        sys.exit
 
 #Also important and should be improved 
-def publishTable(item_prop: dict, geom_params: dict, path, erddapObj: ec.ERDDAPHandler, inputDataType = "csv") -> str:
+def publishTable(item_prop: dict, geom_params: dict, path, erddapObj: ec.ERDDAPHandler, inputDataType= "csv") -> str:
     try:
         # Remove 'hasStaticData' from geom_params if present
         geom_params.pop('hasStaticData', None)
         
         item = gis.content.add(item_prop, path, HasGeometry=True)
-        published_item = item.publish(publish_parameters=erddapObj.geoParams, file_type=inputDataType)
+        published_item = item.publish(publish_parameters=erddapObj.geoParams, file_type= inputDataType)
 
         # Disable editing by updating layer capabilities
         fl = published_item.layers[0]

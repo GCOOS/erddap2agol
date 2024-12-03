@@ -1,4 +1,4 @@
-# ERDDAP2AGOL v.0.4.8 
+# ERDDAP2AGOL v.0.4.9 
 
 ### Pending functionality for the latest ERDDAP Update (2.25_1)
 ### Hotfix 1 11/25/2024: Issue is caused by depth and (probably) max time constraints. Depth has been temporarily removed from valid attributes list to maintain basic functionality. Please standby for full fix. 

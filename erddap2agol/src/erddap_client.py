@@ -238,9 +238,10 @@ class ERDDAPHandler:
         return url
         
     def fetchData(self, url):
-        response = self.return_response(url)
-        if isinstance(response, dict) and "status_code" in response:
-            return pd.DataFrame()  
+        response, responseCode = self.return_response(url)
+        if responseCode != 200:
+            print(f"Error fetching data: {responseCode}")
+            return None  
         return pd.read_csv(StringIO(response))
 
     def filterAttributesWithData(self, data, attributes):
@@ -265,6 +266,9 @@ class ERDDAPHandler:
 
         data = self.fetchData(generated_url)
 
+        if data is None:
+            return None
+
         valid_attributes = self.filterAttributesWithData(data, attributes)
 
         self.start_time = oldStart
@@ -276,7 +280,10 @@ class ERDDAPHandler:
 
     #Works and important. Breaks when no lat or lon lol. 
     def responseToCsv(self, response: any) -> str:
-        csvResponse = response
+        csvResponse = response[0]
+        responseCode = response[1]
+        if responseCode != 200:
+            return None
         try:
             csvData = StringIO(csvResponse)
 
@@ -394,26 +401,17 @@ class ERDDAPHandler:
         for key, value in params.items():
             setattr(erddapObject, key, value)
 
-    # This is not very readable.
+
     @staticmethod
     def return_response(generatedUrl: str):
         try:
             response = requests.get(generatedUrl)
             response.raise_for_status()
-            return response.text
-        except requests.exceptions.HTTPError as http_err:
-            error_message = response.text if response is not None else str(http_err)
-            print(f"HTTP error occurred: {http_err}")
-            return {
-                "status_code": response.status_code,
-                "message": error_message
-            }
+            return response.text, response.status_code
         except Exception as err:
-            print(f"Other error occurred: {err}")
-            return {
-                "status_code": None,
-                "message": f"Other error occurred: {err}"
-            }
+            print(f"Unexpected error occurred: {err}")
+            return None, None
+
 
     @staticmethod
     def get_current_time() -> str:

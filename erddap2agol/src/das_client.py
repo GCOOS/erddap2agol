@@ -106,7 +106,7 @@ def getTimeFromJson(datasetid):
 def checkDataValidity(dasJson) -> bool:
     for key, value in dasJson.items():
         if isinstance(value, dict):
-            if {"latitude", "longitude", "time"} not in key:
+            if {"latitude", "longitude"} not in key:
                 return False
             else:
                 return True
@@ -159,7 +159,7 @@ def getActualAttributes(dasJson, erddapObject: ec.ERDDAPHandler) -> list:
 
         coverage_content_type_entry = var_attrs.get('coverage_content_type', {})
         coverage_content_type = coverage_content_type_entry.get('value', '')
-        if coverage_content_type == 'qualityInformation':
+        if coverage_content_type == 'qualityInformation' or coverage_content_type == 'other':
             continue
 
         # Include if 'actual_range' exists

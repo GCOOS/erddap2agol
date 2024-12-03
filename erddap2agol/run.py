@@ -43,7 +43,7 @@ def create_erddap_item_menu():
     if datasetid == "show":
         dataset_list = core.selectDatasetFromList(gcload)
         if dataset_list:
-            core.processListInput(dataset_list, gcload, 0)
+            core.agolPublishList(dataset_list, gcload, 0)
         else:
             print("\nERROR: No Dataset List. Returning to main menu...")
             cui()
@@ -56,7 +56,7 @@ def create_erddap_item_menu():
     if core.checkInputForList(datasetid):
         dataset_list = core.inputToList(datasetid)
         if dataset_list:
-            core.DIDListToPublish(dataset_list, gcload, 0)
+            core.agolPublishList(dataset_list, gcload, 0)
         else:
             print("\nERROR: No Dataset List. Returning to main menu...")
             cui()
@@ -139,11 +139,8 @@ def glider_menu():
     print("\nWelcome to the *Special* Glider DAC Menu.")
     print("Select the server of the dataset you want to create an AGOL item for.")
 
-    gcload = core.erddapSelection()
-    if not gcload:
-        cui()
-        return
-
+    gcload = core.erddapSelection(GliderServ= True)
+    
     print("\nEnter the datasetid(s) for the dataset you want to create an AGOL item for.")
     print("Separate multiple dataset IDs with commas (e.g., dataset1, dataset2).")
     print("Type show to show all available datasets on the server.")

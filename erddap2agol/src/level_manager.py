@@ -10,7 +10,9 @@ from arcgis.gis import GIS
 import sys, os, datetime
 from datetime import timedelta, datetime
 
-#This module will handle the logic for determining the level of detail in the data that is being processed
+
+
+################## NRT Functions ##################
 
 #This function returns the start and end time of the moving window
 def movingWindow(isStr: bool):
@@ -58,6 +60,6 @@ def NRTFindAGOL() -> list:
     nrt_dict  = ul.updateCallFromNRT(1)
     return nrt_dict
 
-        
+################## Historical Functions ##################
 
     

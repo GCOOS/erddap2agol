@@ -27,30 +27,33 @@ def enablePrint():
 def checkInputForList(user_input):
     return ',' in user_input
 
-def inputToList(user_input):
+def inputToList(user_input) -> list:
     dataset_list = [dataset.strip() for dataset in user_input.split(',')]
     return dataset_list
 
  # Show erddap menu and define gcload with selection
-def erddapSelection():
-    ec.getErddapList()
-    ec.showErddapList()
-    uc = input("\nSelect an ERDDAP server to use: ")
-    if uc:
-        gcload = ec.ERDDAPHandler.setErddap(ec.custom_server, int(uc))
-        print(f"\nSelected server: {gcload.server}")
-        uc = input("Proceed with server selection? (y/n): ")
-
-        if uc.lower() == "y":
-            print("\nContinuing with selected server...")
-            return gcload
-        else:
-            print("\nReturning to main menu...")
-            return None
+def erddapSelection(GliderServ = False) -> ec.ERDDAPHandler:
+    if GliderServ == True:
+        return ec.ERDDAPHandler.setErddap(ec.custom_server, 15)
     else:
-        print("\nInput cannot be none")
-        return None
-    
+        ec.getErddapList()
+        ec.showErddapList()
+        uc = input("\nSelect an ERDDAP server to use: ")
+        if uc:
+            gcload = ec.ERDDAPHandler.setErddap(ec.custom_server, int(uc))
+            print(f"\nSelected server: {gcload.server}")
+            uc = input("Proceed with server selection? (y/n): ")
+
+            if uc.lower() == "y":
+                print("\nContinuing with selected server...")
+                return gcload
+            else:
+                print("\nReturning to main menu...")
+                return None
+        else:
+            print("\nInput cannot be none")
+            return None
+        
 # Select dataset from list and return list of datasets
 # This includes logic not found elsewhere, not a wrapper like other core funcs.
 # need to handle misinputs
@@ -126,13 +129,14 @@ def selectDatasetFromList(gcload, dispLength= 50) -> list:
 # Wraps getDas, parseDasResponse, convertToDict, saveToJson, openDasJson, getActualAttributes, convertFromUnix, displayAttributes
 def parseDas(gcload, dataset):
     das_resp = ec.ERDDAPHandler.getDas(gcload, dataset)
+    
     if das_resp is None:
         print(f"\nNo data found for dataset {dataset}.")
         return None
     
     parsed_response = dc.convertToDict(dc.parseDasResponse(das_resp))
-    fp = dc.saveToJson(parsed_response, dataset)
-    print(f"\nJSON file saved to {fp}")
+    dc.saveToJson(parsed_response, dataset)
+    print(f"\nDas converted to JSON successfully")
 
     
     attribute_list = dc.getActualAttributes(dc.openDasJson(dataset), gcload)
@@ -159,7 +163,7 @@ def parseDasNRT(gcload, dataset) -> list:
     
     parsed_response = dc.convertToDict(dc.parseDasResponse(das_resp))
     fp = dc.saveToJson(parsed_response, dataset)
-    print(f"\nJSON file saved to {fp}")
+    print(f"\nDas converted to JSON successfully")
 
     
     attribute_list = dc.getActualAttributes(dc.openDasJson(dataset), gcload)
@@ -197,13 +201,15 @@ def agolPublish(gcload, attribute_list:list, isNRT: int) -> None:
     response = ec.ERDDAPHandler.return_response(full_url)
     filepath = ec.ERDDAPHandler.responseToCsv(gcload, response)
 
-   
-    propertyDict = aw.makeItemProperties(gcload)
-    
+    if filepath:
+        
+        propertyDict = aw.makeItemProperties(gcload)
 
-    table_id = aw.publishTable(propertyDict, gcload.geoParams, filepath, gcload)
-    ul.updateLog(gcload.datasetid, table_id, "None", full_url, gcload.end_time, ul.get_current_time(), isNRT)
-    ec.cleanTemp()
+        table_id = aw.publishTable(propertyDict, gcload.geoParams, filepath, gcload)
+        ul.updateLog(gcload.datasetid, table_id, "None", full_url, gcload.end_time, ul.get_current_time(), isNRT)
+        ec.cleanTemp()
+    else:
+        print(f"Skipping {gcload.datasetid} due to bad response.")
 
 # When users provide multiple datasets for manual upload 
 # Terminal
@@ -229,11 +235,11 @@ def agolPublishList(dataset_list, gcload, isNRT: int):
 def agolPublish_glider(gcload, attribute_list:list, isNRT: int, dataformat="geojson") -> None:
 
     full_url = gcload.generate_url(0, attribute_list)
+
     response = ec.ERDDAPHandler.return_response(full_url)
     filepath = ec.ERDDAPHandler.responseToCsv(gcload, response)
 
     geojson = aw.pointTableToGeojsonLine(filepath)
-
     geojson = json.dumps(geojson)
 
     propertyDict = aw.makeItemProperties(gcload)
