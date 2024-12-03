@@ -34,7 +34,8 @@ def inputToList(user_input) -> list:
  # Show erddap menu and define gcload with selection
 def erddapSelection(GliderServ = False) -> ec.ERDDAPHandler:
     if GliderServ == True:
-        return ec.ERDDAPHandler.setErddap(ec.custom_server, 15)
+        gcload = ec.ERDDAPHandler.setErddap(ec.custom_server, 15)
+        return gcload
     else:
         ec.getErddapList()
         ec.showErddapList()
@@ -239,10 +240,14 @@ def agolPublish_glider(gcload, attribute_list:list, isNRT: int, dataformat="geoj
     response = ec.ERDDAPHandler.return_response(full_url)
     filepath = ec.ERDDAPHandler.responseToCsv(gcload, response)
 
-    geojson = aw.pointTableToGeojsonLine(filepath)
-    geojson = json.dumps(geojson)
+    geojson1 = aw.pointTableToGeojsonLine(filepath)
+    geojson = json.dumps(geojson1)
+    
+    with open("temp.geojson", "w") as f:
+        json.dump(geojson1, f)
 
     propertyDict = aw.makeItemProperties(gcload)
+    print(propertyDict)
     
 
     table_id = aw.publishTable(propertyDict, gcload.geoParams, geojson, gcload, inputDataType= dataformat)

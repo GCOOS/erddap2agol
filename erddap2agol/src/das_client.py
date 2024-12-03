@@ -157,6 +157,9 @@ def getActualAttributes(dasJson, erddapObject: ec.ERDDAPHandler) -> list:
         if "_qc_" in var_name or "qartod_" in var_name or var_name in {"latitude", "longitude", "time"}:
             continue
 
+        if var_name.endswith("_qc"):
+            continue
+
         coverage_content_type_entry = var_attrs.get('coverage_content_type', {})
         coverage_content_type = coverage_content_type_entry.get('value', '')
         if coverage_content_type == 'qualityInformation' or coverage_content_type == 'other':

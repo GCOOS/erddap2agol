@@ -65,7 +65,7 @@ def getErddapList() -> None:
         return None
 
 def showErddapList() -> None:
-    filepath = getErddapConfDir()
+    filepath = getErddapList()
     with open(filepath, 'r') as f:
         data = json.load(f)
     
@@ -132,7 +132,7 @@ class ERDDAPHandler:
             return response.text
         
     def setErddap(self, erddapIndex: int) -> None:
-        filepath = getErddapConfDir()
+        filepath = getErddapList()
         with open(filepath, 'r') as f:
             data = json.load(f)
         
@@ -227,13 +227,11 @@ class ERDDAPHandler:
         url = (
             f"{self.server}{self.datasetid}.{dataformat}?"
             f"{attrs_str}"
-            f"{time_constraints}&orderBy(%22{self.time}%22)"
+            f"{time_constraints}"
         )
 
-        if isSeed:
-            print(f"Seed URL: {url}")
-        else:
-            print(f"\nGenerated URL: {url}")
+        
+        print(f"\nGenerated URL: {url}")
 
         return url
         
