@@ -2,7 +2,7 @@ from arcgis.gis import GIS
 from arcgis.features import FeatureLayer, FeatureLayerCollection
 from . import erddap_client as ec
 from . import das_client as dc
-import copy, json, sys, pandas as pd, numpy as np
+import copy, os, sys, pandas as pd, numpy as np, json
 
 gis = GIS("home")
 
@@ -72,7 +72,7 @@ def defineGeoParams(erddapObj: ec.ERDDAPHandler) -> dict:
 
     return geom_params
         
-def pointTableToGeojsonLine(filepath, X="longitude (degrees_east)", Y="latitude (degrees_north)") -> dict:
+def pointTableToGeojsonLine(filepath, erddapObj: ec.ERDDAPHandler, X="longitude (degrees_east)", Y="latitude (degrees_north)") -> dict:
     if filepath:
         print(f"\nConverting {filepath} to GeoJSON...")
         df = pd.read_csv(filepath)
@@ -117,9 +117,13 @@ def pointTableToGeojsonLine(filepath, X="longitude (degrees_east)", Y="latitude 
             "type": "FeatureCollection",
             "features": features
         }
-
-        print("GeoJSON conversion complete.")
-        return geojson
+        savedir = ec.getTempDir()
+        filename = erddapObj.datasetid + "_line.geojson"
+        savepath = os.path.join(savedir, filename)
+        with open(savepath, "w") as f:
+            json.dump(geojson, f)
+        print(f"\nGeoJSON conversion complete @ {savepath}.")
+        return savepath
     else:
         sys.exit()
 
@@ -129,7 +133,9 @@ def publishTable(item_prop: dict, geom_params: dict, path, erddapObj: ec.ERDDAPH
         # Remove 'hasStaticData' from geom_params if present
         geom_params.pop('hasStaticData', None)
         
+        print(f"\ngis.content.add...")
         item = gis.content.add(item_prop, path, HasGeometry=True)
+        print(f"\nitem.publish...")
         published_item = item.publish(publish_parameters=erddapObj.geoParams, file_type= inputDataType)
 
         # Disable editing by updating layer capabilities

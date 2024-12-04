@@ -240,17 +240,18 @@ def agolPublish_glider(gcload, attribute_list:list, isNRT: int, dataformat="geoj
     response = ec.ERDDAPHandler.return_response(full_url)
     filepath = ec.ERDDAPHandler.responseToCsv(gcload, response)
 
-    geojson1 = aw.pointTableToGeojsonLine(filepath)
-    geojson = json.dumps(geojson1)
+    geojson_path = aw.pointTableToGeojsonLine(filepath, gcload)
+    
     
     with open("temp.geojson", "w") as f:
-        json.dump(geojson1, f)
+        json.dump(geojson_path, f)
 
     propertyDict = aw.makeItemProperties(gcload)
     print(propertyDict)
     
 
-    table_id = aw.publishTable(propertyDict, gcload.geoParams, geojson, gcload, inputDataType= dataformat)
+    table_id = aw.publishTable(propertyDict, gcload.geoParams, geojson_path, gcload, inputDataType= dataformat)
+
     ul.updateLog(gcload.datasetid, table_id, "None", full_url, gcload.end_time, ul.get_current_time(), isNRT)
     ec.cleanTemp()
 

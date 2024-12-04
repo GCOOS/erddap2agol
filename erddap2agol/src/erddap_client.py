@@ -8,7 +8,7 @@ import tempfile
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-def getTempDir():
+def getTempDir() -> os.PathLike:
     # Check if running in AGOL Notebook environment
     if os.path.exists('/arcgis/home'):
         temp_dir = os.path.join('/arcgis/home', 'e2a_temp')
@@ -33,7 +33,7 @@ def cleanTemp() -> None:
         print(f"The directory {filepath} does not exist.")
 
 #Sometimes the directory or file isnt created 
-def getErddapConfDir() -> str:
+def getErddapConfDir():
     agol_home = os.getenv('AGOL_HOME', '/arcgis/home')
     base_dir = agol_home
     erddap_conf_dir = os.path.join(base_dir, 'e2a_erddap_conf')
@@ -191,8 +191,7 @@ class ERDDAPHandler:
 
         if additionalAttr and 'depth' in additionalAttr:
             additionalAttr.remove('depth')
-            #--- Hotfix 1 for depth attribute ---
-            #attrs.append('depth')
+            attrs.append('depth')
 
         attrs.extend([self.longitude, self.latitude])
 

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "erddap2agol"
-version = "0.4.8.1"
+version = "0.4.9.1"
 description = "A tool for creating, updating, and managing ERDDAP data on AGOL automatically"
 readme = "README.md"
 requires-python = ">=3.10"
