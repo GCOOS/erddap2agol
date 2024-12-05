@@ -2,7 +2,7 @@ from arcgis.gis import GIS
 from arcgis.features import FeatureLayer, FeatureLayerCollection
 from . import erddap_client as ec
 from . import das_client as dc
-import copy, json
+import copy, os, sys, pandas as pd, numpy as np, json
 
 gis = GIS("home")
 
@@ -16,7 +16,7 @@ def agoConnect() -> None:
         print(f"An error occurred connecting to ArcGIS Online: {e}")
 
 # Need to work out the rest of the metadata in item props
-def makeItemProperties(erddapObj: "ec.ERDDAPHandler", accessLevel = None) -> dict:
+def makeItemProperties(erddapObj: ec.ERDDAPHandler, accessLevel = None) -> dict:
     dataid = erddapObj.datasetid
     attribute_tags = erddapObj.attributes
 
@@ -25,20 +25,33 @@ def makeItemProperties(erddapObj: "ec.ERDDAPHandler", accessLevel = None) -> dic
     if attribute_tags is not None:
         tags.extend(attribute_tags)
 
-    ItemProperties = {
-        "title": dataid,
-        "type": "CSV",
-        "item_type": "Feature Service",
-        "tags": tags
-    }
+    if erddapObj.server != "https://gliders.ioos.us/erddap//tabledap/":
+        ItemProperties = {
+            "title": dataid,
+            "type": "CSV",
+            "item_type": "Feature Service",
+            "tags": tags
+        }
 
-    dasJson = dc.openDasJson(dataid)
-    metadata = dasJson.get("NC_Global", {})
-    if "license" in metadata and metadata["license"] is not None:
-        ItemProperties["licenseInfo"] = metadata["license"].get("value", "")
+        dasJson = dc.openDasJson(dataid)
+        metadata = dasJson.get("NC_Global", {})
+        if "license" in metadata and metadata["license"] is not None:
+            ItemProperties["licenseInfo"] = metadata["license"].get("value", "")
 
-    #print(ItemProperties)
-    return ItemProperties
+        #print(ItemProperties)
+        return ItemProperties
+    else:
+        dataidTitle = dataid.replace("-", "")
+        ItemProperties = {
+            "title": dataidTitle,
+            "type": "GeoJson",
+            #'typeKeywords': ['Coordinates Type', 'crs', 'Feature', 'FeatureCollection', 'GeoJSON', 'Geometry', 'GeometryCollection'],
+            "item_type": "Feature Service",
+            "tags": tags
+        }
+
+        return ItemProperties
+
 
 def defineGeoParams(erddapObj: ec.ERDDAPHandler) -> dict:
     # Hard code coordinate parameters presuming these have already
@@ -55,15 +68,82 @@ def defineGeoParams(erddapObj: ec.ERDDAPHandler) -> dict:
 
     return geom_params
         
+def pointTableToGeojsonLine(filepath, erddapObj: ec.ERDDAPHandler, X="longitude (degrees_east)", Y="latitude (degrees_north)") -> dict:
+    if filepath:
+        print(f"\nConverting {filepath} to GeoJSON...")
+        df = pd.read_csv(filepath)
 
-#Also important and should be improved 
-def publishTable(item_prop: dict, geom_params: dict, path, erddapObj: ec.ERDDAPHandler):
+        # Replace NaN with None in the entire DataFrame
+        df = df.replace({np.nan: None})
+
+        # Filter out rows with invalid coordinates
+        df = df.dropna(subset=[X, Y])
+
+        features = []
+        data_columns = [col for col in df.columns if col not in [X, Y]]
+        num_points = len(df)
+
+        for i in range(num_points - 1):
+            # Coordinates for the line segment
+            point_start = [df.iloc[i][X], df.iloc[i][Y]]
+            point_end = [df.iloc[i + 1][X], df.iloc[i + 1][Y]]
+            coordinates = [point_start, point_end]
+
+            # Skip if any coordinate is None
+            if None in point_start or None in point_end:
+                continue
+
+            # Properties from the last point of the segment
+            properties = df.iloc[i + 1][data_columns].to_dict()
+
+            # Create the GeoJSON feature for the line segment
+            feature = {
+                "type": "Feature",
+                "geometry": {
+                    "type": "LineString",
+                    "coordinates": coordinates
+                },
+                "properties": properties
+            }
+
+            features.append(feature)
+
+        # Assemble the FeatureCollection
+        geojson = {
+            "type": "FeatureCollection",
+            "features": features
+        }
+        savedir = ec.getTempDir()
+        filename = erddapObj.datasetid + "_line.geojson"
+        savepath = os.path.join(savedir, filename)
+        with open(savepath, "w") as f:
+            json.dump(geojson, f)
+        print(f"\nGeoJSON conversion complete @ {savepath}.")
+        return savepath
+    else:
+        sys.exit()
+
+def publishTable(item_prop: dict, geom_params: dict, path, erddapObj: ec.ERDDAPHandler, inputDataType="csv") -> str:
     try:
-        # Remove 'hasStaticData' from geom_params if present
         geom_params.pop('hasStaticData', None)
-        
+
+        print(f"\ngis.content.add...")
         item = gis.content.add(item_prop, path, HasGeometry=True)
-        published_item = item.publish(publish_parameters=erddapObj.geoParams)
+
+        # Check if the server matches the specific condition
+        if erddapObj.server == "https://gliders.ioos.us/erddap/tabledap/":
+            # Ensure a unique service name for this specific server
+            unique_service_name = f"{item_prop['title']}_service"
+            erddapObj.geoParams['name'] = unique_service_name  # Explicitly set service name
+
+        
+        # Ensure publish parameters include a unique service name
+        if 'name' not in erddapObj.geoParams or not erddapObj.geoParams['name']:
+            erddapObj.geoParams['name'] = item_prop['title']
+            # .replace(' ', '_')
+
+        print(f"\nitem.publish...")
+        published_item = item.publish(publish_parameters=erddapObj.geoParams, file_type=inputDataType)
 
         # Disable editing by updating layer capabilities
         fl = published_item.layers[0]

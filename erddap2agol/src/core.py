@@ -1,5 +1,5 @@
 #Runtime logic consolidated here
-import sys, os, requests
+import sys, os, requests, json
 from . import erddap_client as ec
 from . import das_client as dc
 from . import ago_wrapper as aw
@@ -27,98 +27,120 @@ def enablePrint():
 def checkInputForList(user_input):
     return ',' in user_input
 
-def inputToList(user_input):
+def inputToList(user_input) -> list:
     dataset_list = [dataset.strip() for dataset in user_input.split(',')]
     return dataset_list
 
  # Show erddap menu and define gcload with selection
-def erddapSelection():
-    ec.getErddapList()
-    ec.showErddapList()
-    uc = input("\nSelect an ERDDAP server to use: ")
-    if uc:
-        gcload = ec.ERDDAPHandler.setErddap(ec.custom_server, int(uc))
-        print(f"\nSelected server: {gcload.server}")
-        uc = input("Proceed with server selection? (y/n): ")
-
-        if uc.lower() == "y":
-            print("\nContinuing with selected server...")
-            return gcload
-        else:
-            print("\nReturning to main menu...")
-            return None
+def erddapSelection(GliderServ = False) -> ec.ERDDAPHandler:
+    if GliderServ == True:
+        gcload = ec.ERDDAPHandler.setErddap(ec.custom_server, 15)
+        return gcload
     else:
-        print("\nInput cannot be none")
-        return None
-    
+        ec.getErddapList()
+        ec.showErddapList()
+        uc = input("\nSelect an ERDDAP server to use: ")
+        if uc:
+            gcload = ec.ERDDAPHandler.setErddap(ec.custom_server, int(uc))
+            print(f"\nSelected server: {gcload.server}")
+            uc = input("Proceed with server selection? (y/n): ")
+
+            if uc.lower() == "y":
+                print("\nContinuing with selected server...")
+                return gcload
+            else:
+                print("\nReturning to main menu...")
+                return None
+        else:
+            print("\nInput cannot be none")
+            return None
+        
 # Select dataset from list and return list of datasets
 # This includes logic not found elsewhere, not a wrapper like other core funcs.
 # need to handle misinputs
-def selectDatasetFromList(gcload) -> list:
+def selectDatasetFromList(gcload, dispLength=50) -> list:
     dataset_id_list = ec.ERDDAPHandler.getDatasetIDList(gcload)
-    print(f"{dataset_id_list}")
     
-    if len(dataset_id_list) >= 100:
-        print(f"\n There are greater than 100 datasets available on this server.")
-        print(f"Datasets are shown 100 datasets at a time.")
-        print(f"Enter the number(s) of the datasets you want.")
-        print(f"To move forward one page type next, to move backwards type back.")
+    # If the number of datasets is less than dispLength, display all
+    if len(dataset_id_list) < dispLength:
+        dispLength = len(dataset_id_list)
+    
+    print(f"\nDatasets are shown {dispLength} at a time.")
+    print(f"Enter the number(s) of the datasets you want, separated by commas.")
+    print(f"To move forward one page type 'next', to move backwards type 'back'.")
+    
+    import math
+    num_pages = math.ceil(len(dataset_id_list) / dispLength)
+    current_page = 1
+    input_list = []
+    
+    def clear_screen():
+        import os
+        os.system('cls' if os.name == 'nt' else 'clear')
+    
+    while True:
+        clear_screen()
+        start_index = (current_page - 1) * dispLength
+        end_index = min(start_index + dispLength, len(dataset_id_list))
+        current_page_datasets = dataset_id_list[start_index:end_index]
         
-        import math
-        num_pages = math.ceil(len(dataset_id_list) / 100)
-        current_page = 1
-        input_list = []
-        
-        while True:
-            start_index = (current_page - 1) * 100
-            end_index = start_index + 100
-            current_page_datasets = dataset_id_list[start_index:end_index]
-            
-            print(f"\nPage {current_page} of {num_pages}")
-            print(f"Cart: {len(input_list)} datasets")
-            for index, dataset in enumerate(current_page_datasets):
-                print(f"{start_index + index + 1}. {dataset}")
+        print(f"\nPage {current_page} of {num_pages}")
+        print(f"Cart: {len(input_list)} datasets")
+        for index, dataset in enumerate(current_page_datasets):
+            print(f"{start_index + index + 1}. {dataset}")
 
-            print("\nEnter the number of the dataset(s) you want to select...")
-            idx_select = input(": ")
-            
-            if idx_select == "next":
-                if current_page < num_pages:
-                    current_page += 1
-                else:
-                    print("No more pages.")
-            
-            elif idx_select == "back":
-                if current_page > 1:
-                    current_page -= 1
-                else:
-                    print("Already at the first page.")
-            
-            elif idx_select == "exit":
-                run.cui()
-            
-            elif idx_select == "done":
-                print("\nPassing the following datasets to the next step...")
-                print(f"{input_list}")
-                return input_list
-            
-            elif idx_select == "all":
-                for dataset in current_page_datasets:
-                    input_list.append(dataset)
-                
-                print(f"Added all datasets on page {current_page} to the list.")
-                            
+        print("\nEnter the number(s) of the dataset(s) you want to select, or type 'next', 'back', 'all', 'done', or 'exit'.")
+        idx_select = input(": ").strip().lower()
+        
+        if idx_select == "next":
+            if current_page < num_pages:
+                current_page += 1
             else:
-                try:
-                    idx_select = int(idx_select)
-                    if 1 <= idx_select <= len(dataset_id_list):
-                        selected_dataset = dataset_id_list[idx_select - 1]
-                        input_list.append(selected_dataset)
-                        print(f"Added {selected_dataset} to the list.")
+                print("No more pages.")
+                input("Press Enter to continue...")
+        elif idx_select == "back":
+            if current_page > 1:
+                current_page -= 1
+            else:
+                print("Already at the first page.")
+                input("Press Enter to continue...")
+        elif idx_select == "exit":
+            run.cui()
+        elif idx_select == "done":
+            print("\nPassing the following datasets to the next step...")
+            print(f"{input_list}")
+            return input_list
+        elif idx_select == "all":
+            for dataset in current_page_datasets:
+                if dataset not in input_list:
+                    input_list.append(dataset)
+            print(f"Added all datasets on page {current_page} to the list.")
+            input("Press Enter to continue...")
+        else:
+            try:
+                indices = [i.strip() for i in idx_select.split(',')]
+                valid_selection = False
+                for idx in indices:
+                    if idx.isdigit():
+                        idx_int = int(idx)
+                        if start_index < idx_int <= start_index + len(current_page_datasets):
+                            selected_dataset = dataset_id_list[idx_int - 1]
+                            if selected_dataset not in input_list:
+                                input_list.append(selected_dataset)
+                                print(f"Added {selected_dataset} to the list.")
+                            else:
+                                print(f"{selected_dataset} is already in the list.")
+                            valid_selection = True
+                        else:
+                            print(f"Invalid input. Number {idx_int} out of range for this page.")
                     else:
-                        print("Invalid input")
-                except ValueError:
-                    print("You need to type a valid number or input.")
+                        print(f"Invalid input '{idx}'. Please enter valid numbers or commands.")
+                if not valid_selection:
+                    input("Press Enter to continue...")
+            except Exception as e:
+                print("An unexpected error occurred:", e)
+                input("Press Enter to continue...")
+
     
         
 
@@ -127,13 +149,14 @@ def selectDatasetFromList(gcload) -> list:
 # Wraps getDas, parseDasResponse, convertToDict, saveToJson, openDasJson, getActualAttributes, convertFromUnix, displayAttributes
 def parseDas(gcload, dataset):
     das_resp = ec.ERDDAPHandler.getDas(gcload, dataset)
+    
     if das_resp is None:
         print(f"\nNo data found for dataset {dataset}.")
         return None
     
     parsed_response = dc.convertToDict(dc.parseDasResponse(das_resp))
-    fp = dc.saveToJson(parsed_response, dataset)
-    print(f"\nJSON file saved to {fp}")
+    dc.saveToJson(parsed_response, dataset)
+    print(f"\nDas converted to JSON successfully")
 
     
     attribute_list = dc.getActualAttributes(dc.openDasJson(dataset), gcload)
@@ -160,7 +183,7 @@ def parseDasNRT(gcload, dataset) -> list:
     
     parsed_response = dc.convertToDict(dc.parseDasResponse(das_resp))
     fp = dc.saveToJson(parsed_response, dataset)
-    print(f"\nJSON file saved to {fp}")
+    print(f"\nDas converted to JSON successfully")
 
     
     attribute_list = dc.getActualAttributes(dc.openDasJson(dataset), gcload)
@@ -183,10 +206,11 @@ def parseDasNRT(gcload, dataset) -> list:
         dc.displayAttributes(timeintv, attribute_list)
         
         return attribute_list
+    
 
 # AGOL publishing and log updating
 # Terminal
-def agolPublish(gcload, attribute_list, isNRT: int) -> None:
+def agolPublish(gcload, attribute_list:list, isNRT: int) -> None:
     if isNRT == 0:
         seed_choice = input("Would you like to create a seed file? (y/n): ").lower()
         seedbool = seed_choice
@@ -197,35 +221,74 @@ def agolPublish(gcload, attribute_list, isNRT: int) -> None:
     response = ec.ERDDAPHandler.return_response(full_url)
     filepath = ec.ERDDAPHandler.responseToCsv(gcload, response)
 
-   
-    propertyDict = aw.makeItemProperties(gcload)
-    
+    if filepath:
+        
+        propertyDict = aw.makeItemProperties(gcload)
 
-    table_id = aw.publishTable(propertyDict, gcload.geoParams, filepath, gcload)
+        table_id = aw.publishTable(propertyDict, gcload.geoParams, filepath, gcload)
+        ul.updateLog(gcload.datasetid, table_id, "None", full_url, gcload.end_time, ul.get_current_time(), isNRT)
+        ec.cleanTemp()
+    else:
+        print(f"Skipping {gcload.datasetid} due to bad response.")
+
+# Modified agol publish function for glider datasets
+def agolPublish_glider(gcload, attribute_list:list, isNRT: int, dataformat="geojson") -> None:
+
+    full_url = gcload.generate_url(0, attribute_list)
+
+    response = ec.ERDDAPHandler.return_response(full_url)
+    filepath = ec.ERDDAPHandler.responseToCsv(gcload, response)
+
+    geojson_path = aw.pointTableToGeojsonLine(filepath, gcload)
+    
+    propertyDict = aw.makeItemProperties(gcload)
+       
+    table_id = aw.publishTable(propertyDict, gcload.geoParams, geojson_path, gcload, inputDataType= dataformat)
+
     ul.updateLog(gcload.datasetid, table_id, "None", full_url, gcload.end_time, ul.get_current_time(), isNRT)
     ec.cleanTemp()
 
+
 # When users provide multiple datasets for manual upload 
 # Terminal
-def processListInput(dataset_list, gcload, isNRT: int):
+def agolPublishList(dataset_list, gcload, isNRT: int):
+    if not dataset_list:
+        print("No datasets to process.")
+        return
+
+    available_datasets = ec.ERDDAPHandler.getDatasetIDList(gcload)
+    
+    # Determine which publish function to use based on the server
+    if gcload.server == "https://gliders.ioos.us/erddap/tabledap/":
+        publish_function = agolPublish_glider
+    else:
+        publish_function = agolPublish
+
     if isNRT == 0:
         for dataset in dataset_list:
+            if dataset not in available_datasets:
+                print(f"Dataset ID '{dataset}' not found in the list of available datasets.")
+                continue
             attribute_list = parseDas(gcload, dataset)
             if attribute_list is None:
-                print(f"\nNo data found for dataset {dataset}, trying next.")
+                print(f"\nNo data found for dataset '{dataset}', trying next.")
                 continue
             else:
-                agolPublish(gcload, attribute_list, isNRT)           
+                publish_function(gcload, attribute_list, isNRT)
         ec.cleanTemp()
     else:
         for dataset in dataset_list:
+            if dataset not in available_datasets:
+                print(f"Dataset ID '{dataset}' not found in the list of available datasets.")
+                continue
             attribute_list = parseDasNRT(gcload, dataset)
             if attribute_list is None:
+                print(f"\nNo data found for dataset '{dataset}', trying next.")
                 continue
-            
-            agolPublish(gcload, attribute_list, isNRT)           
+            publish_function(gcload, attribute_list, isNRT)
         ec.cleanTemp()
 
+    print("\nAll done!")
 
 
 
@@ -263,4 +326,3 @@ def NRTUpdateAGOL() -> None:
             except Exception as e:
                     print(f"Error: {e}")
                     pass
-    
