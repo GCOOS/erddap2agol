@@ -140,6 +140,7 @@ def glider_menu():
     print("Select the server of the dataset you want to create an AGOL item for.")
 
     gcload = core.erddapSelection(GliderServ= True)
+    gcload.server = "https://gliders.ioos.us/erddap/tabledap/"
     
     print("\nEnter the datasetid(s) for the dataset you want to create an AGOL item for.")
     print("Separate multiple dataset IDs with commas (e.g., dataset1, dataset2).")

@@ -61,77 +61,86 @@ def erddapSelection(GliderServ = False) -> ec.ERDDAPHandler:
 def selectDatasetFromList(gcload, dispLength=50) -> list:
     dataset_id_list = ec.ERDDAPHandler.getDatasetIDList(gcload)
     
-    if len(dataset_id_list) >= dispLength:
-        print(f"\nThere are more than {dispLength} datasets available on this server.")
-        print(f"Datasets are shown {dispLength} at a time.")
-        print(f"Enter the number(s) of the datasets you want, separated by commas.")
-        print(f"To move forward one page type 'next', to move backwards type 'back'.")
-        
-        import math
-        num_pages = math.ceil(len(dataset_id_list) / dispLength)
-        current_page = 1
-        input_list = []
-        
-        def clear_screen():
-            import os
-            os.system('cls' if os.name == 'nt' else 'clear')
-        
-        while True:
-            clear_screen()
-            start_index = (current_page - 1) * dispLength
-            end_index = min(start_index + dispLength, len(dataset_id_list))
-            current_page_datasets = dataset_id_list[start_index:end_index]
-            
-            print(f"\nPage {current_page} of {num_pages}")
-            print(f"Cart: {len(input_list)} datasets")
-            for index, dataset in enumerate(current_page_datasets):
-                print(f"{start_index + index + 1}. {dataset}")
+    # If the number of datasets is less than dispLength, display all
+    if len(dataset_id_list) < dispLength:
+        dispLength = len(dataset_id_list)
     
-            print("\nEnter the number(s) of the dataset(s) you want to select, or type 'next', 'back', 'all', 'done', or 'exit'.")
-            idx_select = input(": ").strip().lower()
-            
-            if idx_select == "next":
-                if current_page < num_pages:
-                    current_page += 1
-                else:
-                    print("No more pages.")
-                    input("Press Enter to continue...")
-            elif idx_select == "back":
-                if current_page > 1:
-                    current_page -= 1
-                else:
-                    print("Already at the first page.")
-                    input("Press Enter to continue...")
-            elif idx_select == "exit":
-                run.cui()
-            elif idx_select == "done":
-                print("\nPassing the following datasets to the next step...")
-                print(f"{input_list}")
-                return input_list
-            elif idx_select == "all":
-                for dataset in current_page_datasets:
-                    if dataset not in input_list:
-                        input_list.append(dataset)
-                print(f"Added all datasets on page {current_page} to the list.")
-                input("Press Enter to continue...")
+    print(f"\nDatasets are shown {dispLength} at a time.")
+    print(f"Enter the number(s) of the datasets you want, separated by commas.")
+    print(f"To move forward one page type 'next', to move backwards type 'back'.")
+    
+    import math
+    num_pages = math.ceil(len(dataset_id_list) / dispLength)
+    current_page = 1
+    input_list = []
+    
+    def clear_screen():
+        import os
+        os.system('cls' if os.name == 'nt' else 'clear')
+    
+    while True:
+        clear_screen()
+        start_index = (current_page - 1) * dispLength
+        end_index = min(start_index + dispLength, len(dataset_id_list))
+        current_page_datasets = dataset_id_list[start_index:end_index]
+        
+        print(f"\nPage {current_page} of {num_pages}")
+        print(f"Cart: {len(input_list)} datasets")
+        for index, dataset in enumerate(current_page_datasets):
+            print(f"{start_index + index + 1}. {dataset}")
+
+        print("\nEnter the number(s) of the dataset(s) you want to select, or type 'next', 'back', 'all', 'done', or 'exit'.")
+        idx_select = input(": ").strip().lower()
+        
+        if idx_select == "next":
+            if current_page < num_pages:
+                current_page += 1
             else:
-                try:
-                    # Handle multiple indices separated by commas
-                    indices = [int(i.strip()) for i in idx_select.split(',')]
-                    for idx in indices:
-                        if start_index < idx <= end_index:
-                            selected_dataset = dataset_id_list[idx - 1]
+                print("No more pages.")
+                input("Press Enter to continue...")
+        elif idx_select == "back":
+            if current_page > 1:
+                current_page -= 1
+            else:
+                print("Already at the first page.")
+                input("Press Enter to continue...")
+        elif idx_select == "exit":
+            run.cui()
+        elif idx_select == "done":
+            print("\nPassing the following datasets to the next step...")
+            print(f"{input_list}")
+            return input_list
+        elif idx_select == "all":
+            for dataset in current_page_datasets:
+                if dataset not in input_list:
+                    input_list.append(dataset)
+            print(f"Added all datasets on page {current_page} to the list.")
+            input("Press Enter to continue...")
+        else:
+            try:
+                indices = [i.strip() for i in idx_select.split(',')]
+                valid_selection = False
+                for idx in indices:
+                    if idx.isdigit():
+                        idx_int = int(idx)
+                        if start_index < idx_int <= start_index + len(current_page_datasets):
+                            selected_dataset = dataset_id_list[idx_int - 1]
                             if selected_dataset not in input_list:
                                 input_list.append(selected_dataset)
                                 print(f"Added {selected_dataset} to the list.")
                             else:
                                 print(f"{selected_dataset} is already in the list.")
+                            valid_selection = True
                         else:
-                            print(f"Invalid input. Number {idx} out of range for this page.")
+                            print(f"Invalid input. Number {idx_int} out of range for this page.")
+                    else:
+                        print(f"Invalid input '{idx}'. Please enter valid numbers or commands.")
+                if not valid_selection:
                     input("Press Enter to continue...")
-                except ValueError:
-                    print("Invalid input. Please enter valid numbers separated by commas or a command.")
-                    input("Press Enter to continue...")
+            except Exception as e:
+                print("An unexpected error occurred:", e)
+                input("Press Enter to continue...")
+
     
         
 
