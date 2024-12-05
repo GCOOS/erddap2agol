@@ -41,18 +41,14 @@ def makeItemProperties(erddapObj: ec.ERDDAPHandler, accessLevel = None) -> dict:
         #print(ItemProperties)
         return ItemProperties
     else:
+        dataidTitle = dataid.replace("-", "")
         ItemProperties = {
-            "title": dataid,
+            "title": dataidTitle,
             "type": "GeoJson",
-            'typeKeywords': ['Coordinates Type', 'crs', 'Feature', 'FeatureCollection', 'GeoJSON', 'Geometry', 'GeometryCollection'],
+            #'typeKeywords': ['Coordinates Type', 'crs', 'Feature', 'FeatureCollection', 'GeoJSON', 'Geometry', 'GeometryCollection'],
             "item_type": "Feature Service",
             "tags": tags
         }
-
-        dasJson = dc.openDasJson(dataid)
-        metadata = dasJson.get("NC_Global", {})
-        if "license" in metadata and metadata["license"] is not None:
-            ItemProperties["licenseInfo"] = metadata["license"].get("value", "")
 
         return ItemProperties
 
@@ -127,16 +123,27 @@ def pointTableToGeojsonLine(filepath, erddapObj: ec.ERDDAPHandler, X="longitude 
     else:
         sys.exit()
 
-#Also important and should be improved 
-def publishTable(item_prop: dict, geom_params: dict, path, erddapObj: ec.ERDDAPHandler, inputDataType= "csv") -> str:
+def publishTable(item_prop: dict, geom_params: dict, path, erddapObj: ec.ERDDAPHandler, inputDataType="csv") -> str:
     try:
-        # Remove 'hasStaticData' from geom_params if present
         geom_params.pop('hasStaticData', None)
-        
+
         print(f"\ngis.content.add...")
         item = gis.content.add(item_prop, path, HasGeometry=True)
+
+        # Check if the server matches the specific condition
+        if erddapObj.server == "https://gliders.ioos.us/erddap/tabledap/":
+            # Ensure a unique service name for this specific server
+            unique_service_name = f"{item_prop['title']}_service"
+            erddapObj.geoParams['name'] = unique_service_name  # Explicitly set service name
+
+        
+        # Ensure publish parameters include a unique service name
+        if 'name' not in erddapObj.geoParams or not erddapObj.geoParams['name']:
+            erddapObj.geoParams['name'] = item_prop['title']
+            # .replace(' ', '_')
+
         print(f"\nitem.publish...")
-        published_item = item.publish(publish_parameters=erddapObj.geoParams, file_type= inputDataType)
+        published_item = item.publish(publish_parameters=erddapObj.geoParams, file_type=inputDataType)
 
         # Disable editing by updating layer capabilities
         fl = published_item.layers[0]
