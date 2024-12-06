@@ -297,6 +297,7 @@ def agolPublishList(dataset_list, gcload, isNRT: int):
 ###################################
 
 def NRTUpdateAGOL() -> None:
+    #This is hardcoded for GCOOS ERDDAP
     gcload = ec.erddapGcoos    
 
     nrt_dict  = lm.NRTFindAGOL()

@@ -89,38 +89,7 @@ class ERDDAPHandler:
         self.end_time = end_time
         self.geoParams = geoParams
 
-    
-    def getDatasetIDList(self) -> list:
-        url = f"{self.serverInfo}"
-        try:
-            response = requests.get(url)
-            data = response.json()
-
-        
-            column_names = data['table']['columnNames']
-            dataset_id_index = column_names.index("Dataset ID")
-            
-            rows = data['table']['rows']
-            dataset_id_list = [row[dataset_id_index] for row in rows if row[dataset_id_index] != "allDatasets"]
-            
-            return dataset_id_list
-        except Exception as e:
-            print(f"Error fetching dataset ID list: {e}")
-            return None
-    
-    def spatialFilter(self) -> list:
-        url = f"{self.serverInfo}"
-        response = requests.get(url)
-        data = response.json()
-        
-        column_names = data['table']['columnNames']
-        dataset_id_index = column_names.index("Dataset ID")
-        
-        rows = data['table']['rows']
-        dataset_id_list = [row[dataset_id_index] for row in rows if row[dataset_id_index] != "allDatasets"]
-        
-        return dataset_id_list
-
+    # Gets Dataset DAS
     def getDas(self, datasetid: str) -> str:
         dataset_id_list = self.getDatasetIDList()
         if datasetid not in dataset_id_list:
@@ -131,7 +100,8 @@ class ERDDAPHandler:
             response = requests.get(url)
             return response.text
         
-    def setErddap(self, erddapIndex: int) -> None:
+        
+    def setErddap(self, erddapIndex: int):
         filepath = getErddapList()
         with open(filepath, 'r') as f:
             data = json.load(f)
@@ -153,10 +123,11 @@ class ERDDAPHandler:
                     serv_check = requests.get(baseurl)
                     serv_check.raise_for_status()
 
-                
+
                     server_url = baseurl + "/tabledap/"
                     setattr(server_obj, 'server', server_url)
 
+                    # We set server info class attribute here 
                     server_info_url = baseurl + "/info/index.json"
                     setattr(server_obj, 'serverInfo', server_info_url)
 
@@ -183,9 +154,42 @@ class ERDDAPHandler:
                     print(f"HTTP error {http_err} occurred when connecting to {baseurl}")
                     return None
                 
+    def getDatasetIDList(self) -> list:
+        # Calls self.serverInfo 
+        # we will have to modify this url for the search feature
+        url = f"{self.serverInfo}"
+        try:
+            response = requests.get(url)
+            data = response.json()
+
+        
+            column_names = data['table']['columnNames']
+            dataset_id_index = column_names.index("Dataset ID")
+            
+            rows = data['table']['rows']
+            dataset_id_list = [row[dataset_id_index] for row in rows if row[dataset_id_index] != "allDatasets"]
+            
+            return dataset_id_list
+        except Exception as e:
+            print(f"Error fetching dataset ID list: {e}")
+            return None
+        
+    def getDatasetsFromSearch(self, search: str) -> list:
+        url = f"{self.serverInfo}"
+        try:
+            responseObj = requests.get(url)
+        
+            if responseObj.status_code != 200:
+                print(f"Error fetching dataset list: {responseObj.status_code}")
+                return None
+
+
+        except Exception as e:
+            print(f"Error using getDatasetsFromSearch: {e}")
+            return None
                 
     # Generates URL for ERDDAP request based on class object attributes
-    def generate_url(self, isSeed: bool, additionalAttr: list = None, dataformat="csvp") -> str:
+    def generate_url(self, isSeed: bool, additionalAttr: list = None, dataformat="csvp", seedDays = 7) -> str:
         # the attribute list
         attrs = []
 
@@ -208,7 +212,7 @@ class ERDDAPHandler:
         if isSeed:
             if isinstance(self.start_time, str):
                 self.start_time = datetime.strptime(self.start_time, '%Y-%m-%dT%H:%M:%S')
-            endtime_seed = self.start_time + timedelta(days=3)
+            endtime_seed = self.start_time + timedelta(days= seedDays)
             endtime_seed_str = endtime_seed.strftime('%Y-%m-%dT%H:%M:%S')
             start_time_str = self.start_time.strftime('%Y-%m-%dT%H:%M:%S')
             time_constraints = (
