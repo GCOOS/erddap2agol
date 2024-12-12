@@ -89,7 +89,35 @@ class ERDDAPHandler:
         self.end_time = end_time
         self.geoParams = geoParams
 
-    # Gets Dataset DAS
+   
+    def getDatasetIDList(self) -> list:
+        url = f"{self.serverInfo}"
+        try:
+            response = requests.get(url)
+            data = response.json()
+            
+            if not data.get('table') or 'columnNames' not in data['table']:
+                print(f"Invalid response format from {url}")
+                return []
+
+            column_names = data['table']['columnNames']
+            dataset_id_index = column_names.index("Dataset ID") if "Dataset ID" in column_names else None
+            
+            if dataset_id_index is None:
+                print("Dataset ID column not found in response")
+                return []
+
+            rows = data['table']['rows']
+            dataset_id_list = [row[dataset_id_index] for row in rows if row[dataset_id_index] != "allDatasets"]
+            
+            return dataset_id_list
+
+        except Exception as e:
+            print(f"Error fetching dataset ID list: {e}")
+            return []
+
+        
+    #Gets dataset DAS    
     def getDas(self, datasetid: str) -> str:
         dataset_id_list = self.getDatasetIDList()
         if datasetid not in dataset_id_list:
@@ -154,25 +182,6 @@ class ERDDAPHandler:
                     print(f"HTTP error {http_err} occurred when connecting to {baseurl}")
                     return None
                 
-    def getDatasetIDList(self) -> list:
-        # Calls self.serverInfo 
-        # we will have to modify this url for the search feature
-        url = f"{self.serverInfo}"
-        try:
-            response = requests.get(url)
-            data = response.json()
-
-        
-            column_names = data['table']['columnNames']
-            dataset_id_index = column_names.index("Dataset ID")
-            
-            rows = data['table']['rows']
-            dataset_id_list = [row[dataset_id_index] for row in rows if row[dataset_id_index] != "allDatasets"]
-            
-            return dataset_id_list
-        except Exception as e:
-            print(f"Error fetching dataset ID list: {e}")
-            return None
         
     def getDatasetsFromSearch(self, search: str) -> list:
         url = f"{self.serverInfo}"
@@ -476,4 +485,3 @@ custom_server = ERDDAPHandler(
     }
 )
 
-    
