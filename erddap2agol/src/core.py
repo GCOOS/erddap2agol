@@ -104,20 +104,23 @@ def selectDatasetFromList(erddapObj, dispLength=50) -> list:
         
         print(f"\nPage {current_page} of {num_pages}")
         print(f"Cart: {len(input_list)} datasets")
+
         for index, dataset in enumerate(current_page_datasets):
             # Split the dataset info to get just the ID for the cart
             dataset_id = dataset.split(' - ')[0] if ' - ' in dataset else dataset
             print(f"{start_index + index + 1}. {dataset}")
 
         print("\nEnter the number(s) of the dataset(s) you want to select")
-        print("Commands: 'next', 'back', 'all', 'addpage', 'done', 'exit', or 'search:keyword'")
-        print("Note: 'all' adds all datasets, 'addpage' adds current page only, be careful with that")
-        idx_select = input(": ").strip().lower()
+        print("Commands: 'next', 'back', 'addAll', 'addPage', 'done', 'exit', or 'search:keyword'")
+        idx_select = input(": ")
         
         if idx_select.startswith('search:'):
             search_term = idx_select.split(':', 1)[1]
+
             print(f"\nSearching for: {search_term}")
+
             dataset_id_list = update_dataset_list(erddapObj, search_term)
+
             if not dataset_id_list:
                 print("No datasets found matching your search.")
                 input("Press Enter to continue...")
@@ -131,6 +134,7 @@ def selectDatasetFromList(erddapObj, dispLength=50) -> list:
             else:
                 print("No more pages.")
                 input("Press Enter to continue...")
+
         elif idx_select == "back":
             if current_page > 1:
                 current_page -= 1
@@ -139,22 +143,26 @@ def selectDatasetFromList(erddapObj, dispLength=50) -> list:
                 input("Press Enter to continue...")
         elif idx_select == "exit":
             run.cui()
+
         elif idx_select == "done":
             print("\nPassing the following datasets to the next step...")
             print(f"{input_list}")
             return input_list
-        elif idx_select == "all":
+        
+        elif idx_select == "addAll":
             for dataset in dataset_id_list:  # Changed from current_page_datasets to dataset_id_list
                 if dataset not in input_list:
                     input_list.append(dataset)
             print(f"Added all {len(dataset_id_list)} datasets to the list.")
             input("Press Enter to continue...")
-        elif idx_select == "addpage":
+
+        elif idx_select == "addPage":
             for dataset in current_page_datasets:
                 if dataset not in input_list:
                     input_list.append(dataset)
             print(f"Added all datasets on page {current_page} to the list.")
             input("Press Enter to continue...")
+
         else:
             try:
                 indices = [i.strip() for i in idx_select.split(',')]

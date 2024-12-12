@@ -144,44 +144,27 @@ class ERDDAPHandler:
             server_obj = custom_server
             baseurl = erddap_dict['url']
 
-            if baseurl.endswith("/index.html"):
-                baseurl = baseurl[:-10]
+            # Remove index.html and trailing slashes
+            if baseurl.endswith("index.html"):
+                baseurl = baseurl[:-10].rstrip('/')
 
-                try:
-                    serv_check = requests.get(baseurl)
-                    serv_check.raise_for_status()
+            try:
+                serv_check = requests.get(baseurl)
+                serv_check.raise_for_status()
 
+                server_url = f"{baseurl}/tabledap/"
+                setattr(server_obj, 'server', server_url)
 
-                    server_url = baseurl + "/tabledap/"
-                    setattr(server_obj, 'server', server_url)
+                # Set server info URL 
+                server_info_url = f"{baseurl}/info/index.json?itemsPerPage=1000"
+                setattr(server_obj, 'serverInfo', server_info_url)
 
-                    # We set server info class attribute here 
-                    server_info_url = baseurl + "/info/index.json"
-                    setattr(server_obj, 'serverInfo', server_info_url)
+                return server_obj
+            
+            except requests.exceptions.HTTPError as http_err:
+                print(f"HTTP error {http_err} occurred when connecting to {baseurl}")
+                return None
 
-                    return server_obj
-                
-                except requests.exceptions.HTTPError as http_err:
-                    print(f"HTTP error {http_err} occurred when connecting to {baseurl}")
-                    return None
-
-            else:
-
-                try:
-                    serv_check = requests.get(baseurl)
-                    serv_check.raise_for_status()
-
-                    server_url = erddap_dict['url'] + "/tabledap/"
-                    setattr(server_obj, 'server', server_url)
-
-                    server_info_url = erddap_dict['url'] + "/info/index.json?itemsPerPage=100000"
-                    setattr(server_obj, 'serverInfo', server_info_url)
-
-                    return server_obj
-                except requests.exceptions.HTTPError as http_err:
-                    print(f"HTTP error {http_err} occurred when connecting to {baseurl}")
-                    return None
-                
         
     def getDatasetsFromSearch(self, search: str) -> list:
         url = f"{self.serverInfo}"
