@@ -25,7 +25,17 @@ def makeItemProperties(erddapObj: ec.ERDDAPHandler, accessLevel = None) -> dict:
     if attribute_tags is not None:
         tags.extend(attribute_tags)
 
-    if erddapObj.server != "https://gliders.ioos.us/erddap//tabledap/":
+    if erddapObj.server == "https://gliders.ioos.us/erddap/tabledap/":
+        tags.append("Glider DAC")
+        dataidTitle = dataid.replace("-", "")
+        ItemProperties = {
+            "title": dataidTitle,
+            "type": "GeoJson",
+            "item_type": "Feature Service",
+            "tags": tags
+        }
+        
+    else:
         ItemProperties = {
             "title": dataid,
             "type": "CSV",
@@ -38,19 +48,7 @@ def makeItemProperties(erddapObj: ec.ERDDAPHandler, accessLevel = None) -> dict:
         if "license" in metadata and metadata["license"] is not None:
             ItemProperties["licenseInfo"] = metadata["license"].get("value", "")
 
-        #print(ItemProperties)
-        return ItemProperties
-    else:
-        dataidTitle = dataid.replace("-", "")
-        ItemProperties = {
-            "title": dataidTitle,
-            "type": "GeoJson",
-            #'typeKeywords': ['Coordinates Type', 'crs', 'Feature', 'FeatureCollection', 'GeoJSON', 'Geometry', 'GeometryCollection'],
-            "item_type": "Feature Service",
-            "tags": tags.extend(["Glider DAC"])
-        }
-
-        return ItemProperties
+    return ItemProperties
 
 
 def defineGeoParams(erddapObj: ec.ERDDAPHandler) -> dict:
@@ -191,21 +189,6 @@ def disable_editing(item_id):
     # Update the capabilities to disable editing
     flc.manager.update_definition({"capabilities": "Query"})
     print(f"Editing successfully disabled for item {item_id}")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
