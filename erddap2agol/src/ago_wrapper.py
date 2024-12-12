@@ -47,7 +47,7 @@ def makeItemProperties(erddapObj: ec.ERDDAPHandler, accessLevel = None) -> dict:
             "type": "GeoJson",
             #'typeKeywords': ['Coordinates Type', 'crs', 'Feature', 'FeatureCollection', 'GeoJSON', 'Geometry', 'GeometryCollection'],
             "item_type": "Feature Service",
-            "tags": tags
+            "tags": tags.extend(["Glider DAC"])
         }
 
         return ItemProperties
