@@ -388,3 +388,42 @@ def NRTUpdateAGOL() -> None:
             except Exception as e:
                     print(f"Error: {e}")
                     pass
+
+def gliderWorkflow(search_term: str = None, isNRT: int = 0) -> None:
+    """
+    Automates the workflow for glider data:
+    1. Selects glider ERDDAP server
+    2. Searches for datasets with given search term
+    3. Processes and publishes found datasets
+    
+    Args:
+        search_term (str, optional): Term to search for in dataset names. Defaults to None.
+        isNRT (int, optional): Whether to treat as near-real-time data. Defaults to 0.
+    """
+    # Get glider server
+    erddapObj = erddapSelection(GliderServ=True)
+    if not erddapObj:
+        print("Failed to connect to glider server")
+        return
+
+    if search_term:
+        # Store original server info
+        original_info = erddapObj.serverInfo
+        # Construct search URL
+        base_url = original_info.split('/erddap/')[0] + '/erddap'
+        search_url = f"{base_url}/search/index.json?searchFor={search_term}&page=1&itemsPerPage=100000&protocol=tabledap"
+        erddapObj.serverInfo = search_url
+        
+        # Get matching datasets
+        dataset_list = erddapObj.getDatasetIDList()
+        # Restore original server info
+        erddapObj.serverInfo = original_info
+
+        if dataset_list:
+            print(f"\nFound {len(dataset_list)} datasets matching search term '{search_term}'")
+            # Process and publish datasets
+            agolPublishList(dataset_list, erddapObj, isNRT)
+        else:
+            print(f"No datasets found matching search term '{search_term}'")
+    else:
+        print("No search term provided")
