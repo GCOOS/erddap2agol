@@ -59,28 +59,28 @@ def erddapSelection(GliderServ = False) -> ec.ERDDAPHandler:
 # This includes logic not found elsewhere, not a wrapper like other core funcs.
 # need to handle misinputs
 def selectDatasetFromList(erddapObj, dispLength=50) -> list:
-    def update_dataset_list(erddapObj, search_term=None):
+    def _updateDatasetList(erddapObj, search_term=None):
         if search_term:
             original_info = erddapObj.serverInfo
             # Extract the base URL (remove everything after /erddap/)
             base_url = original_info.split('/erddap/')[0] + '/erddap'
             # Construct the proper search URL
-            search_url = f"{base_url}/search/index.json?searchFor={search_term}&page=1&itemsPerPage=1000&protocol=tabledap"
+            search_url = f"{base_url}/search/index.json?searchFor={search_term}&page=1&itemsPerPage=100000&protocol=tabledap"
             erddapObj.serverInfo = search_url
             
-            print(f"Searching using URL: {search_url}")  # Debug print
+            #print(f"Searching using URL: {search_url}")  # Debug print
             dataset_id_list = erddapObj.getDatasetIDList()
             erddapObj.serverInfo = original_info
             return dataset_id_list
         return erddapObj.getDatasetIDList()
 
-    dataset_id_list = update_dataset_list(erddapObj)
+    dataset_id_list = _updateDatasetList(erddapObj)
     
     if len(dataset_id_list) < dispLength:
         dispLength = len(dataset_id_list)
     
     print(f"\nDatasets are shown {dispLength} at a time.")
-    print("Enter the number(s) of the datasets you want, separated by commas.")
+    print("Enter the number of the datasets you want and press enter.")
     print("To search datasets, type 'search:keyword'")
     print("To move forward one page type 'next', to move backwards type 'back'.")
     
@@ -98,6 +98,7 @@ def selectDatasetFromList(erddapObj, dispLength=50) -> list:
     
     while True:
         clear_screen()
+        print(dataset_id_list)
         start_index = (current_page - 1) * dispLength
         end_index = min(start_index + dispLength, len(dataset_id_list))
         current_page_datasets = dataset_id_list[start_index:end_index]
@@ -119,7 +120,7 @@ def selectDatasetFromList(erddapObj, dispLength=50) -> list:
 
             print(f"\nSearching for: {search_term}")
 
-            dataset_id_list = update_dataset_list(erddapObj, search_term)
+            dataset_id_list = _updateDatasetList(erddapObj, search_term)
 
             if not dataset_id_list:
                 print("No datasets found matching your search.")
@@ -145,6 +146,7 @@ def selectDatasetFromList(erddapObj, dispLength=50) -> list:
             run.cui()
 
         elif idx_select == "done":
+            print("\nDebug - Final input_list before return:", input_list)
             print("\nPassing the following datasets to the next step...")
             print(f"{input_list}")
             return input_list
@@ -162,7 +164,7 @@ def selectDatasetFromList(erddapObj, dispLength=50) -> list:
                     input_list.append(dataset)
             print(f"Added all datasets on page {current_page} to the list.")
             input("Press Enter to continue...")
-
+        # If user input is int, theyre adding datasets
         else:
             try:
                 indices = [i.strip() for i in idx_select.split(',')]
@@ -303,7 +305,15 @@ def agolPublishList(dataset_list, erddapObj, isNRT: int):
         print("No datasets to process.")
         return
 
+    # Store original server info
+    original_info = erddapObj.serverInfo
+    
+    # Get available datasets using original server info
+    erddapObj.serverInfo = original_info
     available_datasets = ec.ERDDAPHandler.getDatasetIDList(erddapObj)
+    
+    # print("\nDebug - Available datasets:", available_datasets)
+    # print("Debug - Dataset list to process:", dataset_list)
     
     # Determine which publish function to use based on the server
     if erddapObj.server == "https://gliders.ioos.us/erddap/tabledap/":
@@ -313,6 +323,10 @@ def agolPublishList(dataset_list, erddapObj, isNRT: int):
 
     if isNRT == 0:
         for dataset in dataset_list:
+            # print(f"\nDebug - Processing dataset: {dataset}")
+            # print(f"Debug - Type of dataset: {type(dataset)}")
+            # print(f"Debug - Available datasets contains dataset?: {dataset in available_datasets}")
+            
             if dataset not in available_datasets:
                 print(f"Dataset ID '{dataset}' not found in the list of available datasets.")
                 continue
@@ -368,6 +382,7 @@ def NRTUpdateAGOL() -> None:
                 gis = aw.agoConnect()
                 
                 content = gis.content.get(itemid)
+
 
                 OverwriteFS.overwriteFeatureService(content, url, verbose=True, preserveProps=False, ignoreAge = True)
             

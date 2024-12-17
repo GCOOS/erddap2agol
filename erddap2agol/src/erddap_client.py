@@ -156,7 +156,7 @@ class ERDDAPHandler:
                 setattr(server_obj, 'server', server_url)
 
                 # Set server info URL 
-                server_info_url = f"{baseurl}/info/index.json?itemsPerPage=1000"
+                server_info_url = f"{baseurl}/info/index.json?itemsPerPage=100000"
                 setattr(server_obj, 'serverInfo', server_info_url)
 
                 return server_obj
