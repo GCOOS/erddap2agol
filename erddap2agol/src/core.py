@@ -313,14 +313,14 @@ def agolPublishList(dataset_list, erddapObj, isNRT: int):
     erddapObj.serverInfo = original_info
     available_datasets = ec.ERDDAPHandler.getDatasetIDList(erddapObj)
     
-    # Determine which publish function to use based on the server
-    is_glider_server = erddapObj.server == "https://gliders.ioos.us/erddap/tabledap/"
+    # Determine which publish function to use based on the server flag
+    is_glider_server = getattr(erddapObj, 'is_glider', False)
     publish_function = agolPublish_glider if is_glider_server else agolPublish
 
-    # For non-NRT, non-glider data, ask about seed file once
-    seed_choice = None
+    # Only ask for seed files if not glider data
     if isNRT == 0 and not is_glider_server:
         seed_choice = input("Would you like to create seed files? (y/n): ").lower() == 'y'
+        erddapObj.seed_choice = seed_choice
 
     if isNRT == 0:
         for dataset in dataset_list:
@@ -409,7 +409,10 @@ def gliderWorkflow(search_term: str = None, isNRT: int = 0) -> None:
         print("Failed to connect to glider server")
         return
 
-    erddapObj.server == "https://gliders.ioos.us/erddap/tabledap/"
+    # Set server explicitly rather than comparing
+    erddapObj.server = "https://gliders.ioos.us/erddap/tabledap/"
+    erddapObj.is_glider = True  # Add flag to identify as glider server
+    
     if search_term:
         # Store original server info
         original_info = erddapObj.serverInfo
