@@ -406,6 +406,7 @@ def gliderWorkflow(search_term: str = None, isNRT: int = 0) -> None:
         print("Failed to connect to glider server")
         return
 
+    erddapObj.server == "https://gliders.ioos.us/erddap/tabledap/"
     if search_term:
         # Store original server info
         original_info = erddapObj.serverInfo
