@@ -146,7 +146,6 @@ def selectDatasetFromList(erddapObj, dispLength=50) -> list:
             run.cui()
 
         elif idx_select == "done":
-            print("\nDebug - Final input_list before return:", input_list)
             print("\nPassing the following datasets to the next step...")
             print(f"{input_list}")
             return input_list

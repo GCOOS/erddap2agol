@@ -1,5 +1,6 @@
 from arcgis.gis import GIS
 from arcgis.features import FeatureLayer, FeatureLayerCollection
+from arcgis.gis._impl._content_manager import SharingLevel
 from . import erddap_client as ec
 from . import das_client as dc
 import copy, os, sys, pandas as pd, numpy as np, json
@@ -16,7 +17,7 @@ def agoConnect() -> None:
         print(f"An error occurred connecting to ArcGIS Online: {e}")
 
 # Need to work out the rest of the metadata in item props
-def makeItemProperties(erddapObj: ec.ERDDAPHandler, accessLevel = None) -> dict:
+def makeItemProperties(erddapObj: ec.ERDDAPHandler) -> dict:
     dataid = erddapObj.datasetid
     attribute_tags = erddapObj.attributes
 
@@ -39,9 +40,9 @@ def makeItemProperties(erddapObj: ec.ERDDAPHandler, accessLevel = None) -> dict:
         
         # First check for institution, then creator_institution if institution doesn't exist
         if "institution" in global_attrs:
-            ItemProperties["credits"] = global_attrs["institution"].get("value", "")
+            ItemProperties["accessInformation"] = global_attrs["institution"].get("value", "")
         elif "creator_institution" in global_attrs:
-            ItemProperties["credits"] = global_attrs["creator_institution"].get("value", "")
+            ItemProperties["accessInformation"] = global_attrs["creator_institution"].get("value", "")
             
         # Map license information
         if "license" in global_attrs:
@@ -141,7 +142,7 @@ def pointTableToGeojsonLine(filepath, erddapObj: ec.ERDDAPHandler, X="longitude 
     else:
         sys.exit()
 
-def publishTable(item_prop: dict, geom_params: dict, path, erddapObj: ec.ERDDAPHandler, inputDataType="csv") -> str:
+def publishTable(item_prop: dict, geom_params: dict, path, erddapObj: ec.ERDDAPHandler, inputDataType="csv", sharing_lvl = "EVERYONE") -> str:
     try:
         geom_params.pop('hasStaticData', None)
 
@@ -163,12 +164,16 @@ def publishTable(item_prop: dict, geom_params: dict, path, erddapObj: ec.ERDDAPH
         print(f"\nitem.publish...")
         published_item = item.publish(publish_parameters=erddapObj.geoParams, file_type=inputDataType)
 
+        # we should be doing this above, i believe geoParams is the service definition
         # Disable editing by updating layer capabilities
         item_gis = gis.content.get(published_item.id)
         item_flc = FeatureLayerCollection.fromitem(item_gis)
         update_definition_dict = {"capabilities": "Query,Extract"}
-
         item_flc.manager.update_definition(update_definition_dict)
+
+        if sharing_lvl is not None:
+            item_sharing_mgr = item_gis.sharing
+            item_sharing_mgr.sharing_level = SharingLevel.EVERYONE
 
         print(f"\nSuccessfully uploaded {item_prop['title']} to ArcGIS Online")
         print(f"Item ID: {published_item.id}")
