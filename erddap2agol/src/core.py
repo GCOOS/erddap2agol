@@ -260,8 +260,10 @@ def parseDasNRT(erddapObj, dataset) -> list:
 # Terminal
 def agolPublish(erddapObj, attribute_list:list, isNRT: int) -> None:
     if isNRT == 0:
-        seed_choice = input("Would you like to create a seed file? (y/n): ").lower()
-        seedbool = seed_choice
+        seedbool = getattr(erddapObj, 'seed_choice', None)
+        if seedbool is None:
+            seed_choice = input("Would you like to create a seed file? (y/n): ").lower()
+            seedbool = seed_choice == 'y'
     else:
         seedbool = False
 
@@ -311,21 +313,17 @@ def agolPublishList(dataset_list, erddapObj, isNRT: int):
     erddapObj.serverInfo = original_info
     available_datasets = ec.ERDDAPHandler.getDatasetIDList(erddapObj)
     
-    # print("\nDebug - Available datasets:", available_datasets)
-    # print("Debug - Dataset list to process:", dataset_list)
-    
     # Determine which publish function to use based on the server
-    if erddapObj.server == "https://gliders.ioos.us/erddap/tabledap/":
-        publish_function = agolPublish_glider
-    else:
-        publish_function = agolPublish
+    is_glider_server = erddapObj.server == "https://gliders.ioos.us/erddap/tabledap/"
+    publish_function = agolPublish_glider if is_glider_server else agolPublish
+
+    # For non-NRT, non-glider data, ask about seed file once
+    seed_choice = None
+    if isNRT == 0 and not is_glider_server:
+        seed_choice = input("Would you like to create seed files? (y/n): ").lower() == 'y'
 
     if isNRT == 0:
         for dataset in dataset_list:
-            # print(f"\nDebug - Processing dataset: {dataset}")
-            # print(f"Debug - Type of dataset: {type(dataset)}")
-            # print(f"Debug - Available datasets contains dataset?: {dataset in available_datasets}")
-            
             if dataset not in available_datasets:
                 print(f"Dataset ID '{dataset}' not found in the list of available datasets.")
                 continue
@@ -334,7 +332,12 @@ def agolPublishList(dataset_list, erddapObj, isNRT: int):
                 print(f"\nNo data found for dataset '{dataset}', trying next.")
                 continue
             else:
-                publish_function(erddapObj, attribute_list, isNRT)
+                if is_glider_server:
+                    publish_function(erddapObj, attribute_list, isNRT)
+                else:
+                    # Pass the seed_choice to agolPublish
+                    erddapObj.seed_choice = seed_choice
+                    publish_function(erddapObj, attribute_list, isNRT)
         ec.cleanTemp()
     else:
         for dataset in dataset_list:
