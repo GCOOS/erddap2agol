@@ -1,4 +1,4 @@
-# ERDDAP2AGOL v.0.5.0.1 
+# ERDDAP2AGOL v.0.5.5.2 
 
 The goal of this project is to establish a connection between ERDDAP services and ArcGIS Online (AGOL). Erddap2agol will be a "hands-off" ETL program to automatically update and manage ERDDAP data hosted on ArcGIS Online. 
 Erddap2agol is a service provided by the Gulf of Mexico Ocean Observing System (GCOOS) and is intended for use by other data providers using ERDDAP, or individuals who wish to study ERDDAP data on a GIS platform. As this project is in active development, please see the "roadmap" section.
@@ -13,7 +13,7 @@ The ERDDAP2AGOL tool is under active development. Stable features are indicated 
 
 ## What to expect
 * Your ERDDAP data will be available in three product levels.         
-- NRT: 7 day moving window, Level 1. (Available now!)
+- NRT: 7 day moving window, Level 1. (WIP)
 - Glider DAC Menu: Create multiline HFLs from the Glider DAC ERDDAP (Available now!)  
 - Historical: Updated weekly, contains all data, Level 2. (Version 0.6) 
 - QC Historical: QC Flags, low quality records removed, Level 3. (Version 0.7) <br />

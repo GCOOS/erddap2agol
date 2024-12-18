@@ -221,6 +221,11 @@ def parseDas(erddapObj, dataset):
     timeintv = ec.ERDDAPHandler.calculateTimeRange(erddapObj)
     dc.displayAttributes(timeintv, attribute_list)
     
+    # Ask about seed file after showing record count
+    if getattr(erddapObj, 'seed_choice', None) is None:
+        seed_choice = input(f"\nDataset contains {timeintv} days of records. Would you like to create a seed file? (y/n): ").lower()
+        setattr(erddapObj, 'seed_choice', seed_choice == 'y')
+    
     return attribute_list
 
 # DAS parsing and attribute definitions for NRT datasets
@@ -232,7 +237,7 @@ def parseDasNRT(erddapObj, dataset) -> list:
     
     parsed_response = dc.convertToDict(dc.parseDasResponse(das_resp))
     fp = dc.saveToJson(parsed_response, dataset)
-    #print(f"\nDas converted to JSON successfully")
+    print(f"\nDas converted to JSON successfully")
 
     
     attribute_list = dc.getActualAttributes(dc.openDasJson(dataset), erddapObj)
@@ -279,10 +284,7 @@ def agolPublish(erddapObj, attribute_list:list, isNRT: int, skip_check: bool = F
         return
     
     if isNRT == 0:
-        seedbool = getattr(erddapObj, 'seed_choice', None)
-        if seedbool is None:
-            seed_choice = input("Would you like to create a seed file? (y/n): ").lower()
-            seedbool = seed_choice == 'y'
+        seedbool = getattr(erddapObj, 'seed_choice', False)
     else:
         seedbool = False
 
@@ -352,11 +354,6 @@ def agolPublishList(dataset_list, erddapObj, isNRT: int, skip_check: bool = Fals
     is_glider_server = getattr(erddapObj, 'is_glider', False)
     publish_function = agolPublish_glider if is_glider_server else agolPublish
 
-    # Only ask for seed files if not glider data
-    if isNRT == 0 and not is_glider_server:
-        seed_choice = input("Would you like to create seed files? (y/n): ").lower() == 'y'
-        erddapObj.seed_choice = seed_choice
-
     if isNRT == 0:
         for dataset in dataset_list:
             dataset_start_time = time.time()
@@ -380,9 +377,8 @@ def agolPublishList(dataset_list, erddapObj, isNRT: int, skip_check: bool = Fals
                 if is_glider_server:
                     publish_function(erddapObj, attribute_list, isNRT, skip_check=skip_check)
                 else:
-                    # Pass the seed_choice to agolPublish
-                    erddapObj.seed_choice = seed_choice
                     publish_function(erddapObj, attribute_list, isNRT, skip_check=skip_check)
+            
             dataset_end_time = time.time()
             processing_time = dataset_end_time - dataset_start_time
             processed_count += 1

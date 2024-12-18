@@ -14,8 +14,8 @@ from erddap2agol.src import core
 from erddap2agol.logs import updatelog as ul 
 
 def main():
-    #run.cui()
-    core.gliderWorkflow(search_term="GCOOS")    
+    run.cui()
+    #core.gliderWorkflow(search_term="GCOOS")    
 
 if __name__ == "__main__":
     main()
