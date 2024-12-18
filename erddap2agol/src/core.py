@@ -1,5 +1,6 @@
 #Runtime logic consolidated here
 import sys, os, requests, json
+import time  # Add this import at the top with other imports
 from . import erddap_client as ec
 from . import das_client as dc
 from . import ago_wrapper as aw
@@ -204,7 +205,7 @@ def parseDas(erddapObj, dataset):
     
     parsed_response = dc.convertToDict(dc.parseDasResponse(das_resp))
     dc.saveToJson(parsed_response, dataset)
-    print(f"\nDas converted to JSON successfully")
+    #print(f"\nDas converted to JSON successfully")
 
     
     attribute_list = dc.getActualAttributes(dc.openDasJson(dataset), erddapObj)
@@ -231,7 +232,7 @@ def parseDasNRT(erddapObj, dataset) -> list:
     
     parsed_response = dc.convertToDict(dc.parseDasResponse(das_resp))
     fp = dc.saveToJson(parsed_response, dataset)
-    print(f"\nDas converted to JSON successfully")
+    #print(f"\nDas converted to JSON successfully")
 
     
     attribute_list = dc.getActualAttributes(dc.openDasJson(dataset), erddapObj)
@@ -258,7 +259,25 @@ def parseDasNRT(erddapObj, dataset) -> list:
 
 # AGOL publishing and log updating
 # Terminal
-def agolPublish(erddapObj, attribute_list:list, isNRT: int) -> None:
+def check_dataset_exists(dataset_id: str) -> bool:
+    """Check if dataset already exists in AGOL by searching for its tag."""
+    try:
+        # Search for items with the dataset ID tag
+        search_results = aw.searchContentByTag(dataset_id)
+        return len(search_results) > 0
+    except Exception as e:
+        print(f"Error checking dataset existence: {e}")
+        return False
+
+def agolPublish(erddapObj, attribute_list:list, isNRT: int, skip_check: bool = False) -> None:
+    start_time = time.time()
+    print(f"\nProcessing dataset: {erddapObj.datasetid}")
+    
+    # Check if dataset exists unless skip_check is True
+    if not skip_check and check_dataset_exists(erddapObj.datasetid):
+        print(f"\nWarning: Dataset {erddapObj.datasetid} already exists in AGOL. Skipping processing.")
+        return
+    
     if isNRT == 0:
         seedbool = getattr(erddapObj, 'seed_choice', None)
         if seedbool is None:
@@ -275,14 +294,26 @@ def agolPublish(erddapObj, attribute_list:list, isNRT: int) -> None:
         
         propertyDict = aw.makeItemProperties(erddapObj)
 
-        table_id = aw.publishTable(propertyDict, erddapObj.geoParams, filepath, erddapObj)
+        table_id = aw.postAndPublish(propertyDict, erddapObj.geoParams, filepath, erddapObj)
         ul.updateLog(erddapObj.datasetid, table_id, "None", full_url, erddapObj.end_time, ul.get_current_time(), isNRT)
         ec.cleanTemp()
+        
+        end_time = time.time()
+        processing_time = end_time - start_time
+        print(f"Processing completed in {processing_time:.2f} seconds")
     else:
+        end_time = time.time()
+        processing_time = end_time - start_time
+        print(f"Processing failed after {processing_time:.2f} seconds")
         print(f"Skipping {erddapObj.datasetid} due to bad response.")
 
 # Modified agol publish function for glider datasets
-def agolPublish_glider(erddapObj, attribute_list:list, isNRT: int, dataformat="geojson") -> None:
+def agolPublish_glider(erddapObj, attribute_list:list, isNRT: int, dataformat="geojson", skip_check: bool = False) -> None:
+
+    # Check if dataset exists unless skip_check is True
+    if not skip_check and check_dataset_exists(erddapObj.datasetid):
+        print(f"\nWarning: Dataset {erddapObj.datasetid} already exists in AGOL. Skipping processing.")
+        return
 
     full_url = erddapObj.generate_url(0, attribute_list)
 
@@ -293,7 +324,7 @@ def agolPublish_glider(erddapObj, attribute_list:list, isNRT: int, dataformat="g
     
     propertyDict = aw.makeItemProperties(erddapObj)
        
-    table_id = aw.publishTable(propertyDict, erddapObj.geoParams, geojson_path, erddapObj, inputDataType= dataformat)
+    table_id = aw.postAndPublish(propertyDict, erddapObj.geoParams, geojson_path, erddapObj, inputDataType= dataformat)
 
     ul.updateLog(erddapObj.datasetid, table_id, "None", full_url, erddapObj.end_time, ul.get_current_time(), isNRT)
     ec.cleanTemp()
@@ -301,11 +332,15 @@ def agolPublish_glider(erddapObj, attribute_list:list, isNRT: int, dataformat="g
 
 # When users provide multiple datasets for manual upload 
 # Terminal
-def agolPublishList(dataset_list, erddapObj, isNRT: int):
+def agolPublishList(dataset_list, erddapObj, isNRT: int, skip_check: bool = False):
     if not dataset_list:
         print("No datasets to process.")
         return
 
+    total_start_time = time.time()
+    processed_count = 0
+    skipped_count = 0
+    
     # Store original server info
     original_info = erddapObj.serverInfo
     
@@ -324,33 +359,67 @@ def agolPublishList(dataset_list, erddapObj, isNRT: int):
 
     if isNRT == 0:
         for dataset in dataset_list:
+            dataset_start_time = time.time()
+            print(f"\nProcessing dataset: {dataset}")
+            
             if dataset not in available_datasets:
                 print(f"Dataset ID '{dataset}' not found in the list of available datasets.")
                 continue
+
+            # Check if dataset exists unless skip_check is True
+            if not skip_check and check_dataset_exists(dataset):
+                print(f"\nWarning: Dataset {dataset} already exists in AGOL. Skipping processing.")
+                skipped_count += 1
+                continue
+
             attribute_list = parseDas(erddapObj, dataset)
             if attribute_list is None:
                 print(f"\nNo data found for dataset '{dataset}', trying next.")
                 continue
             else:
                 if is_glider_server:
-                    publish_function(erddapObj, attribute_list, isNRT)
+                    publish_function(erddapObj, attribute_list, isNRT, skip_check=skip_check)
                 else:
                     # Pass the seed_choice to agolPublish
                     erddapObj.seed_choice = seed_choice
-                    publish_function(erddapObj, attribute_list, isNRT)
+                    publish_function(erddapObj, attribute_list, isNRT, skip_check=skip_check)
+            dataset_end_time = time.time()
+            processing_time = dataset_end_time - dataset_start_time
+            processed_count += 1
+            print(f"Dataset processed in {processing_time:.2f} seconds")
         ec.cleanTemp()
     else:
         for dataset in dataset_list:
+            dataset_start_time = time.time()
+            print(f"\nProcessing dataset: {dataset}")
+            
             if dataset not in available_datasets:
                 print(f"Dataset ID '{dataset}' not found in the list of available datasets.")
                 continue
+
+            # Check if dataset exists unless skip_check is True
+            if not skip_check and check_dataset_exists(dataset):
+                print(f"\nWarning: Dataset {dataset} already exists in AGOL. Skipping processing.")
+                skipped_count += 1
+                continue
+
             attribute_list = parseDasNRT(erddapObj, dataset)
             if attribute_list is None:
                 print(f"\nNo data found for dataset '{dataset}', trying next.")
                 continue
-            publish_function(erddapObj, attribute_list, isNRT)
+            publish_function(erddapObj, attribute_list, isNRT, skip_check=skip_check)
+            dataset_end_time = time.time()
+            processing_time = dataset_end_time - dataset_start_time
+            processed_count += 1
+            print(f"Dataset processed in {processing_time:.2f} seconds")
         ec.cleanTemp()
 
+    total_end_time = time.time()
+    total_time = total_end_time - total_start_time
+    print(f"\nProcessing completed for {processed_count} datasets")
+    if skipped_count > 0:
+        print(f"Skipped {skipped_count} datasets that already existed in AGOL")
+    print(f"Total processing time: {total_time:.2f} seconds")
     print("\nAll done!")
 
 
@@ -359,7 +428,7 @@ def agolPublishList(dataset_list, erddapObj, isNRT: int):
 ##### Functions for Notebooks #####
 ###################################
 
-def NRTUpdateAGOL() -> None:
+def NRTUpdateAGOL(skip_check: bool = True) -> None:
     #This is hardcoded for GCOOS ERDDAP
     erddapObj = ec.erddapGcoos    
 
@@ -392,7 +461,7 @@ def NRTUpdateAGOL() -> None:
                     print(f"Error: {e}")
                     pass
 
-def gliderWorkflow(search_term: str = None, isNRT: int = 0) -> None:
+def gliderWorkflow(search_term: str = None, isNRT: int = 0, skip_check: bool = False) -> None:
     """
     Automates the workflow for glider data:
     1. Selects glider ERDDAP server
@@ -402,6 +471,7 @@ def gliderWorkflow(search_term: str = None, isNRT: int = 0) -> None:
     Args:
         search_term (str, optional): Term to search for in dataset names. Defaults to None.
         isNRT (int, optional): Whether to treat as near-real-time data. Defaults to 0.
+        skip_check (bool, optional): Whether to skip the dataset existence check. Defaults to False.
     """
     # Get glider server
     erddapObj = erddapSelection(GliderServ=True)
@@ -429,7 +499,7 @@ def gliderWorkflow(search_term: str = None, isNRT: int = 0) -> None:
         if dataset_list:
             print(f"\nFound {len(dataset_list)} datasets matching search term '{search_term}'")
             # Process and publish datasets
-            agolPublishList(dataset_list, erddapObj, isNRT)
+            agolPublishList(dataset_list, erddapObj, isNRT, skip_check=skip_check)
         else:
             print(f"No datasets found matching search term '{search_term}'")
     else:

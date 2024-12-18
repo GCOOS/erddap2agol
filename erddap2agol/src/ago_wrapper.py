@@ -58,35 +58,23 @@ def makeItemProperties(erddapObj: ec.ERDDAPHandler) -> dict:
         
         # Create summary with dataset title and ERDDAP server info
         server_name = erddapObj.server.split('/erddap/')[0].split('://')[-1]
-        ItemProperties["snippet"] = f"{dataset_title} was generated with erddap2agol from the {server_name} ERDDAP."
+
+        if "summary " in global_attrs:
+            sum_string = global_attrs["summary"].get("value", "")
+            ItemProperties["snippet"] = f"{sum_string}. {dataset_title} was generated with erddap2agol from the {server_name} ERDDAP."
+        else:
+            ItemProperties["snippet"] = f"{dataset_title} was generated with erddap2agol from the {server_name} ERDDAP."
 
     # Special handling for Glider DAC
     if erddapObj.server == "https://gliders.ioos.us/erddap/tabledap/":
         tags.append("Glider DAC")
-        #dataidTitle = dataid.replace("-", "")
-        ItemProperties.update({
-        #    "title": dataidTitle,
+        ItemProperties.update({        
             "type": "GeoJson"
         })
 
     return ItemProperties
 
 
-def defineGeoParams(erddapObj: ec.ERDDAPHandler) -> dict:
-    # Hard code coordinate parameters presuming these have already
-    # been checked to exist 
-
-    geom_params = erddapObj.geoParams
-
-    attribute_list = erddapObj.attributes
-    #This doesnt work, we might have to publish first, then update the properties
-    # for attribute in attribute_list:
-    #     if "depth" in attribute or "z" in attribute:
-    #         geom_params["hasZ"] = True
-        
-
-    return geom_params
-        
 def pointTableToGeojsonLine(filepath, erddapObj: ec.ERDDAPHandler, X="longitude (degrees_east)", Y="latitude (degrees_north)") -> dict:
     if filepath:
         print(f"\nConverting {filepath} to GeoJSON...")
@@ -142,9 +130,9 @@ def pointTableToGeojsonLine(filepath, erddapObj: ec.ERDDAPHandler, X="longitude 
     else:
         sys.exit()
 
-def publishTable(item_prop: dict, geom_params: dict, path, erddapObj: ec.ERDDAPHandler, inputDataType="csv", sharing_lvl = "EVERYONE") -> str:
+def postAndPublish(item_prop: dict, geom_params: dict, path, erddapObj: ec.ERDDAPHandler, inputDataType="csv", sharing_lvl = "EVERYONE") -> str:
     try:
-        geom_params.pop('hasStaticData', None)
+        geom_params.pop('hasStaticData', None) 
 
         print(f"\ngis.content.add...")
         item = gis.content.add(item_prop, path, HasGeometry=True)
@@ -159,7 +147,6 @@ def publishTable(item_prop: dict, geom_params: dict, path, erddapObj: ec.ERDDAPH
         # Ensure publish parameters include a unique service name
         if 'name' not in erddapObj.geoParams or not erddapObj.geoParams['name']:
             erddapObj.geoParams['name'] = item_prop['title']
-            # .replace(' ', '_')
 
         print(f"\nitem.publish...")
         published_item = item.publish(publish_parameters=erddapObj.geoParams, file_type=inputDataType)
@@ -217,24 +204,6 @@ def disable_editing(item_id):
     # Update the capabilities to disable editing
     flc.manager.update_definition({"capabilities": "Query"})
     print(f"Editing successfully disabled for item {item_id}")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
