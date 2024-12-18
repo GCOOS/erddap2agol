@@ -1,5 +1,5 @@
 from .src import erddap_client as ec
-from .src import level_manager as lm
+from .src import data_wrangler as lm
 from .src import core
 from arcgis.gis import GIS
 

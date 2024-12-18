@@ -4,7 +4,7 @@ import time  # Add this import at the top with other imports
 from . import erddap_client as ec
 from . import das_client as dc
 from . import ago_wrapper as aw
-from . import level_manager as lm
+from . import data_wrangler as dw
 from erddap2agol import run
 from logs import updatelog as ul
 from src.utils import OverwriteFS
@@ -197,7 +197,7 @@ def findBigDatasets(dataset_list: list, erddapObj: ec.ERDDAPHandler) -> dict:
     Returns: {datasetid: {subset1: {start:time, end:time}, subset2:{...}}}
     """
     time_dict = {}
-    sizeDict = lm.getDatasetSizes(dataset_list, erddapObj)
+    sizeDict = dw.getDatasetSizes(dataset_list, erddapObj)
     sizeDict_filtered = {k: v for k, v in sizeDict.items() if v > 45000}
     bypassDatasets = [k for k, v in sizeDict.items() if k not in sizeDict_filtered]
     
@@ -260,9 +260,9 @@ def parseDasNRT(erddapObj, dataset) -> list:
     
     attribute_list = dc.getActualAttributes(dc.openDasJson(dataset), erddapObj)
 
-    window_start, window_end = lm.movingWindow(isStr=True)
+    window_start, window_end = dw.movingWindow(isStr=True)
 
-    overlapBool = lm.checkDataRange(dataset)
+    overlapBool = dw.checkDataRange(dataset)
     
     if overlapBool == False:
         print(f"\nNo data found for dataset {dataset} within the last 7 days.")
@@ -446,11 +446,11 @@ def NRTUpdateAGOL(skip_check: bool = True) -> None:
     #This is hardcoded for GCOOS ERDDAP
     erddapObj = ec.erddapGcoos    
 
-    nrt_dict  = lm.NRTFindAGOL()
+    nrt_dict  = dw.NRTFindAGOL()
     for datasetid, itemid in nrt_dict.items():
         if datasetid and itemid:
             try: 
-                startWindow, endWindow = lm.movingWindow(isStr=True)
+                startWindow, endWindow = dw.movingWindow(isStr=True)
                 das_resp = ec.ERDDAPHandler.getDas(erddapObj, datasetid)
                 parsed_response = dc.convertToDict(dc.parseDasResponse(das_resp))
                 fp = dc.saveToJson(parsed_response, datasetid)

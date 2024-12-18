@@ -1,9 +1,10 @@
-#ERDDAP stuff is handled here with the ERDDAPHandler class.
-import sys, os, requests, json, math
+import sys, os, requests, json, pandas as pd
 from datetime import datetime, timedelta
-import pandas as pd
 from io import StringIO
+from typing import Optional, Dict, List
 import tempfile
+from . import data_wrangler as dw
+from erddap2agol.src.data_wrangler import dataclass
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
@@ -75,7 +76,7 @@ def showErddapList() -> None:
 
 #--------------------------------------------------------------------------------
 class ERDDAPHandler:
-    def __init__(self, server, serverInfo, datasetid, attributes, fileType, longitude, latitude, time, start_time, end_time, geoParams):
+    def __init__(self, server, serverInfo, datasetid, attributes, fileType, longitude, latitude, time, start_time, end_time, geoParams, datasets, availData):
         self.server = server
         self.serverInfo = serverInfo
         self.datasetid = datasetid
@@ -87,9 +88,28 @@ class ERDDAPHandler:
         self.start_time = start_time
         self.end_time = end_time
         self.geoParams = geoParams
+        self.datasets = []
+        self.availData = []
 
-   
+    def __iter__(self):
+        """Make ERDDAPHandler directly iterable"""
+        return iter(self.datasets)
+    
+    def __len__(self):
+        """Get number of datasets"""
+        return len(self.datasets)
+    
+    def __getitem__(self, index):
+        """Allow index access to datasets"""
+        return self.datasets[index]
+    
+    # def get_unprocessed(self) -> List[dw.DatasetWrangler]:
+    #         return [d for d in self.datasets if not d.is_processed]
+    
+
     def getDatasetIDList(self) -> list:
+        """Fetches a list of dataset IDs from the ERDDAP server.
+           spits out list of dataset IDs"""
         url = f"{self.serverInfo}"
         try:
             response = requests.get(url)
@@ -114,18 +134,27 @@ class ERDDAPHandler:
         except Exception as e:
             print(f"Error fetching dataset ID list: {e}")
             return []
+        
+    @property
+    def availData(self):
+        """Loading of available datasets"""
+        if self._availData is None:
+            self._availData = self.getDatasetIDList()
+        return self._availData
 
+
+    def add_dataset(self, dataset_id: str) -> dw.DatasetWrangler:
+            dataset = dw.DatasetWrangler(
+                dataset_id=dataset_id,
+                server=self.server
+            )
+            self.datasets.append(dataset)
+            return dataset
+    
+    
         
     #Gets dataset DAS    
-    def getDas(self, datasetid: str) -> str:
-        dataset_id_list = self.getDatasetIDList()
-        if datasetid not in dataset_id_list:
-            print(f"\nDataset ID {datasetid} not found in the list of available datasets.")
-            return None
-        else:
-            url = f"{self.server}{datasetid}.das"
-            response = requests.get(url)
-            return response.text
+
         
         
     def setErddap(self, erddapIndex: int):
@@ -229,45 +258,6 @@ class ERDDAPHandler:
 
         return url
     
-    def calculateTimeSubset(self, row_count: int) -> dict:
-        """Calculate time subsets based on row count.
-        Returns Subset_N: {'start': time, 'end': time}
-        """
-        try:
-            # Use start_time and end_time directly if they are datetime objects
-            start = self.start_time
-            end = self.end_time
-
-            # If start_time or end_time are strings, parse them into datetime objects
-            if isinstance(start, str):
-                start = datetime.fromisoformat(start)
-            if isinstance(end, str):
-                end = datetime.fromisoformat(end)
-
-            # Calculate total days and required chunks
-            total_days = (end - start).days
-            chunks_needed = max(1, math.ceil(row_count / 45000))
-
-            days_per_chunk = total_days / chunks_needed
-
-            time_chunks = {}
-            chunk_start = start
-            chunk_num = 1
-
-            while chunk_start < end:
-                chunk_end = min(chunk_start + timedelta(days=days_per_chunk), end)
-                time_chunks[f'Subset_{chunk_num}'] = {
-                    'start': chunk_start.strftime('%Y-%m-%dT%H:%M:%S'),
-                    'end': chunk_end.strftime('%Y-%m-%dT%H:%M:%S'),
-                }
-                chunk_start = chunk_end
-                chunk_num += 1
-
-            return time_chunks
-
-        except Exception as e:
-            print(f"Error calculating time subset: {e}")
-            return None
         
     def fetchData(self, url):
         response, responseCode = self.return_response(url)

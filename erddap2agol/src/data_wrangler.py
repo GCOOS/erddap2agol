@@ -4,11 +4,90 @@ from logs import updatelog as ul
 from src.utils import OverwriteFS
 from arcgis.gis import GIS
 
-#from utils import OverwriteFS
+from dataclasses import dataclass
+from datetime import datetime
+from typing import Optional, Dict, List
 
-import datetime, requests, re
+import datetime, requests, re, math
 from datetime import timedelta, datetime
 
+################## Experimenting with new class ##################
+
+@dataclass
+class DatasetWrangler:
+    """Represents a single ERDDAP dataset with metadata and time params"""
+    dataset_id: str
+    server: str
+    row_count: Optional[int] = None
+    attributes: List[str] = None
+    time_params: Dict[str, datetime] = None
+    das_metadata: Dict = None
+
+    def __post_init__(self):
+        self.subsets = {}
+        self.is_processed = False
+    
+    def get_das(self) -> Dict:
+        """Fetch and parse DAS metadata"""
+        url = f"{self.server}{self.dataset_id}.das"
+        response = requests.get(url)
+        if response.status_code != 200:
+            return None
+        return dc.parseDasResponse(response.text)
+
+
+
+    # Below are example functions that can be used to manipulate the dataset object
+    def add_time_subset(self, subset_name: str, start: str, end: str) -> None:
+        """Add time subset for chunked processing"""
+        if not self.subsets:
+            self.subsets = {}
+        self.subsets[subset_name] = {'start': start, 'end': end}
+
+    @property
+    def needs_chunking(self) -> bool:
+        """Check if dataset needs to be split into chunks"""
+        return self.row_count > 45000 if self.row_count else False
+    
+    def calculateTimeSubset(self, row_count: int) -> dict:
+        """Calculate time subsets based on row count.
+        Returns Subset_N: {'start': time, 'end': time}
+        """
+        try:
+            # Use start_time and end_time directly if they are datetime objects
+            start = self.start_time
+            end = self.end_time
+
+            # If start_time or end_time are strings, parse them into datetime objects
+            if isinstance(start, str):
+                start = datetime.fromisoformat(start)
+            if isinstance(end, str):
+                end = datetime.fromisoformat(end)
+
+            # Calculate total days and required chunks
+            total_days = (end - start).days
+            chunks_needed = max(1, math.ceil(row_count / 45000))
+
+            days_per_chunk = total_days / chunks_needed
+
+            time_chunks = {}
+            chunk_start = start
+            chunk_num = 1
+
+            while chunk_start < end:
+                chunk_end = min(chunk_start + timedelta(days=days_per_chunk), end)
+                time_chunks[f'Subset_{chunk_num}'] = {
+                    'start': chunk_start.strftime('%Y-%m-%dT%H:%M:%S'),
+                    'end': chunk_end.strftime('%Y-%m-%dT%H:%M:%S'),
+                }
+                chunk_start = chunk_end
+                chunk_num += 1
+
+            return time_chunks
+
+        except Exception as e:
+            print(f"Error calculating time subset: {e}")
+            return None
 
 
 ################## NRT Functions ##################
