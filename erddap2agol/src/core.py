@@ -99,7 +99,6 @@ def selectDatasetFromList(erddapObj, dispLength=50) -> list:
     
     while True:
         clear_screen()
-        print(dataset_id_list)
         start_index = (current_page - 1) * dispLength
         end_index = min(start_index + dispLength, len(dataset_id_list))
         current_page_datasets = dataset_id_list[start_index:end_index]
