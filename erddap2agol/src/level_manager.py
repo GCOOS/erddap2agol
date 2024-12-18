@@ -1,13 +1,12 @@
 from . import erddap_client as ec
 from . import das_client as dc
-from . import ago_wrapper as aw
 from logs import updatelog as ul
 from src.utils import OverwriteFS
 from arcgis.gis import GIS
 
 #from utils import OverwriteFS
 
-import sys, os, datetime
+import datetime, requests, re
 from datetime import timedelta, datetime
 
 
@@ -60,6 +59,40 @@ def NRTFindAGOL() -> list:
     nrt_dict  = ul.updateCallFromNRT(1)
     return nrt_dict
 
-################## Historical Functions ##################
-
+def getDatasetSizes(datasetList: list, erddapObj: ec.ERDDAPHandler) -> dict:
+    """Gets row counts for multiple datasets and spits out into a dictionary datasetid, rowNumber"""
     
+    def _parse_header(content: str) -> int:
+        """Parse ncHeader content to find row count using fancy regex"""
+        match = re.search(r'dimensions:\s*(.*?)\s*variables:', content, re.DOTALL)
+        if not match:
+            return None
+            
+        dimensions_section = match.group(1)
+        for line in dimensions_section.split('\n'):
+            line = line.strip()
+            if line.startswith('row'):
+                row_match = re.match(r'row\s*=\s*(\d+);', line)
+                if row_match:
+                    return int(row_match.group(1))
+            elif line.startswith('obs'):
+                obs_match = re.match(r'obs\s*=\s*(\d+);', line)
+                if obs_match:
+                    return int(obs_match.group(1))
+        return None
+    
+    def _get_row_count(dataset: str) -> int:
+        """Get row count for single dataset"""
+        base_url = f"{erddapObj.server}{dataset}"
+        ncheader_url = f"{base_url}.ncHeader?"
+        
+        print(f"Requesting headers for {dataset}")
+        response = requests.get(ncheader_url)
+        if response.status_code != 200:
+            return None
+            
+        return _parse_header(response.text)
+    
+    return {dataset: _get_row_count(dataset) for dataset in datasetList}
+
+

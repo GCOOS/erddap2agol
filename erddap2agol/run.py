@@ -35,10 +35,26 @@ def create_erddap_item_menu():
         cui()
         return
     dataset_list = core.selectDatasetFromList(erddapObj)
+    timeDict = core.findBigDatasets(dataset_list, erddapObj)
+    print(timeDict)
+    
     if dataset_list:
         core.agolPublishList(dataset_list, erddapObj, 0)
     print("\nReturning to main menu...")
     cui()
+
+
+# def create_erddap_item_menu():
+#     print("\nCreate ERDDAP Item")
+#     erddapObj = core.erddapSelection()
+#     if not erddapObj:
+#         cui()
+#         return
+#     dataset_list = core.selectDatasetFromList(erddapObj)
+#     if dataset_list:
+#         core.agolPublishList(dataset_list, erddapObj, 0)
+#     print("\nReturning to main menu...")
+#     cui()
 
 def legacy_add_menu():
     print("\nLegacy Add - Manual Dataset Input")

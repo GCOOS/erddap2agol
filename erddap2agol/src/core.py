@@ -60,6 +60,8 @@ def erddapSelection(GliderServ = False) -> ec.ERDDAPHandler:
 # This includes logic not found elsewhere, not a wrapper like other core funcs.
 # need to handle misinputs
 def selectDatasetFromList(erddapObj, dispLength=50) -> list:
+    """The big search function that allows users to search datasets and select them for processing.
+        Returns a list of selected datasets. Passed to agolPublishList."""
     def _updateDatasetList(erddapObj, search_term=None):
         if search_term:
             original_info = erddapObj.serverInfo
@@ -188,11 +190,27 @@ def selectDatasetFromList(erddapObj, dispLength=50) -> list:
             except Exception as e:
                 print("An unexpected error occurred:", e)
                 input("Press Enter to continue...")
-
+     
+def findBigDatasets(dataset_list: list, erddapObj: ec.ERDDAPHandler) -> dict:
+    """
+    Creates nested dictionary of datasets and their time subsets
+    Returns: {datasetid: {subset1: {start:time, end:time}, subset2:{...}}}
+    """
+    time_dict = {}
+    sizeDict = lm.getDatasetSizes(dataset_list, erddapObj)
+    sizeDict_filtered = {k: v for k, v in sizeDict.items() if v > 45000}
+    bypassDatasets = [k for k, v in sizeDict.items() if k not in sizeDict_filtered]
     
+    for dataset_id, row_count in sizeDict_filtered.items():
+        setattr(erddapObj, "datasetid", dataset_id)
+        # Here we will do parse das so we can properly get the time subset
+
+        time_params = erddapObj.calculateTimeSubset(row_count)
+        time_dict[dataset_id] = time_params
         
-
-
+    return time_dict
+    
+            
 # DAS parsing and attribute definitions for non-NRT datasets
 # Wraps getDas, parseDasResponse, convertToDict, saveToJson, openDasJson, getActualAttributes, convertFromUnix, displayAttributes
 def parseDas(erddapObj, dataset):
@@ -209,6 +227,7 @@ def parseDas(erddapObj, dataset):
     
     attribute_list = dc.getActualAttributes(dc.openDasJson(dataset), erddapObj)
 
+    #Time stuff starts here
     unixtime = (dc.getTimeFromJson(dataset))
     start, end = dc.convertFromUnix(unixtime)
     

@@ -1,8 +1,7 @@
 #ERDDAP stuff is handled here with the ERDDAPHandler class.
-import sys, os, requests, json
+import sys, os, requests, json, math
 from datetime import datetime, timedelta
 import pandas as pd
-from urllib.parse import urlparse, parse_qsl, urlencode, urlunparse
 from io import StringIO
 import tempfile
 
@@ -229,6 +228,46 @@ class ERDDAPHandler:
         print(f"\nGenerated URL: {url}")
 
         return url
+    
+    def calculateTimeSubset(self, row_count: int) -> dict:
+        """Calculate time subsets based on row count.
+        Returns Subset_N: {'start': time, 'end': time}
+        """
+        try:
+            # Use start_time and end_time directly if they are datetime objects
+            start = self.start_time
+            end = self.end_time
+
+            # If start_time or end_time are strings, parse them into datetime objects
+            if isinstance(start, str):
+                start = datetime.fromisoformat(start)
+            if isinstance(end, str):
+                end = datetime.fromisoformat(end)
+
+            # Calculate total days and required chunks
+            total_days = (end - start).days
+            chunks_needed = max(1, math.ceil(row_count / 45000))
+
+            days_per_chunk = total_days / chunks_needed
+
+            time_chunks = {}
+            chunk_start = start
+            chunk_num = 1
+
+            while chunk_start < end:
+                chunk_end = min(chunk_start + timedelta(days=days_per_chunk), end)
+                time_chunks[f'Subset_{chunk_num}'] = {
+                    'start': chunk_start.strftime('%Y-%m-%dT%H:%M:%S'),
+                    'end': chunk_end.strftime('%Y-%m-%dT%H:%M:%S'),
+                }
+                chunk_start = chunk_end
+                chunk_num += 1
+
+            return time_chunks
+
+        except Exception as e:
+            print(f"Error calculating time subset: {e}")
+            return None
         
     def fetchData(self, url):
         response, responseCode = self.return_response(url)

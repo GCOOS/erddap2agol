@@ -133,7 +133,7 @@ def displayAttributes(timeintv: int , attributes: list) -> None:
 
 
 
-def getActualAttributes(dasJson, erddapObject: ec.ERDDAPHandler) -> list:
+def getActualAttributes(dasJson, erddapObject) -> list:
     attributes_set = set()
     for var_name, var_attrs in dasJson.items():
         if not isinstance(var_attrs, dict):
