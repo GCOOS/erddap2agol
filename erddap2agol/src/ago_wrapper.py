@@ -1,5 +1,6 @@
 from arcgis.gis import GIS
 from arcgis.features import FeatureLayer, FeatureLayerCollection
+from arcgis.gis._impl._content_manager import SharingLevel
 from . import erddap_client as ec
 from . import das_client as dc
 import copy, os, sys, pandas as pd, numpy as np, json
@@ -16,7 +17,7 @@ def agoConnect() -> None:
         print(f"An error occurred connecting to ArcGIS Online: {e}")
 
 # Need to work out the rest of the metadata in item props
-def makeItemProperties(erddapObj: ec.ERDDAPHandler, accessLevel = None) -> dict:
+def makeItemProperties(erddapObj: ec.ERDDAPHandler) -> dict:
     dataid = erddapObj.datasetid
     attribute_tags = erddapObj.attributes
 
@@ -25,47 +26,55 @@ def makeItemProperties(erddapObj: ec.ERDDAPHandler, accessLevel = None) -> dict:
     if attribute_tags is not None:
         tags.extend(attribute_tags)
 
+    # Base properties dictionary
+    ItemProperties = {
+        "type": "CSV",
+        "item_type": "Feature Service",
+        "tags": tags
+    }
+
+    # DAS Metadata to item properties
+    dasJson = dc.openDasJson(dataid)
+    if dasJson:
+        global_attrs = dasJson.get("NC_GLOBAL", {})
+        
+        # First check for institution, then creator_institution if institution doesn't exist
+        if "institution" in global_attrs:
+            ItemProperties["accessInformation"] = global_attrs["institution"].get("value", "")
+        elif "creator_institution" in global_attrs:
+            ItemProperties["accessInformation"] = global_attrs["creator_institution"].get("value", "")
+            
+        # Map license information
+        if "license" in global_attrs:
+            ItemProperties["licenseInfo"] = global_attrs["license"].get("value", "")
+
+        # Get title from global attributes if available
+        dataset_title = global_attrs.get("title", {}).get("value", dataid)
+
+        if "title" in global_attrs:
+            ItemProperties["title"] = dataset_title
+        else:
+            ItemProperties["title"] = dataid 
+        
+        # Create summary with dataset title and ERDDAP server info
+        server_name = erddapObj.server.split('/erddap/')[0].split('://')[-1]
+
+        if "summary " in global_attrs:
+            sum_string = global_attrs["summary"].get("value", "")
+            ItemProperties["snippet"] = f"{sum_string}. {dataset_title} was generated with erddap2agol from the {server_name} ERDDAP."
+        else:
+            ItemProperties["snippet"] = f"{dataset_title} was generated with erddap2agol from the {server_name} ERDDAP."
+
+    # Special handling for Glider DAC
     if erddapObj.server == "https://gliders.ioos.us/erddap/tabledap/":
         tags.append("Glider DAC")
-        dataidTitle = dataid.replace("-", "")
-        ItemProperties = {
-            "title": dataidTitle,
-            "type": "GeoJson",
-            "item_type": "Feature Service",
-            "tags": tags
-        }
-        
-    else:
-        ItemProperties = {
-            "title": dataid,
-            "type": "CSV",
-            "item_type": "Feature Service",
-            "tags": tags
-        }
-
-        dasJson = dc.openDasJson(dataid)
-        metadata = dasJson.get("NC_Global", {})
-        if "license" in metadata and metadata["license"] is not None:
-            ItemProperties["licenseInfo"] = metadata["license"].get("value", "")
+        ItemProperties.update({        
+            "type": "GeoJson"
+        })
 
     return ItemProperties
 
 
-def defineGeoParams(erddapObj: ec.ERDDAPHandler) -> dict:
-    # Hard code coordinate parameters presuming these have already
-    # been checked to exist 
-
-    geom_params = erddapObj.geoParams
-
-    attribute_list = erddapObj.attributes
-    #This doesnt work, we might have to publish first, then update the properties
-    # for attribute in attribute_list:
-    #     if "depth" in attribute or "z" in attribute:
-    #         geom_params["hasZ"] = True
-        
-
-    return geom_params
-        
 def pointTableToGeojsonLine(filepath, erddapObj: ec.ERDDAPHandler, X="longitude (degrees_east)", Y="latitude (degrees_north)") -> dict:
     if filepath:
         print(f"\nConverting {filepath} to GeoJSON...")
@@ -121,9 +130,9 @@ def pointTableToGeojsonLine(filepath, erddapObj: ec.ERDDAPHandler, X="longitude 
     else:
         sys.exit()
 
-def publishTable(item_prop: dict, geom_params: dict, path, erddapObj: ec.ERDDAPHandler, inputDataType="csv") -> str:
+def postAndPublish(item_prop: dict, geom_params: dict, path, erddapObj: ec.ERDDAPHandler, inputDataType="csv", sharing_lvl = "EVERYONE") -> str:
     try:
-        geom_params.pop('hasStaticData', None)
+        geom_params.pop('hasStaticData', None) 
 
         print(f"\ngis.content.add...")
         item = gis.content.add(item_prop, path, HasGeometry=True)
@@ -138,14 +147,20 @@ def publishTable(item_prop: dict, geom_params: dict, path, erddapObj: ec.ERDDAPH
         # Ensure publish parameters include a unique service name
         if 'name' not in erddapObj.geoParams or not erddapObj.geoParams['name']:
             erddapObj.geoParams['name'] = item_prop['title']
-            # .replace(' ', '_')
 
         print(f"\nitem.publish...")
         published_item = item.publish(publish_parameters=erddapObj.geoParams, file_type=inputDataType)
 
+        # we should be doing this above, i believe geoParams is the service definition
         # Disable editing by updating layer capabilities
-        fl = published_item.layers[0]
-        fl.manager.update_definition({"capabilities": "Query"})
+        item_gis = gis.content.get(published_item.id)
+        item_flc = FeatureLayerCollection.fromitem(item_gis)
+        update_definition_dict = {"capabilities": "Query,Extract"}
+        item_flc.manager.update_definition(update_definition_dict)
+
+        if sharing_lvl is not None:
+            item_sharing_mgr = item_gis.sharing
+            item_sharing_mgr.sharing_level = SharingLevel.EVERYONE
 
         print(f"\nSuccessfully uploaded {item_prop['title']} to ArcGIS Online")
         print(f"Item ID: {published_item.id}")
@@ -189,30 +204,6 @@ def disable_editing(item_id):
     # Update the capabilities to disable editing
     flc.manager.update_definition({"capabilities": "Query"})
     print(f"Editing successfully disabled for item {item_id}")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

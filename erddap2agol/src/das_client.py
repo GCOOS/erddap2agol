@@ -127,24 +127,9 @@ def convertFromUnixDT(time_tuple):
     return start_datetime, end_datetime
 
 
-    
-#Expand this function to check the dtype of attributes 
-# Add string handling
-# def getActualAttributes(dasJson, erddapObject: ec.ERDDAPHandler) -> list:
-#     attributes_set = set() 
-#     for key, value in dasJson.items():
-#         if isinstance(value, dict):
-#             if "actual_range" in value and "_qc_" not in key and key not in {"latitude", "longitude", "time"}:
-#                 if "coverage_content_type" in value and value["coverage_content_type"].get("value") == "qualityInformation":
-#                     continue
-#                 attributes_set.add(key)
-
-#     setattr(erddapObject, "attributes", list(attributes_set))
-#     return list(attributes_set)
-
 def displayAttributes(timeintv: int , attributes: list) -> None:
     print(f"\nThere are {timeintv} days worth of records")
-    print(f"\nAttributes: {attributes}")
+    #print(f"\nAttributes: {attributes}")
 
 
 
