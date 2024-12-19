@@ -33,6 +33,7 @@ def inputToList(user_input) -> list:
     return dataset_list
 
  # Show erddap menu and define gcload with selection
+ # Survives refactor
 def erddapSelection(GliderServ = False) -> ec.ERDDAPHandler:
     if GliderServ == True:
         erddapObj = ec.ERDDAPHandler.setErddap(ec.custom_server, 15)
@@ -59,9 +60,12 @@ def erddapSelection(GliderServ = False) -> ec.ERDDAPHandler:
 # Select dataset from list and return list of datasets
 # This includes logic not found elsewhere, not a wrapper like other core funcs.
 # need to handle misinputs
+
+# Survives refactor
 def selectDatasetFromList(erddapObj, dispLength=50) -> list:
     """The big search function that allows users to search datasets and select them for processing.
-        Returns a list of selected datasets. Passed to agolPublishList."""
+        
+        Returns a list of selected datasets. Should pass to the erddapObj list constructor."""
     def _updateDatasetList(erddapObj, search_term=None):
         if search_term:
             original_info = erddapObj.serverInfo
@@ -191,6 +195,7 @@ def selectDatasetFromList(erddapObj, dispLength=50) -> list:
                 print("An unexpected error occurred:", e)
                 input("Press Enter to continue...")
      
+# needs change     
 def findBigDatasets(dataset_list: list, erddapObj: ec.ERDDAPHandler) -> dict:
     """
     Creates nested dictionary of datasets and their time subsets
@@ -214,7 +219,7 @@ def findBigDatasets(dataset_list: list, erddapObj: ec.ERDDAPHandler) -> dict:
 # DAS parsing and attribute definitions for non-NRT datasets
 # Wraps getDas, parseDasResponse, convertToDict, saveToJson, openDasJson, getActualAttributes, convertFromUnix, displayAttributes
 
-
+# obviously needs changes, has moved to data_wrangler 
 def parseDas(erddapObj, dataset):
     das_resp = ec.ERDDAPHandler.getDas(erddapObj, dataset)
     

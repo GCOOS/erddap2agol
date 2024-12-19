@@ -11,7 +11,7 @@ def cui():
         print("\nWelcome to ERDDAP2AGOL.")
         print("GCOOS GIS, 2024.")
         print("\n1. Create ERDDAP Items")
-        print("2. Create ERDDAP NRT Items")
+        print("2. Dev menu")
         print("3. Glider DAC *Special* Menu")
         print("4. Legacy Add (Manual Input)")
 
@@ -20,7 +20,7 @@ def cui():
         if user_choice == "1":
             create_erddap_item_menu()
         elif user_choice == "2":
-            nrt_creation()
+            experimental_menu()
         elif user_choice == "3":
             glider_menu()
         elif user_choice == "4":
@@ -44,18 +44,27 @@ def create_erddap_item_menu():
     cui()
 
 
-# def create_erddap_item_menu():
-#     print("\nCreate ERDDAP Item")
-#     erddapObj = core.erddapSelection()
-#     if not erddapObj:
-#         cui()
-#         return
-#     dataset_list = core.selectDatasetFromList(erddapObj)
-#     if dataset_list:
-#         core.agolPublishList(dataset_list, erddapObj, 0)
-#     print("\nReturning to main menu...")
-#     cui()
+def experimental_menu():
+    print("\nCreate ERDDAP Item")
+    erddapObj = core.erddapSelection()
+    print(erddapObj.server)
 
+    
+    dataset_list = core.selectDatasetFromList(erddapObj)
+    # so here we get the dataset list, everything is unchanged by up to this point
+    # now what we are going to want to do is construct the dataset wrangler objects
+
+    erddapObj.addDatasets_list(dataset_list)
+
+    datasetObjlist = (erddapObj.datasets)
+
+    for datasetObj in datasetObjlist:
+        datasetObj.generateUrl()
+        datasetObj.writeErddapData()
+    
+    print("Pause")
+
+    
 def legacy_add_menu():
     print("\nLegacy Add - Manual Dataset Input")
     print("Select the server of the dataset you want to create an AGOL item for.")
