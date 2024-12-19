@@ -1,5 +1,6 @@
 from .src import erddap_client as ec
-from .src import data_wrangler as lm
+from .src import data_wrangler as dw
+from .src import ago_wrapper as aw
 from .src import core
 from arcgis.gis import GIS
 
@@ -51,9 +52,7 @@ def experimental_menu():
 
     
     dataset_list = core.selectDatasetFromList(erddapObj)
-    # so here we get the dataset list, everything is unchanged by up to this point
-    # now what we are going to want to do is construct the dataset wrangler objects
-
+    
     erddapObj.addDatasets_list(dataset_list)
 
     datasetObjlist = (erddapObj.datasets)
@@ -61,6 +60,12 @@ def experimental_menu():
     for datasetObj in datasetObjlist:
         datasetObj.generateUrl()
         datasetObj.writeErddapData()
+
+    agolObj = aw.AgolWrangler(erddap_obj= erddapObj)
+    agolObj.datasets = erddapObj.datasets
+    agolObj.makeItemProperties()
+
+    agolObj.postAndPublish()
     
     print("Pause")
 
@@ -126,7 +131,7 @@ def nrt_creation():
             return 
 
         print("Finding valid NRT datasets...")
-        NRT_IDs = lm.batchNRTFind(erddapObj)
+        NRT_IDs = dw.batchNRTFind(erddapObj)
 
         print(f"\nFound {len(NRT_IDs)} datasets with data within the last 7 days.")
         print("Show dataset IDs? (y/n)")
