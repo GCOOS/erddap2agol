@@ -161,11 +161,25 @@ class AgolWrangler:
                     sys.exit()
 
     def postAndPublish(self, inputDataType="csv") -> None:
+        geom_params = self.geoParams
         """Publishes all datasets in self.datasets to AGOL, handling subsets if needed."""
+        def adjustSharing(published_item):
+            try:
+                item_gis = gis.content.get(published_item.id)
+                item_sharing_mgr = item_gis.sharing
+                #hard coded
+                item_sharing_mgr.sharing_level = SharingLevel.EVERYONE
+                if item_gis.layers:
+                    feature_layer = item_gis.layers[0]
+                    update_definition_dict = {"capabilities": "Query,Extract"}
+                    feature_layer.manager.update_definition(update_definition_dict)
+            except Exception as e:
+                print(f"An error occurred during disable editing by updating layer capabilities for {dataset.dataset_id}: {e}")
+
         for dataset in self.datasets:
             item_prop = self.item_properties.get(dataset.dataset_id)
-
-
+            print(item_prop)
+            
             if not item_prop:
                 print(f"No item properties found for {dataset.dataset_id}. Skipping.")
                 continue
@@ -177,10 +191,7 @@ class AgolWrangler:
 
             try:
                 gis = self.gis
-                geom_params = self.geoParams
-                geom_params.pop('hasStaticData', None)
-
-                
+                                        
                 if dataset.needs_Subset:
                     # ----Post and publish the first subset----
                     first_path = paths[0]
@@ -193,6 +204,7 @@ class AgolWrangler:
 
                     print(f"\nPublishing item for {dataset.dataset_id}...")
                     published_item = item.publish(publish_parameters=geom_params, file_type=inputDataType)
+                    adjustSharing(published_item)
 
 
                     print(f"\nSuccessfully uploaded and published {item_prop['title']} to ArcGIS Online")
@@ -237,25 +249,17 @@ class AgolWrangler:
                     if dataset.is_glider:
                         #hardcoding geojson into filetype arg for geojson
                         published_item = item.publish(publish_parameters=geom_params, file_type="GeoJson")
+                        adjustSharing(published_item)
+
                     else:
                         published_item = item.publish(publish_parameters=geom_params, file_type=inputDataType)
+                        adjustSharing(published_item)
                         
 
                     print(f"\nSuccessfully published HFL- {dataset.dataset_id} to ArcGIS Online")
 
                     # Disable editing by updating layer capabilities
-                    try:
-                        item_gis = gis.content.get(published_item.id)
-                        item_sharing_mgr = item_gis.sharing
-                        #hard coded
-                        item_sharing_mgr.sharing_level = SharingLevel.EVERYONE
-                        if item_gis.layers:
-                            feature_layer = item_gis.layers[0]
-                            update_definition_dict = {"capabilities": "Query,Extract"}
-                            feature_layer.manager.update_definition(update_definition_dict)
-                    except Exception as e:
-                        print(f"An error occurred during disable editing by updating layer capabilities for {dataset.dataset_id}: {e}")
-                        continue
+                    
 
 
             except Exception as e:

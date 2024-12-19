@@ -48,9 +48,7 @@ def create_erddap_item_menu():
 def experimental_menu():
     print("\nCreate ERDDAP Item")
     erddapObj = core.erddapSelection()
-    print(erddapObj.server)
-
-    
+      
     dataset_list = core.selectDatasetFromList(erddapObj)
     
     erddapObj.addDatasets_list(dataset_list)
@@ -68,6 +66,7 @@ def experimental_menu():
     agolObj.postAndPublish()
     
     print("Pause")
+
 
     
 def legacy_add_menu():
