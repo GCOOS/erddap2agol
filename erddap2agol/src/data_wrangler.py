@@ -16,26 +16,133 @@ from datetime import timedelta, datetime
 @dataclass
 class DatasetWrangler:
     """Represents a single ERDDAP dataset with metadata and time params"""
-    dataset_id: str
-    server: str
-    row_count: Optional[int] = None
-    attributes: List[str] = None
-    time_params: Dict[str, datetime] = None
-    das_metadata: Dict = None
-
-    def __post_init__(self):
-        self.subsets = {}
+    def __init__(self, dataset_id):
+        self.dataset_id = dataset_id
+        self.server = None
+        self.rowCount = None
+        self.attribute_list = None
+        self.startTime = None
+        self.endTime = None
+        self.needs_Subset = None
+        self.subsetDict = None
         self.is_processed = False
+        self.DAS_filepath = None
+        self.DASresponse = None
     
-    def get_das(self) -> Dict:
-        """Fetch and parse DAS metadata"""
+    def __post_init__(self):
+        """Sets attribute self.server to current ec.ERDDAPHandler instance"""
+        self.server = ec.ERDDAPHandler.server
+    
+    # These methods will need to be wrapped for list input
+    def getDas(self) -> None:
+        """Fetch DAS for dataset and write attributes. Returns nothing, sets attributes for DAS_response and DAS_filepath"""
+        def parseDas(self) -> None:
+            """sets attributes for attributes, startTime, endTime"""
+            if self.DASresponse is False or self.DASresponse is None:
+                print(f"\nInvalid dataset due to bad response and/or filepath")
+                pass
+            else:
+                attribute_list = dc.getActualAttributes(self.dataset_id)
+                setattr(self, "attributes", attribute_list)
+                time_tup = dc.getTimeFromJson(self.dataset_id)
+                start = time_tup[0]
+                end = time_tup[1]
+                setattr(self, "startTime", start)
+                setattr(self, "endTime", end)
+
         url = f"{self.server}{self.dataset_id}.das"
         response = requests.get(url)
+        
+        # if bad response set DASresponse attr to false
+        # can access later
+        # instead of returning fp we assigned it as an obj attribute
+
         if response.status_code != 200:
+            setattr(self, 'DASresponse', False)
+        
+        else:
+            setattr(self, 'DASresponse', True)
+            DAS_Dict = dc.convertToDict(dc.parseDasResponse(response.text))
+            outpath = dc.saveToJson(DAS_Dict)
+            setattr(self, "DAS_filepath", outpath)
+            parseDas(self)
+
+    def getDatasetSizes(self) -> None:
+        """Gets row count for dataset from ERDDAP ncHeader response, sets to attribute"""
+        if not self.DASresponse:
             return None
-        return dc.parseDasResponse(response.text)
+            
+        base_url = f"{self.server}{self.dataset_id}.ncHeader?"
+        print(f"Requesting headers for {self.dataset_id}")
+        
+        try:
+            response = requests.get(base_url)
+            response.raise_for_status()
+            
+            match = re.search(r'dimensions:\s*(.*?)\s*variables:', response.text, re.DOTALL)
+            if not match:
+                return None
+                
+            for line in match.group(1).split('\n'):
+                line = line.strip()
+                if line.startswith('row'):
+                    if row_match := re.match(r'row\s*=\s*(\d+);', line):
+                        self.rowCount = int(row_match.group(1))
+                elif line.startswith('obs'):
+                    if obs_match := re.match(r'obs\s*=\s*(\d+);', line):
+                        self.rowCount = int(obs_match.group(1))
+                        
+        except requests.RequestException as e:
+            print(f"Error fetching dataset size: {e}")
+            
+        return None
+    
+    @property
+    def needsSubsetting(self) -> bool:
+        """Check if dataset needs to be split into chunks"""
+        if self.rowCount > 45000:
+            self.needs_Subset = True
+        else:
+            self.needs_Subset = False
 
+    def generateUrl(self, dataformat="csvp") -> str:
+        additionalAttr = self.attribute_list
 
+        # the attribute list
+        attrs = []
+
+        if additionalAttr and 'depth' in additionalAttr:
+            additionalAttr.remove('depth')
+            attrs.append('depth')
+
+        attrs.extend(["longitude", "self.latitude"])
+
+        if additionalAttr:
+            attrs.extend(additionalAttr)
+
+        # Finally, add 'time'
+        attrs.append(self.time)
+
+        # Join the attributes into the URL
+        attrs_encoded = '%2C'.join(attrs)
+
+        # Construct time constraints
+  
+        time_constraints = (
+            f"&time%3E%3D{self.start_time}Z"
+            f"&time%3C%3D{self.end_time}Z"
+        )
+
+        # Construct the full URL
+        url = (
+            f"{self.server}{self.datasetid}.{dataformat}?"
+            f"{attrs_encoded}"
+            f"{time_constraints}"
+        )
+        
+        print(f"\nGenerated URL: {url}")
+
+        return url
 
     # Below are example functions that can be used to manipulate the dataset object
     def add_time_subset(self, subset_name: str, start: str, end: str) -> None:
@@ -43,11 +150,7 @@ class DatasetWrangler:
         if not self.subsets:
             self.subsets = {}
         self.subsets[subset_name] = {'start': start, 'end': end}
-
-    @property
-    def needs_chunking(self) -> bool:
-        """Check if dataset needs to be split into chunks"""
-        return self.row_count > 45000 if self.row_count else False
+    
     
     def calculateTimeSubset(self, row_count: int) -> dict:
         """Calculate time subsets based on row count.
@@ -138,40 +241,6 @@ def NRTFindAGOL() -> list:
     nrt_dict  = ul.updateCallFromNRT(1)
     return nrt_dict
 
-def getDatasetSizes(datasetList: list, erddapObj: ec.ERDDAPHandler) -> dict:
-    """Gets row counts for multiple datasets and spits out into a dictionary datasetid, rowNumber"""
-    
-    def _parse_header(content: str) -> int:
-        """Parse ncHeader content to find row count using fancy regex"""
-        match = re.search(r'dimensions:\s*(.*?)\s*variables:', content, re.DOTALL)
-        if not match:
-            return None
-            
-        dimensions_section = match.group(1)
-        for line in dimensions_section.split('\n'):
-            line = line.strip()
-            if line.startswith('row'):
-                row_match = re.match(r'row\s*=\s*(\d+);', line)
-                if row_match:
-                    return int(row_match.group(1))
-            elif line.startswith('obs'):
-                obs_match = re.match(r'obs\s*=\s*(\d+);', line)
-                if obs_match:
-                    return int(obs_match.group(1))
-        return None
-    
-    def _get_row_count(dataset: str) -> int:
-        """Get row count for single dataset"""
-        base_url = f"{erddapObj.server}{dataset}"
-        ncheader_url = f"{base_url}.ncHeader?"
-        
-        print(f"Requesting headers for {dataset}")
-        response = requests.get(ncheader_url)
-        if response.status_code != 200:
-            return None
-            
-        return _parse_header(response.text)
-    
-    return {dataset: _get_row_count(dataset) for dataset in datasetList}
+
 
 

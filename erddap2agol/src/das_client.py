@@ -7,6 +7,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 
 def parseDasResponse(response_text):
+    """Parse the DAS response text into an ordered dictionary for conversion to JSON"""
     data = OrderedDict()
     current_section = None
     section_name = None
@@ -70,22 +71,18 @@ def saveToJson(data, datasetid: str) -> str:
         json.dump(data, json_file, indent=4)
     return filepath
 
-def openDasJson(datasetid):
-    das_conf_dir = getConfDir()
-    filepath = os.path.join(das_conf_dir, f'{datasetid}.json')
-    try:
-        with open(filepath, 'r') as json_file:
-            data = json.load(json_file)
-            if "error" in data and data["error"]["Found"] is not None:
-                print(f"File {filepath} does not contain data.")
-                return None
-            else:
-                return data
-    except FileNotFoundError:
-        print(f"File {filepath} not found.")
-        return None
 
-def getTimeFromJson(datasetid):
+def getTimeFromJson(datasetid) -> tuple:
+    """Gets time from JSON file, returns max and min time as a tuple"""
+    def convertFromUnix(time):
+        """Convert from unix tuple to datetime tuple"""
+        try:
+            start = datetime.datetime.utcfromtimestamp(time[0]).strftime('%Y-%m-%dT%H:%M:%S') 
+            end = datetime.datetime.utcfromtimestamp(time[1]).strftime('%Y-%m-%dT%H:%M:%S')
+            return start, end
+        except Exception as e:
+            print(f"Error converting from Unix, probably a bad server response: {e}")
+            return None
     das_conf_dir = getConfDir()
     filepath = os.path.join(das_conf_dir, f'{datasetid}.json')
     with open(filepath, 'r') as json_file:
@@ -96,29 +93,12 @@ def getTimeFromJson(datasetid):
         start_time_str, end_time_str = time_str.split(', ')
         start_time = int(float(start_time_str))
         end_time = int(float(end_time_str))
-        return start_time, end_time
+        time_tup = start_time, end_time
+        return convertFromUnix(time_tup)
     except Exception as e:
         print(f"Error getting time from JSON: {e}")
         return None
     
-# This function doesn't go anywhere yet
-# should be used to check for core attributes (lat lon time) in the dataset
-def checkDataValidity(dasJson) -> bool:
-    for key, value in dasJson.items():
-        if isinstance(value, dict):
-            if {"latitude", "longitude"} not in key:
-                return False
-            else:
-                return True
-    
-def convertFromUnix(time):
-    try:
-        start = datetime.datetime.utcfromtimestamp(time[0]).strftime('%Y-%m-%dT%H:%M:%S') 
-        end = datetime.datetime.utcfromtimestamp(time[1]).strftime('%Y-%m-%dT%H:%M:%S')
-        return start, end
-    except Exception as e:
-        print(f"Error converting from Unix, probably a bad server response: {e}")
-        return None
 
 def convertFromUnixDT(time_tuple):
     start_unix, end_unix = time_tuple
@@ -131,33 +111,63 @@ def displayAttributes(timeintv: int , attributes: list) -> None:
     print(f"\nThere are {timeintv} days worth of records")
     #print(f"\nAttributes: {attributes}")
 
+def getActualAttributes(dataset_id: str) -> list[str]:
+    """
+    Load DAS JSON file and extract relevant attributes while filtering out QC variables.
+    
+    Args:
+        datasetid (str): The dataset identifier
+        
+    Returns:
+        list[str]: List of valid attribute names or None if error
+    """
+    das_conf_dir = getConfDir()
+    filepath = os.path.join(das_conf_dir, f'{dataset_id}.json')
+    
+    try:
+        with open(filepath, 'r') as json_file:
+            data = json.load(json_file)
+            if "error" in data and data["error"]["Found"] is not None:
+                print(f"File {filepath} does not contain data.")
+                return None
+                
+            attributes_set = set()
+            for var_name, var_attrs in data.items():
+                if not isinstance(var_attrs, dict):
+                    continue
+                    
+                # Skip QC and coordinate variables
+                if ("_qc_" in var_name or 
+                    "qartod_" in var_name or 
+                    var_name.endswith("_qc") or
+                    var_name in {"latitude", "longitude", "time"}):
+                    continue
 
+                # Check coverage content type
+                coverage_content_type_entry = var_attrs.get('coverage_content_type', {})
+                coverage_content_type = coverage_content_type_entry.get('value', '')
+                if coverage_content_type in ('qualityInformation', 'other'):
+                    continue
 
-def getActualAttributes(dasJson, erddapObject) -> list:
-    attributes_set = set()
-    for var_name, var_attrs in dasJson.items():
-        if not isinstance(var_attrs, dict):
-            continue
-            # Added qartod to ignore (12/2) 
-        if "_qc_" in var_name or "qartod_" in var_name or var_name in {"latitude", "longitude", "time"}:
-            continue
+                # Include variables with actual_range or single attribute
+                if 'actual_range' in var_attrs or len(var_attrs) == 1:
+                    attributes_set.add(var_name)
 
-        if var_name.endswith("_qc"):
-            continue
-
-        coverage_content_type_entry = var_attrs.get('coverage_content_type', {})
-        coverage_content_type = coverage_content_type_entry.get('value', '')
-        if coverage_content_type == 'qualityInformation' or coverage_content_type == 'other':
-            continue
-
-        # Include if 'actual_range' exists
-        if 'actual_range' in var_attrs:
-            attributes_set.add(var_name)
-            continue
-
-        # Include string variables with more than one attribute
-        if len(var_attrs) == 1:
-            attributes_set.add(var_name)
-
-    setattr(erddapObject, "attributes", list(attributes_set))
-    return list(attributes_set)
+            return list(attributes_set)
+            
+    except FileNotFoundError:
+        print(f"File {filepath} not found.")
+        return None
+    except json.JSONDecodeError:
+        print(f"Error decoding JSON from {filepath}")
+        return None
+    
+# This function doesn't go anywhere yet
+# should be used to check for core attributes (lat lon time) in the dataset
+def checkDataValidity(dasJson) -> bool:
+    for key, value in dasJson.items():
+        if isinstance(value, dict):
+            if {"latitude", "longitude"} not in key:
+                return False
+            else:
+                return True
