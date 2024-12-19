@@ -108,10 +108,10 @@ class DatasetWrangler:
             
         return None
     
-    def needsSubsetting(self) -> bool:
+    def needsSubsetting(self, record_limit = 45000) -> bool:
         """Check if dataset needs to be split into chunks"""
         if self.row_count is not None:
-            if self.row_count > 45000:
+            if self.row_count > record_limit:
                 self.needs_Subset = True
                 print(f"\nUh oh! {self.dataset_id} is too big ({self.row_count} records) and needs additional processing!")
             else:
@@ -121,42 +121,45 @@ class DatasetWrangler:
         """Calculate time subsets based on row count.
         Returns Subset_N: {'start': time, 'end': time}
         """
-        if self.needs_Subset is True:
-            try:
-                # Use start_time and end_time directly if they are datetime objects
-                start = self.start_time
-                end = self.end_time
+        if not self.needs_Subset:
+            return None
+        
+        try:
+            # Ensure datetime objects
+            start = self.start_time if isinstance(self.start_time, datetime) else datetime.fromisoformat(self.start_time)
+            end = self.end_time if isinstance(self.end_time, datetime) else datetime.fromisoformat(self.end_time)
 
-                # If start_time or end_time are strings, parse them into datetime objects
-                if isinstance(start, str):
-                    start = datetime.fromisoformat(start)
-                if isinstance(end, str):
-                    end = datetime.fromisoformat(end)
+            # Calculate exact chunks needed
+            total_records = self.row_count
+            records_per_chunk = 45000
+            chunks_needed = math.ceil(total_records / records_per_chunk)
+            
+            # Calculate time per chunk
+            total_seconds = (end - start).total_seconds()
+            seconds_per_record = total_seconds / total_records
+            seconds_per_chunk = seconds_per_record * records_per_chunk
 
-                # Calculate total days and required chunks
-                total_days = (end - start).days
-                chunks_needed = max(1, math.ceil(self.row_count / 45000))
+            # Create equal-sized chunks
+            time_chunks = {}
+            chunk_start = start
+            
+            for i in range(chunks_needed):
+                chunk_end = chunk_start + timedelta(seconds=seconds_per_chunk)
+                if i == chunks_needed - 1:  # Last chunk
+                    chunk_end = end
+                    
+                time_chunks[f'Subset_{i+1}'] = {
+                    'start': chunk_start.strftime('%Y-%m-%dT%H:%M:%S'),
+                    'end': chunk_end.strftime('%Y-%m-%dT%H:%M:%S')
+                }
+                chunk_start = chunk_end
+                
+            print(f"Created {len(time_chunks)} time chunks for {self.dataset_id}")
+            return time_chunks
 
-                days_per_chunk = total_days / chunks_needed
-
-                time_chunks = {}
-                chunk_start = start
-                chunk_num = 1
-
-                while chunk_start < end:
-                    chunk_end = min(chunk_start + timedelta(days=days_per_chunk), end)
-                    time_chunks[f'Subset_{chunk_num}'] = {
-                        'start': chunk_start.strftime('%Y-%m-%dT%H:%M:%S'),
-                        'end': chunk_end.strftime('%Y-%m-%dT%H:%M:%S'),
-                    }
-                    chunk_start = chunk_end
-                    chunk_num += 1
-
-                return time_chunks
-
-            except Exception as e:
-                print(f"Error calculating time subset: {e}")
-                return None
+        except Exception as e:
+            print(f"Error calculating time subset: {e}")
+            return None
             
     def add_time_subset(self, subset_name: str, start: str, end: str) -> None:
         """Add time subset for chunked processing"""

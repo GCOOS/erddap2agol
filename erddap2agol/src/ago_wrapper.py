@@ -84,9 +84,10 @@ class AgolWrangler:
                             props["licenseInfo"] = dataset.nc_global["license"].get("value", "")
                         
                         # Set title and summary
-                        dataset_title = dataset.nc_global.get("title", {}).get("value", dataset.dataset_id)
+                        dataset_title = dataset.dataset_id
+
                         props["title"] = dataset_title
-                        
+
                         server_name = dataset.server.split('/erddap/')[0].split('://')[-1]
                         summary = dataset.nc_global.get("summary", {}).get("value", "")
                         props["snippet"] = f"{summary}. {dataset_title} was generated with erddap2agol from the {server_name} ERDDAP."
@@ -160,61 +161,106 @@ class AgolWrangler:
                     sys.exit()
 
     def postAndPublish(self, inputDataType="csv") -> None:
-        """Publishes all datasets in self.datasets to AGOL."""
+        """Publishes all datasets in self.datasets to AGOL, handling subsets if needed."""
         for dataset in self.datasets:
-            if dataset.needs_Subset == True:
-                continue
-            
             item_prop = self.item_properties.get(dataset.dataset_id)
+
+
             if not item_prop:
                 print(f"No item properties found for {dataset.dataset_id}. Skipping.")
                 continue
 
-            path = dataset.data_filepath
-            if not path:
+            paths = dataset.data_filepath
+            if not paths:
                 print(f"No data file path found for {dataset.dataset_id}. Skipping.")
                 continue
 
             try:
                 gis = self.gis
-                geom_params = self.geoParams.copy()
+                geom_params = self.geoParams
                 geom_params.pop('hasStaticData', None)
 
-                print(f"\nAdding item for {dataset.dataset_id} to AGOL...")
-                item = gis.content.add(item_prop, path, has_static_data=False)
+                
+                if dataset.needs_Subset:
+                    # ----Post and publish the first subset----
+                    first_path = paths[0]
+                    print(f"\nAdding first subset item for {dataset.dataset_id} to AGOL...")
+                    item = gis.content.add(item_properties=item_prop, data=first_path, HasGeometry=True)
 
-                if dataset.is_glider:
-                    # Ensure a unique service name for this specific server
-                    unique_service_name = f"{item_prop['title']}_service"
-                    geom_params['name'] = unique_service_name  # Explicitly set service name
+                    # Ensure unique service name
+                    if 'name' not in geom_params or not geom_params['name']:
+                        geom_params['name'] = item_prop['title']
 
-                # Ensure publish parameters include a unique service name
-                if 'name' not in geom_params or not geom_params['name']:
-                    geom_params['name'] = item_prop['title']
+                    print(f"\nPublishing item for {dataset.dataset_id}...")
+                    published_item = item.publish(publish_parameters=geom_params, file_type=inputDataType)
 
-                print(f"\nPublishing item for {dataset.dataset_id}...")
-                published_item = item.publish(publish_parameters=geom_params, file_type=inputDataType)
 
-                # Disable editing by updating layer capabilities
-                item_gis = gis.content.get(published_item.id)
-                item_flc = FeatureLayerCollection.fromitem(item_gis)
-                update_definition_dict = {"capabilities": "Query,Extract"}
-                item_flc.manager.update_definition(update_definition_dict)
+                    print(f"\nSuccessfully uploaded and published {item_prop['title']} to ArcGIS Online")
+                    print(f"Item ID: {published_item.id}")
 
-                # Share the item based on the sharing preference
-                sharing_lvl = self.sharing_pref.upper()
-                if sharing_lvl == "EVERYONE":
-                    published_item.share(everyone=True)
-                elif sharing_lvl == "ORG":
-                    published_item.share(org=True)
+                    
+                    if not published_item.layers:
+                        print(f"No layers found in published item {published_item.id}. Skipping dataset.")
+                        continue
+
+                    # Get the feature layer from the published item
+                    feature_layer = published_item.layers[0]
+                    
+                    for subset_path in paths[1:]:
+                        print(f"\nAppending subset to feature layer {dataset.dataset_id}...")
+                        # Upload the subset CSV as an item
+                        subset_item = gis.content.add({}, data=subset_path, HasGeometry=True)
+                        analyze_params = gis.content.analyze(item=subset_item.id)
+                        append_success = feature_layer.append(
+                            item_id=subset_item.id,
+                            upload_format='csv',
+                            source_info=analyze_params['publishParameters'],
+                            upsert=False
+                        )
+                        if append_success:
+                            print(f"Successfully appended {subset_item.title} to {published_item.title}")
+                        else:
+                            print(f"Failed to append {subset_item.title} to {published_item.title}")
+                        # Delete the temporary uploaded item
+                        subset_item.delete()
                 else:
-                    print(f"Unknown sharing level: {self.sharing_pref}. Not sharing the item.")
 
-                print(f"\nSuccessfully uploaded {item_prop['title']} to ArcGIS Online")
-                print(f"Item ID: {published_item.id}")
+                    # ---Nonsubset dataset processing
+                    path = paths if isinstance(paths, str) else paths[0]
+                    print(f"\nAdding item for {dataset.dataset_id} to AGOL...")
+                    item = gis.content.add(item_properties=item_prop, data=path, HasGeometry=True)
+
+                    if 'name' not in geom_params or not geom_params['name']:
+                        geom_params['name'] = item_prop['title']
+
+                    print(f"\nPublishing item for {dataset.dataset_id}...")
+                    if dataset.is_glider:
+                        #hardcoding geojson into filetype arg for geojson
+                        published_item = item.publish(publish_parameters=geom_params, file_type="GeoJson")
+                    else:
+                        published_item = item.publish(publish_parameters=geom_params, file_type=inputDataType)
+                        
+
+                    print(f"\nSuccessfully published HFL- {dataset.dataset_id} to ArcGIS Online")
+
+                    # Disable editing by updating layer capabilities
+                    try:
+                        item_gis = gis.content.get(published_item.id)
+                        item_sharing_mgr = item_gis.sharing
+                        #hard coded
+                        item_sharing_mgr.sharing_level = SharingLevel.EVERYONE
+                        if item_gis.layers:
+                            feature_layer = item_gis.layers[0]
+                            update_definition_dict = {"capabilities": "Query,Extract"}
+                            feature_layer.manager.update_definition(update_definition_dict)
+                    except Exception as e:
+                        print(f"An error occurred during disable editing by updating layer capabilities for {dataset.dataset_id}: {e}")
+                        continue
+
 
             except Exception as e:
                 print(f"An error occurred adding the item for {dataset.dataset_id}: {e}")
+                continue
 
 
 
@@ -259,22 +305,22 @@ class AgolWrangler:
 
 
     #The below functions have no utility right now
-    #-----------------------------------------------------------
-    def appendTableToFeatureService(self, featureServiceID: str, tableID: str) -> str:
-        gis = self.gis
-        try:
-            featureServiceItem = gis.content.get(featureServiceID)
-            tableItem = gis.content.get(tableID)    
-            response = featureServiceItem.append(item_id= tableID, upload_format ='csv', source_table_name = tableItem.title)      
+    # #-----------------------------------------------------------
+    # def appendTableToFeatureService(self, featureServiceID: str, tableID: str) -> str:
+    #     gis = self.gis
+    #     try:
+    #         featureServiceItem = gis.content.get(featureServiceID)
+    #         tableItem = gis.content.get(tableID)    
+    #         response = featureServiceItem.append(item_id= tableID, upload_format ='csv', source_table_name = tableItem.title)      
             
-            if response['status'] == 'Completed':
-                print(f"Successfully appended data to Feature Service ID: {featureServiceItem.id}")
-            else:
-                print(f"Append operation completed with issues: {response}")
+    #         if response['status'] == 'Completed':
+    #             print(f"Successfully appended data to Feature Service ID: {featureServiceItem.id}")
+    #         else:
+    #             print(f"Append operation completed with issues: {response}")
             
-            return response
-        except Exception as e:
-            print(f"An error occurred appending the CSV data: {e}")
+    #         return response
+    #     except Exception as e:
+    #         print(f"An error occurred appending the CSV data: {e}")
 
     def createFeatureService(self, item_prop: dict) -> str:
         gis = self.gis
