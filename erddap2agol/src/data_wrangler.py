@@ -31,6 +31,7 @@ class DatasetWrangler:
     DAS_filepath: Optional[os.PathLike] = None
     data_filepath:Optional[os.PathLike | list[os.PathLike]] = None
     url_s:Optional[str | list[str]] = None
+    has_error: Optional[bool] = False
     
     
     def __post_init__(self):
@@ -44,7 +45,26 @@ class DatasetWrangler:
         self.needsSubsetting()
         if self.needs_Subset == True:
             self.subsetDict = self.calculateTimeSubset()
+
+    def requireTime(func):
+        """Require time decorator"""
+        def wrapper(self, *args, **kwargs):
+            if not self.start_time or self.end_time:
+                print(f"Skipping {func.__name__} - No time for {self.dataset_id}")
+                self.has_error = True
+                return None
+            return func(self, *args, **kwargs)
+        return wrapper
     
+    def skipFromError(func):
+        """General skip error decorator that will be applied to all dataset methods"""
+        def wrapper(self, *args, **kwargs):
+            if self.has_error == True:
+                print(f"Skipping {func.__name__} - due to processing error {self.dataset_id}")
+                return None
+            return func(self, *args, **kwargs)
+        return wrapper
+
     def getDas(self) -> None:
         """Fetch and parse DAS metadata"""
         url = f"{self.server}{self.dataset_id}.das"
@@ -74,6 +94,7 @@ class DatasetWrangler:
         except Exception as e:
             print(f"\nError parsing DAS for {self.dataset_id}: {e}")
             self.DAS_response = False
+
 
     def getDatasetSizes(self) -> None:
         """Gets row count for dataset from ERDDAP ncHeader response, sets to attribute"""
@@ -108,7 +129,7 @@ class DatasetWrangler:
             
         return None
     
-    def needsSubsetting(self, record_limit = 45000) -> bool:
+    def needsSubsetting(self, record_limit = 50000) -> bool:
         """Check if dataset needs to be split into chunks"""
         if self.row_count is not None:
             if self.row_count > record_limit:
@@ -117,7 +138,7 @@ class DatasetWrangler:
             else:
                 self.needs_Subset = False
 
-    def calculateTimeSubset(self) -> dict:
+    def calculateTimeSubset(self, record_limit = 50000) -> dict:
         """Calculate time subsets based on row count.
         Returns Subset_N: {'start': time, 'end': time}
         """
@@ -131,7 +152,7 @@ class DatasetWrangler:
 
             # Calculate exact chunks needed
             total_records = self.row_count
-            records_per_chunk = 45000
+            records_per_chunk = record_limit
             chunks_needed = math.ceil(total_records / records_per_chunk)
             
             # Calculate time per chunk
@@ -154,7 +175,7 @@ class DatasetWrangler:
                 }
                 chunk_start = chunk_end
                 
-            print(f"Created {len(time_chunks)} time chunks for {self.dataset_id}")
+            print(f"{self.dataset_id}: {len(time_chunks)} subsets required")
             return time_chunks
 
         except Exception as e:
@@ -245,7 +266,7 @@ class DatasetWrangler:
                 return filepath
         else:
             for i, url in enumerate(self.url_s, 1):
-                print(f"Processing subset {i}/{len(self.url_s)}")
+                print(f"Downloading subset {i}/{len(self.url_s)} from {self.server}")
                 filepath = process_url(url, i)
                 if filepath:
                     filepaths.append(filepath)

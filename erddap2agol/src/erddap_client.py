@@ -141,7 +141,7 @@ class ERDDAPHandler:
             print(f"Error fetching dataset ID list: {e}")
             return []
         
-
+    #This was occuring later than I thought, and it might not be nessecary 
     def addDatasets_list(self, dataset_ids: list) -> None:
         """Creates DatasetWrangler objects for each dataset ID"""
         for dataset_id in dataset_ids:
@@ -150,7 +150,6 @@ class ERDDAPHandler:
                 server=self.server
             )
             self.datasets.append(dataset)
-            print(f"Created dataset object for {dataset_id}")
     
     
     #Gets dataset DAS    

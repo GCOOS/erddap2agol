@@ -4,7 +4,7 @@ from arcgis.gis._impl._content_manager import SharingLevel
 from . import data_wrangler as dw
 from . import erddap_client as ec
 from . import das_client as dc
-import copy, os, sys, pandas as pd, numpy as np, json
+import copy, os, sys, time, pandas as pd, numpy as np, json
 from dataclasses import dataclass, field
 from typing import Optional, List, Dict
 
@@ -16,9 +16,10 @@ class AgolWrangler:
     item_properties: Dict[str, Dict] = field(default_factory=dict)
     erddap_obj: Optional['ec.ERDDAPHandler'] = None 
     geoParams: dict = field(default_factory=lambda: {
-        "locationType": "coordinates",
-        "latitudeFieldName": "latitude (degrees_north)",
-        "longitudeFieldName": "longitude (degrees_east)"
+    "locationType": "coordinates",
+    "latitudeFieldName": "latitude__degrees_north_",
+    "longitudeFieldName": "longitude__degrees_east_",
+    "timeFieldName": "time__UTC_",
     })
 
 
@@ -161,25 +162,18 @@ class AgolWrangler:
                     sys.exit()
 
     def postAndPublish(self, inputDataType="csv") -> None:
-        geom_params = self.geoParams
         """Publishes all datasets in self.datasets to AGOL, handling subsets if needed."""
-        def adjustSharing(published_item):
-            try:
-                item_gis = gis.content.get(published_item.id)
-                item_sharing_mgr = item_gis.sharing
-                #hard coded
-                item_sharing_mgr.sharing_level = SharingLevel.EVERYONE
-                if item_gis.layers:
-                    feature_layer = item_gis.layers[0]
-                    update_definition_dict = {"capabilities": "Query,Extract"}
-                    feature_layer.manager.update_definition(update_definition_dict)
-            except Exception as e:
-                print(f"An error occurred during disable editing by updating layer capabilities for {dataset.dataset_id}: {e}")
+        geom_params = self.geoParams.copy()
+        geom_params.pop('hasStaticData', None)  # Remove if exists, as done in stable code
+
+        # Time tracking variables
+        total_start_time = time.time()
+        processed_count = 0
 
         for dataset in self.datasets:
+            dataset_start_time = time.time()  # Track start time for this dataset
+
             item_prop = self.item_properties.get(dataset.dataset_id)
-            print(item_prop)
-            
             if not item_prop:
                 print(f"No item properties found for {dataset.dataset_id}. Skipping.")
                 continue
@@ -189,82 +183,94 @@ class AgolWrangler:
                 print(f"No data file path found for {dataset.dataset_id}. Skipping.")
                 continue
 
+            # Set a service name if not already present
+            if 'name' not in geom_params or not geom_params['name']:
+                geom_params['name'] = item_prop['title']
+
+            def adjustSharingAndCapabilities(published_item):
+                # Get fresh item
+                #time.sleep(3)  # brief pause
+                refreshed_item = self.gis.content.get(published_item.id)
+
+                # Update capabilities using FeatureLayerCollection (like stable code)
+                try:
+                    item_flc = FeatureLayerCollection.fromitem(refreshed_item)
+                    update_definition_dict = {"capabilities": "Query,Extract"}
+                    item_flc.manager.update_definition(update_definition_dict)
+                    #print(f"Successfully updated capabilities for {refreshed_item.title}")
+                except Exception as e:
+                    print(f"Error adjusting capabilities: {e}")
+
+                try:
+                    item_sharing_mgr = refreshed_item.sharing
+                    item_sharing_mgr.sharing_level = SharingLevel.EVERYONE
+                    #print(f"Successfully updated sharing for {refreshed_item.title} to EVERYONE")
+                except Exception as e:
+                    print(f"Error adjusting sharing level: {e}")
+
             try:
                 gis = self.gis
-                                        
+
                 if dataset.needs_Subset:
-                    # ----Post and publish the first subset----
+                # -------------Subset file scenario-------------
                     first_path = paths[0]
                     print(f"\nAdding first subset item for {dataset.dataset_id} to AGOL...")
                     item = gis.content.add(item_properties=item_prop, data=first_path, HasGeometry=True)
 
-                    # Ensure unique service name
-                    if 'name' not in geom_params or not geom_params['name']:
-                        geom_params['name'] = item_prop['title']
-
+                    # Publish
                     print(f"\nPublishing item for {dataset.dataset_id}...")
                     published_item = item.publish(publish_parameters=geom_params, file_type=inputDataType)
-                    adjustSharing(published_item)
+                    adjustSharingAndCapabilities(published_item)
 
+                    # Append subsequent subsets
+                    if published_item.layers:
+                        feature_layer = published_item.layers[0]
+                        for subset_path in paths[1:]:
+                            subset_item = gis.content.add({}, data=subset_path, HasGeometry=True)
+                            analyze_params = gis.content.analyze(item=subset_item.id)
+                            append_success = feature_layer.append(
+                                item_id=subset_item.id,
+                                #Probably wont have to worry about geojson for large files, but just in case this is where youd change it
+                                upload_format='csv',
+                                source_info=analyze_params['publishParameters'],
+                                upsert=False
+                            )
+                            if append_success:
+                                print(f"Appended {subset_item.title} to {published_item.title}")
+                            else:
+                                print(f"\nFailed to append {subset_item.title}")
+                            subset_item.delete(permanent=True)
+                # -------------Subset file scenario-------------
 
-                    print(f"\nSuccessfully uploaded and published {item_prop['title']} to ArcGIS Online")
-                    print(f"Item ID: {published_item.id}")
-
-                    
-                    if not published_item.layers:
-                        print(f"No layers found in published item {published_item.id}. Skipping dataset.")
-                        continue
-
-                    # Get the feature layer from the published item
-                    feature_layer = published_item.layers[0]
-                    
-                    for subset_path in paths[1:]:
-                        print(f"\nAppending subset to feature layer {dataset.dataset_id}...")
-                        # Upload the subset CSV as an item
-                        subset_item = gis.content.add({}, data=subset_path, HasGeometry=True)
-                        analyze_params = gis.content.analyze(item=subset_item.id)
-                        append_success = feature_layer.append(
-                            item_id=subset_item.id,
-                            upload_format='csv',
-                            source_info=analyze_params['publishParameters'],
-                            upsert=False
-                        )
-                        if append_success:
-                            print(f"Successfully appended {subset_item.title} to {published_item.title}")
-                        else:
-                            print(f"Failed to append {subset_item.title} to {published_item.title}")
-                        # Delete the temporary uploaded item
-                        subset_item.delete()
                 else:
-
-                    # ---Nonsubset dataset processing
+                    #--------Single file scenario--------------
                     path = paths if isinstance(paths, str) else paths[0]
                     print(f"\nAdding item for {dataset.dataset_id} to AGOL...")
                     item = gis.content.add(item_properties=item_prop, data=path, HasGeometry=True)
 
-                    if 'name' not in geom_params or not geom_params['name']:
-                        geom_params['name'] = item_prop['title']
-
+                    # Publish
                     print(f"\nPublishing item for {dataset.dataset_id}...")
-                    if dataset.is_glider:
-                        #hardcoding geojson into filetype arg for geojson
-                        published_item = item.publish(publish_parameters=geom_params, file_type="GeoJson")
-                        adjustSharing(published_item)
+                    published_item = item.publish(publish_parameters=geom_params, file_type=inputDataType)
+                    adjustSharingAndCapabilities(published_item)
+                    #--------Single file scenario--------------
 
-                    else:
-                        published_item = item.publish(publish_parameters=geom_params, file_type=inputDataType)
-                        adjustSharing(published_item)
-                        
-
-                    print(f"\nSuccessfully published HFL- {dataset.dataset_id} to ArcGIS Online")
-
-                    # Disable editing by updating layer capabilities
-                    
-
+                # End of dataset processing - print time
+                dataset_end_time = time.time()
+                dataset_processing_time = dataset_end_time - dataset_start_time
+                processed_count += 1
+                print(f"Finished processing dataset {dataset.dataset_id} in {dataset_processing_time:.2f} seconds")
 
             except Exception as e:
                 print(f"An error occurred adding the item for {dataset.dataset_id}: {e}")
                 continue
+
+        # After all datasets processed, print total time
+        total_end_time = time.time()
+        total_time = total_end_time - total_start_time
+        print("\nAll done!")
+        print(f"Processing completed for {processed_count} datasets")
+        print(f"Total processing time: {total_time:.2f} seconds")
+        
 
 
 

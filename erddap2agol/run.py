@@ -65,8 +65,6 @@ def experimental_menu():
 
     agolObj.postAndPublish()
     
-    print("Pause")
-
 
     
 def legacy_add_menu():

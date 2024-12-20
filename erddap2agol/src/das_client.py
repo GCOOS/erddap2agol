@@ -1,4 +1,5 @@
 import sys, os, requests, datetime 
+from datetime import datetime, timedelta
 import json
 from collections import OrderedDict
 from . import erddap_client as ec
@@ -72,17 +73,27 @@ def saveToJson(data, datasetid: str) -> str:
     return filepath
 
 
+
 def getTimeFromJson(datasetid) -> tuple:
     """Gets time from JSON file, returns max and min time as a tuple"""
     def convertFromUnix(time):
         """Convert from unix tuple to datetime tuple"""
+        #Now this is some elementary programming 
         try:
-            start = datetime.datetime.utcfromtimestamp(time[0]).strftime('%Y-%m-%dT%H:%M:%S') 
-            end = datetime.datetime.utcfromtimestamp(time[1]).strftime('%Y-%m-%dT%H:%M:%S')
+            if time[0] < 0:
+                start = datetime(1970, 1, 1) + timedelta(seconds=time[0])
+            else:
+                start = datetime.fromtimestamp(time[0]).strftime('%Y-%m-%dT%H:%M:%S')  
+            if time[1] < 0:
+                end = datetime(1970, 1, 1) + timedelta(seconds=time[0])
+            else:
+                end = datetime.fromtimestamp(time[1]).strftime('%Y-%m-%dT%H:%M:%S')
+                            
             return start, end
         except Exception as e:
-            print(f"Error converting from Unix, probably a bad server response: {e}")
+            print(f"Error converting from Unix: {e}")
             return None
+    
     das_conf_dir = getConfDir()
     filepath = os.path.join(das_conf_dir, f'{datasetid}.json')
     with open(filepath, 'r') as json_file:
@@ -91,8 +102,8 @@ def getTimeFromJson(datasetid) -> tuple:
     try:
         time_str = data['time']['actual_range']['value']
         start_time_str, end_time_str = time_str.split(', ')
-        start_time = int(float(start_time_str))
-        end_time = int(float(end_time_str))
+        start_time = (float(start_time_str))
+        end_time = (float(end_time_str))
         time_tup = start_time, end_time
         return convertFromUnix(time_tup)
     except Exception as e:
@@ -112,14 +123,10 @@ def displayAttributes(timeintv: int , attributes: list) -> None:
     #print(f"\nAttributes: {attributes}")
 
 def getActualAttributes(dataset_id: str) -> list[str]:
-    """
-    Load DAS JSON file and extract relevant attributes while filtering out QC variables.
-    
-    Args:
-        datasetid (str): The dataset identifier
+    """Load DAS JSON file and extract relevant attributes while filtering out QC variables.
+    datasetid (str): The dataset identifier
         
-    Returns:
-        list[str]: List of valid attribute names or None if error
+    Returns list[str]: List of valid attribute names or None if error
     """
     das_conf_dir = getConfDir()
     filepath = os.path.join(das_conf_dir, f'{dataset_id}.json')

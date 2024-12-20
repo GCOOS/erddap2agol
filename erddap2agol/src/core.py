@@ -99,12 +99,12 @@ def selectDatasetFromList(erddapObj, dispLength=50) -> list:
     current_page = 1
     input_list = []
     
-    def clear_screen():
+    def clearScreen():
         import os
         os.system('cls' if os.name == 'nt' else 'clear')
     
     while True:
-        clear_screen()
+        clearScreen()
         start_index = (current_page - 1) * dispLength
         end_index = min(start_index + dispLength, len(dataset_id_list))
         current_page_datasets = dataset_id_list[start_index:end_index]
@@ -152,6 +152,7 @@ def selectDatasetFromList(erddapObj, dispLength=50) -> list:
             run.cui()
 
         elif idx_select == "done":
+            clearScreen()
             print("\nPassing the following datasets to the next step...")
             print(f"{input_list}")
             return input_list
