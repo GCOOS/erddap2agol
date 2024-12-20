@@ -1,245 +1,353 @@
 from arcgis.gis import GIS
 from arcgis.features import FeatureLayer, FeatureLayerCollection
 from arcgis.gis._impl._content_manager import SharingLevel
+from . import data_wrangler as dw
 from . import erddap_client as ec
 from . import das_client as dc
-import copy, os, sys, pandas as pd, numpy as np, json
+import copy, os, sys, time, pandas as pd, numpy as np, json
+from dataclasses import dataclass, field
+from typing import Optional, List, Dict
 
-gis = GIS("home")
+@dataclass
+class AgolWrangler:
+    gis: Optional[GIS] = None
+    sharing_pref: str = "EVERYONE"
+    datasets: List['dw.DatasetWrangler'] = field(default_factory=list)
+    item_properties: Dict[str, Dict] = field(default_factory=dict)
+    erddap_obj: Optional['ec.ERDDAPHandler'] = None 
+    geoParams: dict = field(default_factory=lambda: {
+    "locationType": "coordinates",
+    "latitudeFieldName": "latitude__degrees_north_",
+    "longitudeFieldName": "longitude__degrees_east_",
+    "timeFieldName": "time__UTC_",
+    })
 
-#Connect to AGO. This may work different with docker. 
-def agoConnect() -> None:
-    try:
-        gis = GIS("home")
-        print("\nSuccesfully connected to " + gis.properties.portalName + " on " + gis.properties.customBaseUrl)
-        return gis
-    except Exception as e:
-        print(f"An error occurred connecting to ArcGIS Online: {e}")
 
-# Need to work out the rest of the metadata in item props
-def makeItemProperties(erddapObj: ec.ERDDAPHandler) -> dict:
-    dataid = erddapObj.datasetid
-    attribute_tags = erddapObj.attributes
+    def __post_init__(self):
+        """Initialize AGOL connection"""
+        self.connect()
+        if self.erddap_obj and hasattr(self.erddap_obj, 'datasets'):
+            self.shareDatasetObjAttrs
 
-    tags = ["erddap2agol", f"{dataid}"]
+    def __iter__(self):
+        """Make ERDDAPHandler directly iterable"""
+        return iter(self.datasets)
+    
+    def __len__(self):
+        """Get number of datasets"""
+        return len(self.datasets)
+    
+    def __getitem__(self, index):
+        """Allow index access to datasets"""
+        return self.datasets[index]
+    
+    def connect(self) -> None:
+        """Establish AGOL connection"""
+        try:
+            self.gis = GIS("home")
+            gis = self.gis
+            print("\nSuccesfully connected to " + gis.properties.portalName + " on " + gis.properties.customBaseUrl)
+        except Exception as e:
+            print(f"AGOL connection error: {e}")
 
-    if attribute_tags is not None:
-        tags.extend(attribute_tags)
-
-    # Base properties dictionary
-    ItemProperties = {
-        "type": "CSV",
-        "item_type": "Feature Service",
-        "tags": tags
-    }
-
-    # DAS Metadata to item properties
-    dasJson = dc.openDasJson(dataid)
-    if dasJson:
-        global_attrs = dasJson.get("NC_GLOBAL", {})
-        
-        # First check for institution, then creator_institution if institution doesn't exist
-        if "institution" in global_attrs:
-            ItemProperties["accessInformation"] = global_attrs["institution"].get("value", "")
-        elif "creator_institution" in global_attrs:
-            ItemProperties["accessInformation"] = global_attrs["creator_institution"].get("value", "")
-            
-        # Map license information
-        if "license" in global_attrs:
-            ItemProperties["licenseInfo"] = global_attrs["license"].get("value", "")
-
-        # Get title from global attributes if available
-        dataset_title = global_attrs.get("title", {}).get("value", dataid)
-
-        if "title" in global_attrs:
-            ItemProperties["title"] = dataset_title
+    def shareDatasetObjAttrs(self) -> None:
+        erddapObj = self.erddap_obj
+        """Add datasets from the provided ERDDAPHandler instance."""
+        if hasattr(erddapObj, 'datasets'):
+            self.datasets.extend(erddapObj.datasets)
+            print(f"Added {len(erddapObj.datasets)} datasets from erddap_obj to AgolWrangler.")
         else:
-            ItemProperties["title"] = dataid 
-        
-        # Create summary with dataset title and ERDDAP server info
-        server_name = erddapObj.server.split('/erddap/')[0].split('://')[-1]
+            print("The provided erddap_obj does not have a 'datasets' attribute.")
 
-        if "summary " in global_attrs:
-            sum_string = global_attrs["summary"].get("value", "")
-            ItemProperties["snippet"] = f"{sum_string}. {dataset_title} was generated with erddap2agol from the {server_name} ERDDAP."
-        else:
-            ItemProperties["snippet"] = f"{dataset_title} was generated with erddap2agol from the {server_name} ERDDAP."
+    def makeItemProperties(self) -> None:
+        """Creates item properties using dataset attributes"""
+        if self.datasets:
+            for dataset in self.datasets:
+                try:
+                    props = {
+                        "type": "CSV",
+                        "item_type": "Feature Service",
+                        "tags": ["erddap2agol", f"{dataset.dataset_id}"]
+                    }
+                    
+                    if dataset.attribute_list:
+                        props["tags"].extend(dataset.attribute_list)
 
-    # Special handling for Glider DAC
-    if erddapObj.server == "https://gliders.ioos.us/erddap/tabledap/":
-        tags.append("Glider DAC")
-        ItemProperties.update({        
-            "type": "GeoJson"
-        })
+                    if dataset.nc_global:
+                        # Set institution
+                        if "institution" in dataset.nc_global:
+                            props["accessInformation"] = dataset.nc_global["institution"].get("value", "")
+                        elif "creator_institution" in dataset.nc_global:
+                            props["accessInformation"] = dataset.nc_global["creator_institution"].get("value", "")
+                        
+                        # Set license
+                        if "license" in dataset.nc_global:
+                            props["licenseInfo"] = dataset.nc_global["license"].get("value", "")
+                        
+                        # Set title and summary
+                        dataset_title = dataset.dataset_id
 
-    return ItemProperties
+                        props["title"] = dataset_title
+
+                        server_name = dataset.server.split('/erddap/')[0].split('://')[-1]
+                        summary = dataset.nc_global.get("summary", {}).get("value", "")
+                        props["snippet"] = f"{summary}. {dataset_title} was generated with erddap2agol from the {server_name} ERDDAP."
+
+                    if dataset.is_glider:
+                        props["tags"].append("Glider DAC")
+                        props["type"] = "GeoJson"
+                        
+                    self.item_properties[dataset.dataset_id] = props
+                    
+                except Exception as e:
+                    print(f"Error creating item properties for {dataset.dataset_id}: {e}")
 
 
-def pointTableToGeojsonLine(filepath, erddapObj: ec.ERDDAPHandler, X="longitude (degrees_east)", Y="latitude (degrees_north)") -> dict:
-    if filepath:
-        print(f"\nConverting {filepath} to GeoJSON...")
-        df = pd.read_csv(filepath)
+    def pointTableToGeojsonLine(self,  X="longitude (degrees_east)", Y="latitude (degrees_north)") -> dict:
+        for dataset in self.datasets:
+            if dataset.is_glider == True:
+                filepath = dataset.data_filepath
+                if dataset.data_filepath:
+                    print(f"\nConverting {filepath} to GeoJSON...")
+                    df = pd.read_csv(filepath)
 
-        # Replace NaN with None in the entire DataFrame
-        df = df.replace({np.nan: None})
+                    # Replace NaN with None in the entire DataFrame
+                    df = df.replace({np.nan: None})
 
-        # Filter out rows with invalid coordinates
-        df = df.dropna(subset=[X, Y])
+                    # Filter out rows with invalid coordinates
+                    df = df.dropna(subset=[X, Y])
 
-        features = []
-        data_columns = [col for col in df.columns if col not in [X, Y]]
-        num_points = len(df)
+                    features = []
+                    data_columns = [col for col in df.columns if col not in [X, Y]]
+                    num_points = len(df)
 
-        for i in range(num_points - 1):
-            # Coordinates for the line segment
-            point_start = [df.iloc[i][X], df.iloc[i][Y]]
-            point_end = [df.iloc[i + 1][X], df.iloc[i + 1][Y]]
-            coordinates = [point_start, point_end]
+                    for i in range(num_points - 1):
+                        # Coordinates for the line segment
+                        point_start = [df.iloc[i][X], df.iloc[i][Y]]
+                        point_end = [df.iloc[i + 1][X], df.iloc[i + 1][Y]]
+                        coordinates = [point_start, point_end]
 
-            # Skip if any coordinate is None
-            if None in point_start or None in point_end:
+                        # Skip if any coordinate is None
+                        if None in point_start or None in point_end:
+                            continue
+
+                        # Properties from the last point of the segment
+                        properties = df.iloc[i + 1][data_columns].to_dict()
+
+                        # Create the GeoJSON feature for the line segment
+                        feature = {
+                            "type": "Feature",
+                            "geometry": {
+                                "type": "LineString",
+                                "coordinates": coordinates
+                            },
+                            "properties": properties
+                        }
+
+                        features.append(feature)
+
+                    # Assemble the FeatureCollection
+                    geojson = {
+                        "type": "FeatureCollection",
+                        "features": features
+                    }
+                    savedir = ec.getTempDir()
+                    filename = dataset.dataset_id + "_line.geojson"
+                    savepath = os.path.join(savedir, filename)
+                    with open(savepath, "w") as f:
+                        json.dump(geojson, f)
+                    print(f"\nGeoJSON conversion complete @ {savepath}.")
+                    setattr(dataset, "data_filepath", savepath)
+                else:
+                    sys.exit()
+
+    def postAndPublish(self, inputDataType="csv") -> None:
+        """Publishes all datasets in self.datasets to AGOL, handling subsets if needed."""
+        geom_params = self.geoParams.copy()
+        geom_params.pop('hasStaticData', None)  # Remove if exists, as done in stable code
+
+        # Time tracking variables
+        total_start_time = time.time()
+        processed_count = 0
+
+        for dataset in self.datasets:
+            dataset_start_time = time.time()  # Track start time for this dataset
+
+            item_prop = self.item_properties.get(dataset.dataset_id)
+            if not item_prop:
+                print(f"No item properties found for {dataset.dataset_id}. Skipping.")
                 continue
 
-            # Properties from the last point of the segment
-            properties = df.iloc[i + 1][data_columns].to_dict()
+            paths = dataset.data_filepath
+            if not paths:
+                print(f"No data file path found for {dataset.dataset_id}. Skipping.")
+                continue
 
-            # Create the GeoJSON feature for the line segment
-            feature = {
-                "type": "Feature",
-                "geometry": {
-                    "type": "LineString",
-                    "coordinates": coordinates
-                },
-                "properties": properties
-            }
+            # Set a service name if not already present
+            if 'name' not in geom_params or not geom_params['name']:
+                geom_params['name'] = item_prop['title']
 
-            features.append(feature)
+            def adjustSharingAndCapabilities(published_item):
+                # Get fresh item
+                #time.sleep(3)  # brief pause
+                refreshed_item = self.gis.content.get(published_item.id)
 
-        # Assemble the FeatureCollection
-        geojson = {
-            "type": "FeatureCollection",
-            "features": features
-        }
-        savedir = ec.getTempDir()
-        filename = erddapObj.datasetid + "_line.geojson"
-        savepath = os.path.join(savedir, filename)
-        with open(savepath, "w") as f:
-            json.dump(geojson, f)
-        print(f"\nGeoJSON conversion complete @ {savepath}.")
-        return savepath
-    else:
-        sys.exit()
+                # Update capabilities using FeatureLayerCollection (like stable code)
+                try:
+                    item_flc = FeatureLayerCollection.fromitem(refreshed_item)
+                    update_definition_dict = {"capabilities": "Query,Extract"}
+                    item_flc.manager.update_definition(update_definition_dict)
+                    #print(f"Successfully updated capabilities for {refreshed_item.title}")
+                except Exception as e:
+                    print(f"Error adjusting capabilities: {e}")
 
-def postAndPublish(item_prop: dict, geom_params: dict, path, erddapObj: ec.ERDDAPHandler, inputDataType="csv", sharing_lvl = "EVERYONE") -> str:
-    try:
-        geom_params.pop('hasStaticData', None) 
+                try:
+                    item_sharing_mgr = refreshed_item.sharing
+                    item_sharing_mgr.sharing_level = SharingLevel.EVERYONE
+                    #print(f"Successfully updated sharing for {refreshed_item.title} to EVERYONE")
+                except Exception as e:
+                    print(f"Error adjusting sharing level: {e}")
 
-        print(f"\ngis.content.add...")
-        item = gis.content.add(item_prop, path, HasGeometry=True)
+            try:
+                gis = self.gis
 
-        # Check if the server matches the specific condition
-        if erddapObj.server == "https://gliders.ioos.us/erddap/tabledap/":
-            # Ensure a unique service name for this specific server
-            unique_service_name = f"{item_prop['title']}_service"
-            erddapObj.geoParams['name'] = unique_service_name  # Explicitly set service name
+                if dataset.needs_Subset:
+                # -------------Subset file scenario-------------
+                    first_path = paths[0]
+                    print(f"\nAdding first subset item for {dataset.dataset_id} to AGOL...")
+                    item = gis.content.add(item_properties=item_prop, data=first_path, HasGeometry=True)
 
+                    # Publish
+                    print(f"\nPublishing item for {dataset.dataset_id}...")
+                    published_item = item.publish(publish_parameters=geom_params, file_type=inputDataType)
+                    adjustSharingAndCapabilities(published_item)
+
+                    # Append subsequent subsets
+                    if published_item.layers:
+                        feature_layer = published_item.layers[0]
+                        for subset_path in paths[1:]:
+                            subset_item = gis.content.add({}, data=subset_path, HasGeometry=True)
+                            analyze_params = gis.content.analyze(item=subset_item.id)
+                            append_success = feature_layer.append(
+                                item_id=subset_item.id,
+                                #Probably wont have to worry about geojson for large files, but just in case this is where youd change it
+                                upload_format='csv',
+                                source_info=analyze_params['publishParameters'],
+                                upsert=False
+                            )
+                            if append_success:
+                                print(f"Appended {subset_item.title} to {published_item.title}")
+                            else:
+                                print(f"\nFailed to append {subset_item.title}")
+                            subset_item.delete(permanent=True)
+                # -------------Subset file scenario-------------
+
+                else:
+                    #--------Single file scenario--------------
+                    path = paths if isinstance(paths, str) else paths[0]
+                    print(f"\nAdding item for {dataset.dataset_id} to AGOL...")
+                    item = gis.content.add(item_properties=item_prop, data=path, HasGeometry=True)
+
+                    # Publish
+                    print(f"\nPublishing item for {dataset.dataset_id}...")
+                    published_item = item.publish(publish_parameters=geom_params, file_type=inputDataType)
+                    adjustSharingAndCapabilities(published_item)
+                    #--------Single file scenario--------------
+
+                # End of dataset processing - print time
+                dataset_end_time = time.time()
+                dataset_processing_time = dataset_end_time - dataset_start_time
+                processed_count += 1
+                print(f"Finished processing dataset {dataset.dataset_id} in {dataset_processing_time:.2f} seconds")
+
+            except Exception as e:
+                print(f"An error occurred adding the item for {dataset.dataset_id}: {e}")
+                continue
+
+        # After all datasets processed, print total time
+        total_end_time = time.time()
+        total_time = total_end_time - total_start_time
+        print("\nAll done!")
+        print(f"Processing completed for {processed_count} datasets")
+        print(f"Total processing time: {total_time:.2f} seconds")
         
-        # Ensure publish parameters include a unique service name
-        if 'name' not in erddapObj.geoParams or not erddapObj.geoParams['name']:
-            erddapObj.geoParams['name'] = item_prop['title']
-
-        print(f"\nitem.publish...")
-        published_item = item.publish(publish_parameters=erddapObj.geoParams, file_type=inputDataType)
-
-        # we should be doing this above, i believe geoParams is the service definition
-        # Disable editing by updating layer capabilities
-        item_gis = gis.content.get(published_item.id)
-        item_flc = FeatureLayerCollection.fromitem(item_gis)
-        update_definition_dict = {"capabilities": "Query,Extract"}
-        item_flc.manager.update_definition(update_definition_dict)
-
-        if sharing_lvl is not None:
-            item_sharing_mgr = item_gis.sharing
-            item_sharing_mgr.sharing_level = SharingLevel.EVERYONE
-
-        print(f"\nSuccessfully uploaded {item_prop['title']} to ArcGIS Online")
-        print(f"Item ID: {published_item.id}")
-        return published_item.id
-    except Exception as e:
-        print(f"An error occurred adding the item: {e}")
 
 
 
-def searchContentByTag(tag: str) -> list:
-    try:
-        search_query = f'tags:"{tag}" AND owner:{gis.users.me.username} AND type:Feature Service'
-        search_results = gis.content.search(query=search_query, max_items=1000)
-
-        # Check if any items were found
-        if not search_results:
-            print(f"No items found with the tag '{tag}' for the logged-in user.")
-            return []
-
-        # Extract and return the item IDs
-        item_ids = [item.id for item in search_results]
-        
-        print(f"Found {len(item_ids)} items with the tag '{tag}':")
-        for item in search_results:
-            print(f"Title: {item.title}, ID: {item.id}")
-
-        return item_ids
-    
-    except Exception as e:
-        print(f"An error occurred while searching for items: {e}")
-
-def disable_editing(item_id):
-    item = gis.content.get(item_id)
-    if item is None:
-        print(f"Item {item_id} not found")
-        return
-
-    # Get the FeatureLayerCollection from the item
-    flc = FeatureLayerCollection.fromitem(item)
-
-    # Update the capabilities to disable editing
-    flc.manager.update_definition({"capabilities": "Query"})
-    print(f"Editing successfully disabled for item {item_id}")
-
-
-
-
-#The below functions have no utility right now
-#-----------------------------------------------------------
-def appendTableToFeatureService(featureServiceID: str, tableID: str) -> str:
-    try:
-        featureServiceItem = gis.content.get(featureServiceID)
-        tableItem = gis.content.get(tableID)    
-        response = featureServiceItem.append(item_id= tableID, upload_format ='csv', source_table_name = tableItem.title)      
-        
-        if response['status'] == 'Completed':
-            print(f"Successfully appended data to Feature Service ID: {featureServiceItem.id}")
-        else:
-            print(f"Append operation completed with issues: {response}")
-        
-        return response
-    except Exception as e:
-        print(f"An error occurred appending the CSV data: {e}")
-
-def createFeatureService(item_prop: dict) -> str:
-    item_prop_mod = copy.deepcopy(item_prop)
-    item_prop_mod["title"] = item_prop_mod["title"] + "_AGOL"
-    isAvail = gis.content.is_service_name_available(item_prop_mod['title'], "Feature Service")
-    if isAvail == True:
+    def searchContentByTag(self, tag: str) -> list:
+        gis = self.gis
         try:
-            featureService = gis.content.create_service(item_prop_mod['title'], "Feature Service", has_static_data = False) 
-            featureService.update(item_properties = item_prop_mod)
-            print(f"Successfully created Feature Service {item_prop_mod['title']}")
-            return featureService.id
+            search_query = f'tags:"{tag}" AND owner:{gis.users.me.username} AND type:Feature Service'
+            search_results = gis.content.search(query=search_query, max_items=1000)
+
+            # Check if any items were found
+            if not search_results:
+                print(f"No items found with the tag '{tag}' for the logged-in user.")
+                return []
+
+            # Extract and return the item IDs
+            item_ids = [item.id for item in search_results]
+            
+            print(f"Found {len(item_ids)} items with the tag '{tag}':")
+            for item in search_results:
+                print(f"Title: {item.title}, ID: {item.id}")
+
+            return item_ids
         
         except Exception as e:
-            print(f"An error occurred creating the Feature Service: {e}")
-    else:
-        print(f"Feature Service {item_prop_mod['title']} already exists, use OverwriteFS to Update")
+            print(f"An error occurred while searching for items: {e}")
+
+    def disable_editing(self, item_id):
+        gis = self.gis
+        item = gis.content.get(item_id)
+        if item is None:
+            print(f"Item {item_id} not found")
+            return
+
+        # Get the FeatureLayerCollection from the item
+        flc = FeatureLayerCollection.fromitem(item)
+
+        # Update the capabilities to disable editing
+        flc.manager.update_definition({"capabilities": "Query"})
+        print(f"Editing successfully disabled for item {item_id}")
+
+
+
+
+    #The below functions have no utility right now
+    # #-----------------------------------------------------------
+    # def appendTableToFeatureService(self, featureServiceID: str, tableID: str) -> str:
+    #     gis = self.gis
+    #     try:
+    #         featureServiceItem = gis.content.get(featureServiceID)
+    #         tableItem = gis.content.get(tableID)    
+    #         response = featureServiceItem.append(item_id= tableID, upload_format ='csv', source_table_name = tableItem.title)      
+            
+    #         if response['status'] == 'Completed':
+    #             print(f"Successfully appended data to Feature Service ID: {featureServiceItem.id}")
+    #         else:
+    #             print(f"Append operation completed with issues: {response}")
+            
+    #         return response
+    #     except Exception as e:
+    #         print(f"An error occurred appending the CSV data: {e}")
+
+    def createFeatureService(self, item_prop: dict) -> str:
+        gis = self.gis
+        item_prop_mod = copy.deepcopy(item_prop)
+        item_prop_mod["title"] = item_prop_mod["title"] + "_AGOL"
+        isAvail = gis.content.is_service_name_available(item_prop_mod['title'], "Feature Service")
+        if isAvail == True:
+            try:
+                featureService = gis.content.create_service(item_prop_mod['title'], "Feature Service", has_static_data = False) 
+                featureService.update(item_properties = item_prop_mod)
+                print(f"Successfully created Feature Service {item_prop_mod['title']}")
+                return featureService.id
+            
+            except Exception as e:
+                print(f"An error occurred creating the Feature Service: {e}")
+        else:
+            print(f"Feature Service {item_prop_mod['title']} already exists, use OverwriteFS to Update")
 
 
 

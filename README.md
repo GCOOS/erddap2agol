@@ -1,9 +1,8 @@
-# ERDDAP2AGOL v.0.5.5.2 
+# ERDDAP2AGOL v.0.6.0 
 
-The goal of this project is to establish a connection between ERDDAP services and ArcGIS Online (AGOL). Erddap2agol will be a "hands-off" ETL program to automatically update and manage ERDDAP data hosted on ArcGIS Online. 
-Erddap2agol is a service provided by the Gulf of Mexico Ocean Observing System (GCOOS) and is intended for use by other data providers using ERDDAP, or individuals who wish to study ERDDAP data on a GIS platform. As this project is in active development, please see the "roadmap" section.
+The purpose of this project is to develop a robust tool for reliably transferring datasets between ERDDAPTM services and ArcGIS Online (AGOL). Erddap2agol is a "hands-off" Python package designed to operate seamlessly within the AGOL environment. Its core functionalities include creating, managing, and updating ERDDAPTM datasets at various levels of granularity. Developed by the Gulf of Mexico Ocean Observing System (GCOOS), erddap2agol is available for use by data providers leveraging ERDDAPTM services, as well as individuals and organizations aiming to analyze and visualize ERDDAPTM data on a GIS platform.
 
-### Try the new feature! Glider DAC *Special* Menu. This will publish a multline of glider tracks rather than points!   
+### ERDDAP2AGOL v0.6: Major update!   
 
 ## Roadmap
 The ERDDAP2AGOL tool is under active development. Stable features are indicated by the readme and version number. Currently, at version 0.4, NRT add is considered stable. To be notified when the tool is ready for use. <br />
@@ -15,8 +14,8 @@ The ERDDAP2AGOL tool is under active development. Stable features are indicated 
 * Your ERDDAP data will be available in three product levels.         
 - NRT: 7 day moving window, Level 1. (WIP)
 - Glider DAC Menu: Create multiline HFLs from the Glider DAC ERDDAP (Available now!)  
-- Historical: Updated weekly, contains all data, Level 2. (Version 0.6) 
-- QC Historical: QC Flags, low quality records removed, Level 3. (Version 0.7) <br />
+- Historical: Updated weekly, contains all data, Level 2. (WIP)
+- QC Historical: QC Flags, low quality records removed, Level 3. (WIP) <br />
 
 * Multiple install options.
 - Install directly from an AGOL notebook.

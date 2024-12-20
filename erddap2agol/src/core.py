@@ -4,7 +4,7 @@ import time  # Add this import at the top with other imports
 from . import erddap_client as ec
 from . import das_client as dc
 from . import ago_wrapper as aw
-from . import level_manager as lm
+from . import data_wrangler as dw
 from erddap2agol import run
 from logs import updatelog as ul
 from src.utils import OverwriteFS
@@ -33,6 +33,7 @@ def inputToList(user_input) -> list:
     return dataset_list
 
  # Show erddap menu and define gcload with selection
+ # Survives refactor
 def erddapSelection(GliderServ = False) -> ec.ERDDAPHandler:
     if GliderServ == True:
         erddapObj = ec.ERDDAPHandler.setErddap(ec.custom_server, 15)
@@ -59,7 +60,12 @@ def erddapSelection(GliderServ = False) -> ec.ERDDAPHandler:
 # Select dataset from list and return list of datasets
 # This includes logic not found elsewhere, not a wrapper like other core funcs.
 # need to handle misinputs
+
+# Survives refactor
 def selectDatasetFromList(erddapObj, dispLength=50) -> list:
+    """The big search function that allows users to search datasets and select them for processing.
+        
+        Returns a list of selected datasets. Should pass to the erddapObj list constructor."""
     def _updateDatasetList(erddapObj, search_term=None):
         if search_term:
             original_info = erddapObj.serverInfo
@@ -93,12 +99,12 @@ def selectDatasetFromList(erddapObj, dispLength=50) -> list:
     current_page = 1
     input_list = []
     
-    def clear_screen():
+    def clearScreen():
         import os
         os.system('cls' if os.name == 'nt' else 'clear')
     
     while True:
-        clear_screen()
+        clearScreen()
         start_index = (current_page - 1) * dispLength
         end_index = min(start_index + dispLength, len(dataset_id_list))
         current_page_datasets = dataset_id_list[start_index:end_index]
@@ -146,6 +152,7 @@ def selectDatasetFromList(erddapObj, dispLength=50) -> list:
             run.cui()
 
         elif idx_select == "done":
+            clearScreen()
             print("\nPassing the following datasets to the next step...")
             print(f"{input_list}")
             return input_list
@@ -188,13 +195,32 @@ def selectDatasetFromList(erddapObj, dispLength=50) -> list:
             except Exception as e:
                 print("An unexpected error occurred:", e)
                 input("Press Enter to continue...")
-
+     
+# needs change     
+def findBigDatasets(dataset_list: list, erddapObj: ec.ERDDAPHandler) -> dict:
+    """
+    Creates nested dictionary of datasets and their time subsets
+    Returns: {datasetid: {subset1: {start:time, end:time}, subset2:{...}}}
+    """
+    time_dict = {}
+    sizeDict = dw.getDatasetSizes(dataset_list, erddapObj)
+    sizeDict_filtered = {k: v for k, v in sizeDict.items() if v > 45000}
+    bypassDatasets = [k for k, v in sizeDict.items() if k not in sizeDict_filtered]
     
+    for dataset_id, row_count in sizeDict_filtered.items():
+        setattr(erddapObj, "datasetid", dataset_id)
+        # Here we will do parse das so we can properly get the time subset
+
+        time_params = erddapObj.calculateTimeSubset(row_count)
+        time_dict[dataset_id] = time_params
         
-
-
+    return time_dict
+    
+            
 # DAS parsing and attribute definitions for non-NRT datasets
 # Wraps getDas, parseDasResponse, convertToDict, saveToJson, openDasJson, getActualAttributes, convertFromUnix, displayAttributes
+
+# obviously needs changes, has moved to data_wrangler 
 def parseDas(erddapObj, dataset):
     das_resp = ec.ERDDAPHandler.getDas(erddapObj, dataset)
     
@@ -209,6 +235,7 @@ def parseDas(erddapObj, dataset):
     
     attribute_list = dc.getActualAttributes(dc.openDasJson(dataset), erddapObj)
 
+    #Time stuff starts here
     unixtime = (dc.getTimeFromJson(dataset))
     start, end = dc.convertFromUnix(unixtime)
     
@@ -241,9 +268,9 @@ def parseDasNRT(erddapObj, dataset) -> list:
     
     attribute_list = dc.getActualAttributes(dc.openDasJson(dataset), erddapObj)
 
-    window_start, window_end = lm.movingWindow(isStr=True)
+    window_start, window_end = dw.movingWindow(isStr=True)
 
-    overlapBool = lm.checkDataRange(dataset)
+    overlapBool = dw.checkDataRange(dataset)
     
     if overlapBool == False:
         print(f"\nNo data found for dataset {dataset} within the last 7 days.")
@@ -427,11 +454,11 @@ def NRTUpdateAGOL(skip_check: bool = True) -> None:
     #This is hardcoded for GCOOS ERDDAP
     erddapObj = ec.erddapGcoos    
 
-    nrt_dict  = lm.NRTFindAGOL()
+    nrt_dict  = dw.NRTFindAGOL()
     for datasetid, itemid in nrt_dict.items():
         if datasetid and itemid:
             try: 
-                startWindow, endWindow = lm.movingWindow(isStr=True)
+                startWindow, endWindow = dw.movingWindow(isStr=True)
                 das_resp = ec.ERDDAPHandler.getDas(erddapObj, datasetid)
                 parsed_response = dc.convertToDict(dc.parseDasResponse(das_resp))
                 fp = dc.saveToJson(parsed_response, datasetid)
