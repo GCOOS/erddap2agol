@@ -11,21 +11,21 @@ def cui():
     while True:
         print("\nWelcome to ERDDAP2AGOL.")
         print("GCOOS GIS, 2025.")
-        print("\n1. Create ERDDAP Items")
-        print("2. Dev menu")
-        print("3. Glider DAC *Special* Menu")
-        print("4. Legacy Add (Manual Input)")
+        print("\n1. Create ERDDAP Datasets")
+        print("2. Create Glider DAC Datasets")
+        print("3. Create NRT Items")
+        print("4. Find & Update NRT Items")
 
         user_choice = input(": ")  
 
         if user_choice == "1":
-            create_erddap_item_menu()
-        elif user_choice == "2":
             experimental_menu_add()
-        elif user_choice == "3":
+        elif user_choice == "2":
             experimental_menu_glider()
+        elif user_choice == "3":
+            experimental_menu_nrt()
         elif user_choice == "4":
-            legacy_add_menu()
+            core.updateNRT
         else:
             print("\nInvalid input. Please try again.")
 
@@ -57,6 +57,7 @@ def experimental_menu_add():
 
     for datasetObj in datasetObjlist:
         datasetObj.generateUrl()
+        print(datasetObj.start_time, datasetObj.start_time)
         datasetObj.writeErddapData()
 
     agolObj = aw.AgolWrangler(erddap_obj= erddapObj)
@@ -87,6 +88,28 @@ def experimental_menu_glider():
     agolObj.datasets = erddapObj.datasets
     agolObj.makeItemProperties()
     agolObj.pointTableToGeojsonLine()
+    agolObj.postAndPublish()
+    print("\nReturning to main menu...")
+    erddapObj.reset()
+    cui()
+
+def experimental_menu_nrt():
+    print("\nWelcome to the NRT Menu.")
+
+    erddapObj = core.erddapSelection(nrtAdd= True)
+    dataset_list = core.selectDatasetFromList(erddapObj)
+    
+    erddapObj.addDatasets_list(dataset_list)
+
+    datasetObjlist = (erddapObj.datasets)
+
+    for datasetObj in datasetObjlist:
+        datasetObj.generateUrl()
+        datasetObj.writeErddapData()
+
+    agolObj = aw.AgolWrangler(erddap_obj= erddapObj)
+    agolObj.datasets = erddapObj.datasets
+    agolObj.makeItemProperties()
     agolObj.postAndPublish()
     print("\nReturning to main menu...")
     erddapObj.reset()

@@ -39,12 +39,19 @@ class DatasetWrangler:
         print(f"\nConstructing the dataset object: {self.dataset_id}")
         if self.server == "https://gliders.ioos.us/erddap/tabledap/":
             self.is_glider = True
+
+        # For NRT we bypass the dataset size step
+        if self.is_nrt == True:
+            self.needs_Subset = False
+            self.getDas()
+            self.nrtTimeSet()
         
-        self.getDas()
-        self.getDatasetSizes()
-        self.needsSubsetting()
-        if self.needs_Subset == True:
-            self.subsetDict = self.calculateTimeSubset()
+        else:
+            self.getDas()
+            self.getDatasetSizes()
+            self.needsSubsetting()
+            if self.needs_Subset == True:
+                self.subsetDict = self.calculateTimeSubset()
 
     def requireTime(func):
         """Require time decorator"""
@@ -224,7 +231,7 @@ class DatasetWrangler:
             )
             url = (
                 f"{self.server}{self.dataset_id}.{dataformat}?"
-                f"{attrs_encoded}"
+                f"time%2C{attrs_encoded}"
                 f"{time_constraints}"
             )
             urls.append(url)
@@ -314,24 +321,25 @@ class DatasetWrangler:
 ################## NRT Functions ##################
 
 #This function returns the start and end time of the moving window
-def movingWindow(isStr: bool):
-    if isStr == True:
-        start_time = datetime.now() - timedelta(days=7)
-        end_time = datetime.now()
-        return start_time.isoformat(), end_time.isoformat()
-    else:
-        start_time = datetime.now() - timedelta(days=7)
-        end_time = datetime.now()
-        return start_time, end_time
+    def nrtTimeSet(self):
+        """Sets start_time/end_time in ISO format (e.g., 2023-09-29T14:05:12)"""
+        now = datetime.now()
+        seven_days_ago = now - timedelta(days=7)
 
+        self.start_time = seven_days_ago.strftime('%Y-%m-%dT%H:%M:%S')
+        self.end_time = now.strftime('%Y-%m-%dT%H:%M:%S')
+            
 #This function checks if the dataset has data within the last 7 days
-def checkDataRange(datasetid) -> bool:
-    startDas, endDas = dc.convertFromUnixDT(dc.getTimeFromJson(datasetid))
-    window_start, window_end = movingWindow(isStr=False)
-    if startDas <= window_end and endDas >= window_start:
-        return True
-    else:
-        return False  
+    def checkDataRange(datasetid) -> bool:
+        def movingWindow(self):        
+            self.start_time = datetime.now() - timedelta(days=7)
+            self.end_time = datetime.now()
+        startDas, endDas = dc.convertFromUnixDT(dc.getTimeFromJson(datasetid))
+        window_start, window_end = movingWindow(isStr=False)
+        if startDas <= window_end and endDas >= window_start:
+            return True
+        else:
+            return False  
 
 #This function returns all datasetIDs that have data within the last 7 days
 #Maybe request a fresh json everytime?
