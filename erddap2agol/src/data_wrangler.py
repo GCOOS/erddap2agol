@@ -1,6 +1,5 @@
 from . import erddap_client as ec
 from . import das_client as dc
-from logs import updatelog as ul
 from src.utils import OverwriteFS
 from arcgis.gis import GIS
 
@@ -36,7 +35,6 @@ class DatasetWrangler:
     
     def __post_init__(self):
         """Building the dataset objects"""
-        print(f"\nConstructing the dataset object: {self.dataset_id}")
         if self.server == "https://gliders.ioos.us/erddap/tabledap/":
             self.is_glider = True
 

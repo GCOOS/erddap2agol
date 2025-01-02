@@ -12,7 +12,7 @@ from erddap2agol.src import das_client as dc
 from erddap2agol.src import ago_wrapper as aw
 from erddap2agol.src import core
 from erddap2agol.src import update_manager as um
-from erddap2agol.logs import updatelog as ul 
+
 
 def main():
     run.cui()
