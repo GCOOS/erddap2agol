@@ -34,7 +34,7 @@ def inputToList(user_input) -> list:
 
  # Show erddap menu and define gcload with selection
  # Survives refactor
-def erddapSelection(GliderServ = False) -> ec.ERDDAPHandler:
+def erddapSelection(GliderServ = False, nrtAdd = False) -> ec.ERDDAPHandler:
     if GliderServ == True:
         erddapObj = ec.ERDDAPHandler.setErddap(ec.custom_server, 15)
         return erddapObj
@@ -49,7 +49,11 @@ def erddapSelection(GliderServ = False) -> ec.ERDDAPHandler:
 
             if uc.lower() == "y":
                 print("\nContinuing with selected server...")
-                return erddapObj
+                if nrtAdd is True:
+                    erddapObj.is_nrt = True
+                    return erddapObj
+                else:
+                    return erddapObj
             else:
                 print("\nReturning to main menu...")
                 return None
@@ -67,6 +71,22 @@ def selectDatasetFromList(erddapObj, dispLength=75) -> list:
         
         Returns a list of selected datasets. Should pass to the erddapObj list constructor."""
     def _updateDatasetList(erddapObj, search_term=None):
+        original_info = erddapObj.serverInfo
+        base_url = original_info.split('/erddap/')[0] + '/erddap'
+        
+        if erddapObj.is_nrt is True:
+            
+            search_url = (
+                f"{base_url}/search/advanced.json?"
+                f"page=1&itemsPerPage=10000000&minTime=now-7days&maxTime=&protocol=tabledap"
+            )
+
+            print(f"\nSEARCH URL: {search_url}")
+            erddapObj.serverInfo = search_url
+            dataset_id_list = erddapObj.getDatasetIDList()
+            erddapObj.serverInfo = original_info
+            return dataset_id_list
+
         if search_term:
             original_info = erddapObj.serverInfo
             # Extract the base URL (remove everything after /erddap/)
@@ -79,6 +99,7 @@ def selectDatasetFromList(erddapObj, dispLength=75) -> list:
             dataset_id_list = erddapObj.getDatasetIDList()
             erddapObj.serverInfo = original_info
             return dataset_id_list
+        
         return erddapObj.getDatasetIDList()
 
     dataset_id_list = _updateDatasetList(erddapObj)

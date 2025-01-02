@@ -84,6 +84,7 @@ class ERDDAPHandler:
         self.fileType = fileType
         self.geoParams = geoParams
         self.datasets = []
+        self.is_nrt = False
         
     
     @property
@@ -111,6 +112,7 @@ class ERDDAPHandler:
         self.fileType = None
         self.geoParams = None
         self.datasets = []
+        self.is_nrt = False
 
     def __iter__(self):
         """Make ERDDAPHandler directly iterable"""
@@ -161,8 +163,9 @@ class ERDDAPHandler:
         """Creates DatasetWrangler objects for each dataset ID"""
         for dataset_id in dataset_ids:
             dataset = dw.DatasetWrangler(
-                dataset_id=dataset_id,
-                server=self.server
+                dataset_id= dataset_id,
+                server= self.server,
+                is_nrt= self.is_nrt
             )
             self.datasets.append(dataset)
     

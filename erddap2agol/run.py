@@ -12,9 +12,9 @@ def cui():
         print("\nWelcome to ERDDAP2AGOL.")
         print("GCOOS GIS, 2025.")
         print("\n1. Create ERDDAP Items")
-        print("2. Dev menu")
-        print("3. Glider DAC *Special* Menu")
-        print("4. Legacy Add (Manual Input)")
+        print("2. Dev menu (Normal Add)")
+        print("3. Dev menu (Glider Add)")
+        print("4. Dev menu (NRT Add)")
 
         user_choice = input(": ")  
 
@@ -25,7 +25,7 @@ def cui():
         elif user_choice == "3":
             experimental_menu_glider()
         elif user_choice == "4":
-            legacy_add_menu()
+            experimental_menu_nrt()
         else:
             print("\nInvalid input. Please try again.")
 
@@ -87,6 +87,28 @@ def experimental_menu_glider():
     agolObj.datasets = erddapObj.datasets
     agolObj.makeItemProperties()
     agolObj.pointTableToGeojsonLine()
+    agolObj.postAndPublish()
+    print("\nReturning to main menu...")
+    erddapObj.reset()
+    cui()
+
+def experimental_menu_nrt():
+    print("\nWelcome to the NRT Menu.")
+
+    erddapObj = core.erddapSelection(nrtAdd= True)
+    dataset_list = core.selectDatasetFromList(erddapObj)
+    
+    erddapObj.addDatasets_list(dataset_list)
+
+    datasetObjlist = (erddapObj.datasets)
+
+    for datasetObj in datasetObjlist:
+        datasetObj.generateUrl()
+        datasetObj.writeErddapData()
+
+    agolObj = aw.AgolWrangler(erddap_obj= erddapObj)
+    agolObj.datasets = erddapObj.datasets
+    agolObj.makeItemProperties()
     agolObj.postAndPublish()
     print("\nReturning to main menu...")
     erddapObj.reset()
