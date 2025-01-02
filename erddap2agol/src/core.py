@@ -5,6 +5,7 @@ from . import erddap_client as ec
 from . import das_client as dc
 from . import ago_wrapper as aw
 from . import data_wrangler as dw
+from . import update_manager as um
 from erddap2agol import run
 from logs import updatelog as ul
 from src.utils import OverwriteFS
@@ -471,38 +472,33 @@ def agolPublishList(dataset_list, erddapObj, isNRT: int, skip_check: bool = Fals
 ##### Functions for Notebooks #####
 ###################################
 
-def NRTUpdateAGOL(skip_check: bool = True) -> None:
-    #This is hardcoded for GCOOS ERDDAP
-    erddapObj = ec.erddapGcoos    
+# Basic integration of the update function now.  
+def updateNRT() -> None:
+    update_manager = um.UpdateManager()
+    gis = update_manager.gis
+    update_manager.searchContent()
+    dataset_list = []
 
-    nrt_dict  = dw.NRTFindAGOL()
-    for datasetid, itemid in nrt_dict.items():
-        if datasetid and itemid:
-            try: 
-                startWindow, endWindow = dw.movingWindow(isStr=True)
-                das_resp = ec.ERDDAPHandler.getDas(erddapObj, datasetid)
-                parsed_response = dc.convertToDict(dc.parseDasResponse(das_resp))
-                fp = dc.saveToJson(parsed_response, datasetid)
-                das_data = dc.openDasJson(datasetid)
-                attribute_list = dc.getActualAttributes(das_data, erddapObj)
+    for datasetid, info in update_manager.datasets.items():
+        serverurl = info.get('base_url')
+        print(serverurl)
+        datasetObj = dw.DatasetWrangler(
+            dataset_id= datasetid,
+            server= serverurl,
+            is_nrt= True
+        )
 
-                setattr(erddapObj, "start_time", startWindow)
-                setattr(erddapObj, "end_time", endWindow)
-                setattr(erddapObj, "datasetid", datasetid)
-                setattr(erddapObj, "attributes", attribute_list)
+        datasetObj.generateUrl()
 
-                url = erddapObj.generate_url(False, attribute_list)
+        agol_id = info.get('agol_id')
+        content_item = gis.content.get(agol_id) 
 
-                gis = aw.agoConnect()
-                
-                content = gis.content.get(itemid)
+        try:
+            OverwriteFS.overwriteFeatureService(content_item, datasetObj.url_s[0], verbose=True, preserveProps=False, ignoreAge = True)
+        except Exception as e:
+            raise e
 
-
-                OverwriteFS.overwriteFeatureService(content, url, verbose=True, preserveProps=False, ignoreAge = True)
-            
-            except Exception as e:
-                    print(f"Error: {e}")
-                    pass
+    
 
 def gliderWorkflow(search_term: str = None, isNRT: int = 0, skip_check: bool = False) -> None:
     """
@@ -547,3 +543,38 @@ def gliderWorkflow(search_term: str = None, isNRT: int = 0, skip_check: bool = F
             print(f"No datasets found matching search term '{search_term}'")
     else:
         print("No search term provided")
+
+# def NRTUpdateAGOL(skip_check: bool = True) -> None:
+#     #This is hardcoded for GCOOS ERDDAP
+#     erddapObj = ec.erddapGcoos    
+
+#     nrt_dict  = dw.NRTFindAGOL()
+#     for datasetid, itemid in nrt_dict.items():
+#         if datasetid and itemid:
+#             try: 
+#                 startWindow, endWindow = dw.movingWindow(isStr=True)
+#                 das_resp = ec.ERDDAPHandler.getDas(erddapObj, datasetid)
+#                 parsed_response = dc.convertToDict(dc.parseDasResponse(das_resp))
+#                 fp = dc.saveToJson(parsed_response, datasetid)
+#                 das_data = dc.openDasJson(datasetid)
+#                 attribute_list = dc.getActualAttributes(das_data, erddapObj)
+
+#                 setattr(erddapObj, "start_time", startWindow)
+#                 setattr(erddapObj, "end_time", endWindow)
+#                 setattr(erddapObj, "datasetid", datasetid)
+#                 setattr(erddapObj, "attributes", attribute_list)
+
+#                 url = erddapObj.generate_url(False, attribute_list)
+
+#                 gis = aw.agoConnect()
+                
+#                 content = gis.content.get(itemid)
+
+
+#                 OverwriteFS.overwriteFeatureService(content, url, verbose=True, preserveProps=False, ignoreAge = True)
+            
+#             except Exception as e:
+#                     print(f"Error: {e}")
+#                     pass
+
+

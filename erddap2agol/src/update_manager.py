@@ -1,63 +1,73 @@
-from . import erddap_client as ec
-from . import das_client as dc
-from logs import updatelog as ul
-from src.utils import OverwriteFS
 from arcgis.gis import GIS
-
 from dataclasses import dataclass, field
-from datetime import datetime
-from typing import Optional, Dict, List
-from io import StringIO
-import datetime, requests, re, math, os, pandas as pd
-from datetime import timedelta, datetime
-
+from typing import Optional, Dict
+import requests, os
 
 @dataclass
 class UpdateManager:
     gis: Optional[GIS] = None
-    items: Dict[str, str] = field(default_factory=dict)
-    agol_ids: List[str] = None
-    dataset_ids: List[str] = field(default_factory=list)
+    # Remove old agol_ids, dataset_ids in favor of a single dict.
+    # Key = dataset_id, Value = { 'base_url': ..., 'agol_id': ... }
+    datasets: Dict[str, Dict[str, Optional[str]]] = field(default_factory=dict)
 
     def __post_init__(self):
         self.connect()
+        self.searchContent()
 
     def connect(self) -> None:
         """Establish AGOL connection"""
         try:
             self.gis = GIS("home")
-            gis = self.gis
-            print("\nSuccesfully connected to " + gis.properties.portalName + " on " + gis.properties.customBaseUrl)
+            print(
+                f"\nSuccessfully connected to {self.gis.properties.portalName} "
+                f"on {self.gis.properties.customBaseUrl}"
+            )
         except Exception as e:
             print(f"AGOL connection error: {e}")
 
-    # we will want to expand this function to optionally search at an orginizational level
     def searchContent(self) -> None:
-        """Search AGOL content and populate items dictionary"""
+        """
+        Search AGOL content and populate self.datasets with:
+            { dataset_id: { 'base_url': ..., 'agol_id': ... } }
+        """
         tags = ["erddap2agol", "e2a_nrt"]
-        gis = self.gis
-        
         try:
-            
-            tag_query = ' AND '.join(f'tags:"{tag}"' for tag in tags)
-            search_query = f'({tag_query}) AND owner:{gis.users.me.username} AND type:Feature Service'
-            
+            tag_query = " AND ".join(f'tags:"{tag}"' for tag in tags)
+            search_query = (
+                f"({tag_query}) AND owner:{self.gis.users.me.username} AND type:Feature Service"
+            )
+
             print(f"Searching with query: {search_query}")
-            search_results = gis.content.search(query=search_query, max_items=1000)
+            search_results = self.gis.content.search(query=search_query, max_items=1000)
 
             if not search_results:
                 print(f"No items found with tags {tags} for the logged-in user.")
                 return
 
-            # Populate items dictionary
+            # Populate self.datasets dict
             for item in search_results:
                 dataset_id = item.title
-                self.items[item.id] = dataset_id
-                print(f"Found: {dataset_id} (ID: {item.id})")
+                base_url = None
 
-            print(f"\nFound {len(self.items)} total items")
-        
+                # Check tags for one starting with https://
+                for t in item.tags:
+                    if t.lower().startswith("https://"):
+                        base_url = t
+                        break
+
+                # Store the info by dataset_id
+                self.datasets[dataset_id] = {
+                    "base_url": base_url,
+                    "agol_id": item.id
+                }
+
+                print(
+                    f"Found dataset '{dataset_id}' "
+                    f"(Item ID: {item.id}), base_url = {base_url or 'None'}"
+                )
+
+            print(f"\nFound {len(self.datasets)} total items")
+
         except Exception as e:
             print(f"An error occurred while searching for items: {e}")
-
 

@@ -15,9 +15,8 @@ from erddap2agol.src import update_manager as um
 from erddap2agol.logs import updatelog as ul 
 
 def main():
-    # update_manager = um.UpdateManager()
-    # update_manager.searchContent()
     run.cui()
+    # core.updateNRT()
     
 
 if __name__ == "__main__":

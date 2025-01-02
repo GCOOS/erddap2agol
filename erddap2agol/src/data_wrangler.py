@@ -321,9 +321,13 @@ class DatasetWrangler:
 ################## NRT Functions ##################
 
 #This function returns the start and end time of the moving window
-    def nrtTimeSet(self):        
-        self.start_time = datetime.now() - timedelta(days=7)
-        self.end_time = datetime.now()
+    def nrtTimeSet(self):
+        """Sets start_time/end_time in ISO format (e.g., 2023-09-29T14:05:12)"""
+        now = datetime.now()
+        seven_days_ago = now - timedelta(days=7)
+
+        self.start_time = seven_days_ago.strftime('%Y-%m-%dT%H:%M:%S')
+        self.end_time = now.strftime('%Y-%m-%dT%H:%M:%S')
             
 #This function checks if the dataset has data within the last 7 days
     def checkDataRange(datasetid) -> bool:
