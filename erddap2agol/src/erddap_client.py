@@ -97,6 +97,21 @@ class ERDDAPHandler:
         """Set available datasets"""
         self._availData = value   
 
+    def reset(self) -> None:
+        """
+        Reset all class attributes to none.
+
+        Called after postAndPublish in the CUI
+        """
+        self.availData = None
+        self.server = None
+        self.serverInfo = None
+        self.datasetid = None
+        self.attributes = None
+        self.fileType = None
+        self.geoParams = None
+        self.datasets = []
+
     def __iter__(self):
         """Make ERDDAPHandler directly iterable"""
         return iter(self.datasets)

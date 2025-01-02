@@ -84,10 +84,15 @@ class DatasetWrangler:
             
             # Get attributes and time range
             self.attribute_list = dc.getActualAttributes(self.dataset_id)
-            time_range = dc.getTimeFromJson(self.dataset_id)
-            if time_range:
-                self.start_time, self.end_time = time_range
-                
+
+            try:
+                time_range = dc.getTimeFromJson(self.dataset_id)
+                if time_range:
+                    self.start_time, self.end_time = time_range
+            except Exception as e:
+                self.has_error = True
+                pass
+
         except requests.RequestException as e:
             print(f"\nError fetching DAS for {self.dataset_id}: {e}")
             self.DAS_response = False
@@ -103,6 +108,9 @@ class DatasetWrangler:
         
         # Bypass for glider datasets
         if self.is_glider is True:
+            return None
+        
+        if self.has_error is True:
             return None
             
         base_url = f"{self.server}{self.dataset_id}.ncHeader?"
@@ -265,13 +273,15 @@ class DatasetWrangler:
                 return None
         
         if not self.needs_Subset:
+            print(f"\nDownloading data for {self.dataset_id}")
             filepath = process_url(self.url_s[0])
             if filepath:
                 self.data_filepath = filepath
                 return filepath
         else:
+            print(f"\nDownloading data for {self.dataset_id}")
             for i, url in enumerate(self.url_s, 1):
-                print(f"Downloading subset {i}/{len(self.url_s)} from {self.server}")
+                print(f"Downloading subset {i}/{len(self.url_s)}")
                 filepath = process_url(url, i)
                 if filepath:
                     filepaths.append(filepath)
@@ -282,8 +292,7 @@ class DatasetWrangler:
                 
         return None
 
-    
-        
+            
     def calculateTimeRange(self, intervalType=None) -> int:
         start = datetime.fromisoformat(self.start_time)
         end = datetime.fromisoformat(self.end_time)

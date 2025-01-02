@@ -62,7 +62,7 @@ def erddapSelection(GliderServ = False) -> ec.ERDDAPHandler:
 # need to handle misinputs
 
 # Survives refactor
-def selectDatasetFromList(erddapObj, dispLength=50) -> list:
+def selectDatasetFromList(erddapObj, dispLength=75) -> list:
     """The big search function that allows users to search datasets and select them for processing.
         
         Returns a list of selected datasets. Should pass to the erddapObj list constructor."""

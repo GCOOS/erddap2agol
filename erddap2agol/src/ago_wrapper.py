@@ -72,6 +72,9 @@ class AgolWrangler:
                     
                     if dataset.attribute_list:
                         props["tags"].extend(dataset.attribute_list)
+                    
+                    if dataset.is_nrt is True:
+                        props["tags"].extend("E2A_NRT")
 
                     if dataset.nc_global:
                         # Set institution

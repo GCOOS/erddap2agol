@@ -62,8 +62,10 @@ def experimental_menu_add():
     agolObj = aw.AgolWrangler(erddap_obj= erddapObj)
     agolObj.datasets = erddapObj.datasets
     agolObj.makeItemProperties()
-
     agolObj.postAndPublish()
+    print("\nReturning to main menu...")
+    erddapObj.reset()
+    cui()
 
 def experimental_menu_glider():
     print("\nWelcome to the *Special* Glider DAC Menu.")
@@ -86,6 +88,9 @@ def experimental_menu_glider():
     agolObj.makeItemProperties()
     agolObj.pointTableToGeojsonLine()
     agolObj.postAndPublish()
+    print("\nReturning to main menu...")
+    erddapObj.reset()
+    cui()
     
 
     
