@@ -37,7 +37,7 @@ class UpdateManager:
                 f"({tag_query}) AND owner:{self.gis.users.me.username} AND type:Feature Service"
             )
 
-            print(f"Searching with query: {search_query}")
+            print(f"Searching for NRT datasets from: {self.gis.users.me.username}")
             search_results = self.gis.content.search(query=search_query, max_items=1000)
 
             if not search_results:
@@ -61,12 +61,7 @@ class UpdateManager:
                     "agol_id": item.id
                 }
 
-                print(
-                    f"Found dataset '{dataset_id}' "
-                    f"(Item ID: {item.id}), base_url = {base_url or 'None'}"
-                )
-
-            print(f"\nFound {len(self.datasets)} total items")
+            print(f"\nFound {len(self.datasets)} datasets to update")
 
         except Exception as e:
             print(f"An error occurred while searching for items: {e}")

@@ -1,4 +1,4 @@
-# ERDDAP2AGOL v.0.6.0 
+# ERDDAP2AGOL v.0.6.6 
 
 The purpose of this project is to develop a robust tool for reliably transferring datasets between ERDDAPTM services and ArcGIS Online (AGOL). Erddap2agol is a "hands-off" Python package designed to operate seamlessly within the AGOL environment. Its core functionalities include creating, managing, and updating ERDDAPTM datasets at various levels of granularity. Developed by the Gulf of Mexico Ocean Observing System (GCOOS), erddap2agol is available for use by data providers leveraging ERDDAPTM services, as well as individuals and organizations aiming to analyze and visualize ERDDAPTM data on a GIS platform.
 
@@ -12,7 +12,7 @@ The ERDDAP2AGOL tool is under active development. Stable features are indicated 
 
 ## What to expect
 * Your ERDDAP data will be available in three product levels.         
-- NRT: 7 day moving window, Level 1. (WIP)
+- NRT: 7 day moving window, Level 1. (Available now!)
 - Glider DAC Menu: Create multiline HFLs from the Glider DAC ERDDAP (Available now!)  
 - Historical: Updated weekly, contains all data, Level 2. (WIP)
 - QC Historical: QC Flags, low quality records removed, Level 3. (WIP) <br />
@@ -21,7 +21,6 @@ The ERDDAP2AGOL tool is under active development. Stable features are indicated 
 - Install directly from an AGOL notebook.
 - Build AGOL environment locally. <br /> 
 
-* Monitor your ERDDAP collection with generated update logs
 
 ## Core Modules
 ### Das_client.py

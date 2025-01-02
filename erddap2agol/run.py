@@ -11,21 +11,21 @@ def cui():
     while True:
         print("\nWelcome to ERDDAP2AGOL.")
         print("GCOOS GIS, 2025.")
-        print("\n1. Create ERDDAP Items")
-        print("2. Dev menu (Normal Add)")
-        print("3. Dev menu (Glider Add)")
-        print("4. Dev menu (NRT Add)")
+        print("\n1. Create ERDDAP Datasets")
+        print("2. Create Glider DAC Datasets")
+        print("3. Create NRT Items")
+        print("4. Find & Update NRT Items")
 
         user_choice = input(": ")  
 
         if user_choice == "1":
-            create_erddap_item_menu()
-        elif user_choice == "2":
             experimental_menu_add()
-        elif user_choice == "3":
+        elif user_choice == "2":
             experimental_menu_glider()
-        elif user_choice == "4":
+        elif user_choice == "3":
             experimental_menu_nrt()
+        elif user_choice == "4":
+            core.updateNRT
         else:
             print("\nInvalid input. Please try again.")
 
