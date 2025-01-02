@@ -24,7 +24,7 @@ class AgolWrangler:
 
 
     def __post_init__(self):
-        """Initialize AGOL connection"""
+        """Initialize AGOL connection and inherit dataset attributes"""
         self.connect()
         if self.erddap_obj and hasattr(self.erddap_obj, 'datasets'):
             self.shareDatasetObjAttrs
@@ -170,7 +170,12 @@ class AgolWrangler:
         total_start_time = time.time()
         processed_count = 0
 
+        # Start iterating through datasets 
         for dataset in self.datasets:
+            
+            if dataset.is_glider is True:
+                 inputDataType="GeoJson"
+
             dataset_start_time = time.time()  # Track start time for this dataset
 
             item_prop = self.item_properties.get(dataset.dataset_id)
@@ -244,10 +249,10 @@ class AgolWrangler:
 
                 else:
                     #--------Single file scenario--------------
-                    path = paths if isinstance(paths, str) else paths[0]
+                    #path = paths if isinstance(paths, str) else paths[0]
+                    path = dataset.data_filepath
                     print(f"\nAdding item for {dataset.dataset_id} to AGOL...")
                     item = gis.content.add(item_properties=item_prop, data=path, HasGeometry=True)
-
                     # Publish
                     print(f"\nPublishing item for {dataset.dataset_id}...")
                     published_item = item.publish(publish_parameters=geom_params, file_type=inputDataType)

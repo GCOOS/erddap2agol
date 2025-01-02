@@ -96,16 +96,20 @@ class DatasetWrangler:
             self.DAS_response = False
 
 
-    def getDatasetSizes(self) -> None:
+    def getDatasetSizes(self, timeOut_time = 120) -> None:
         """Gets row count for dataset from ERDDAP ncHeader response, sets to attribute"""
         if not self.DAS_response:
+            return None
+        
+        # Bypass for glider datasets
+        if self.is_glider is True:
             return None
             
         base_url = f"{self.server}{self.dataset_id}.ncHeader?"
         print(f"Requesting headers @ {base_url}")
         
         try:
-            response = requests.get(base_url, timeout=90)
+            response = requests.get(base_url, timeout= timeOut_time)
             
             
             match = re.search(r'dimensions:\s*(.*?)\s*variables:', response.text, re.DOTALL)
@@ -132,7 +136,8 @@ class DatasetWrangler:
     def needsSubsetting(self, record_limit = 50000) -> bool:
         """Check if dataset needs to be split into chunks"""
         if self.row_count is not None:
-            if self.row_count > record_limit:
+            #bypass for glider datasets
+            if self.row_count > record_limit and self.is_glider != True:
                 self.needs_Subset = True
                 print(f"\nUh oh! {self.dataset_id} is too big ({self.row_count} records) and needs additional processing!")
             else:
