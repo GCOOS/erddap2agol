@@ -140,6 +140,7 @@ class DatasetWrangler:
                         
         except requests.exceptions.Timeout:
             print(f"Request timed out after 90 seconds for {self.dataset_id}, skipping")
+            self.has_error = True
 
         except Exception as e:
             print(f"Error fetching dataset size: {e}")
@@ -229,6 +230,7 @@ class DatasetWrangler:
             )
             url = (
                 f"{self.server}{self.dataset_id}.{dataformat}?"
+                # hard coded time here
                 f"time%2C{attrs_encoded}"
                 f"{time_constraints}"
             )
@@ -242,7 +244,7 @@ class DatasetWrangler:
                 )
                 url = (
                     f"{self.server}{self.dataset_id}.{dataformat}?"
-                    f"{attrs_encoded}"
+                    f"time%2C{attrs_encoded}"
                     f"{time_constraints}"
                 )
                 urls.append(url)
@@ -257,24 +259,26 @@ class DatasetWrangler:
         
         def process_url(url: str, subset_num: int = None) -> str:
             try:
-                response = requests.get(url)
-                response.raise_for_status()
-                
-                csvData = StringIO(response.text)
-                df = pd.read_csv(csvData, header=None, low_memory=False)
-                
-                temp_dir = ec.getTempDir()
-                if subset_num is not None:
-                    filename = f"{self.dataset_id}_subset_{subset_num}.csv"
-                else:
-                    filename = f"{self.dataset_id}.csv"
+                if not self.has_error:
+                    response = requests.get(url)
+                    response.raise_for_status()
                     
-                file_path = os.path.join(temp_dir, filename)
-                df.to_csv(file_path, index=False, header=False)
-                return file_path
+                    csvData = StringIO(response.text)
+                    df = pd.read_csv(csvData, header=None, low_memory=False)
+                    
+                    temp_dir = ec.getTempDir()
+                    if subset_num is not None:
+                        filename = f"{self.dataset_id}_subset_{subset_num}.csv"
+                    else:
+                        filename = f"{self.dataset_id}.csv"
+                        
+                    file_path = os.path.join(temp_dir, filename)
+                    df.to_csv(file_path, index=False, header=False)
+                    return file_path
                 
             except Exception as e:
                 print(f"Error processing URL {url}: {e}")
+                self.has_error = True
                 return None
         
         if not self.needs_Subset:

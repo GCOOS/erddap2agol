@@ -20,7 +20,7 @@ class UpdateManager:
             self.gis = GIS("home")
             print(
                 f"\nSuccessfully connected to {self.gis.properties.portalName} "
-                f"on {self.gis.properties.customBaseUrl}"
+                f"as {self.gis.users.me.username}"
             )
         except Exception as e:
             print(f"AGOL connection error: {e}")

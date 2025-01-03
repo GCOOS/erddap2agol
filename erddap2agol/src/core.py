@@ -79,7 +79,7 @@ def selectDatasetFromList(erddapObj, dispLength=75) -> list:
                 f"page=1&itemsPerPage=10000000&minTime=now-7days&maxTime=&protocol=tabledap"
             )
 
-            print(f"\nSEARCH URL: {search_url}")
+            # print(f"\nSEARCH URL: {search_url}")
             erddapObj.serverInfo = search_url
             dataset_id_list = erddapObj.getDatasetIDList()
             erddapObj.serverInfo = original_info
@@ -237,6 +237,8 @@ def check_dataset_exists(dataset_id: str) -> bool:
 
 # Basic integration of the update function now.  
 def updateNRT() -> None:
+    """Searches your ArcGIS Online account for datasets with the NRT tags, then runs the 
+        typical NRT post, but passes a URL providing OFS with the destination data"""
     update_manager = um.UpdateManager()
     gis = update_manager.gis
     update_manager.searchContent()
@@ -263,13 +265,10 @@ def updateNRT() -> None:
 
     
 
-def gliderWorkflow(search_term: str = None, isNRT: int = 0, skip_check: bool = False) -> None:
+def gliderWorkflow(search_term: str = None) -> None:
     """
     Automates the workflow for glider data:
-    1. Selects glider ERDDAP server
-    2. Searches for datasets with given search term
-    3. Processes and publishes found datasets
-    
+
     Args:
         search_term (str, optional): Term to search for in dataset names. Defaults to None.
         isNRT (int, optional): Whether to treat as near-real-time data. Defaults to 0.

@@ -5,6 +5,9 @@ from typing import Optional, Dict, List
 import tempfile
 from . import data_wrangler as dw
 
+#--------------------------------------------------------------------------------
+
+
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 def getTempDir() -> os.PathLike:
@@ -30,6 +33,9 @@ def cleanTemp() -> None:
                     print(f"An unexpected error occurred while deleting {full_path}: {e}")
     else:
         print(f"The directory {filepath} does not exist.")
+
+
+#--------------------------------------------------------------------------------
 
 #Sometimes the directory or file isnt created 
 def getErddapConfDir():
@@ -262,28 +268,27 @@ class ERDDAPHandler:
         return valid_attributes
 
 
+    #--------------------------------------------------------------------------------
 
-    #Works and important. Breaks when no lat or lon lol. 
-    ########################## MOVE THESE TO DATA WRANGLER ##########################
-    def responseToCsv(self, response: any) -> str:
-        csvResponse = response[0]
-        responseCode = response[1]
-        if responseCode != 200:
-            return None
-        try:
-            csvData = StringIO(csvResponse)
+    # def responseToCsv(self, response: any) -> str:
+    #     csvResponse = response[0]
+    #     responseCode = response[1]
+    #     if responseCode != 200:
+    #         return None
+    #     try:
+    #         csvData = StringIO(csvResponse)
 
-            df = pd.read_csv(csvData, header=None, low_memory=False)
+    #         df = pd.read_csv(csvData, header=None, low_memory=False)
 
-            temp_dir = getTempDir()
-            file_path = os.path.join(temp_dir, f"{self.datasetid}.csv")
+    #         temp_dir = getTempDir()
+    #         file_path = os.path.join(temp_dir, f"{self.datasetid}.csv")
 
-            df.to_csv(file_path, index=False, header=False)
+    #         df.to_csv(file_path, index=False, header=False)
 
-            return file_path
-        except Exception as e:
-            print(f"Error converting response to CSV: {e}")
-            return None
+    #         return file_path
+    #     except Exception as e:
+    #         print(f"Error converting response to CSV: {e}")
+    #         return None
 
 
     # Creates a list of time values between start and end time
