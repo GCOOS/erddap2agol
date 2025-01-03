@@ -1,8 +1,8 @@
-import sys, os, requests, datetime 
+import sys, os, datetime 
 from datetime import datetime, timedelta
 import json
 from collections import OrderedDict
-from . import erddap_client as ec
+from . import erddap_wrangler as ec
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
@@ -171,10 +171,10 @@ def getActualAttributes(dataset_id: str) -> list[str]:
     
 # This function doesn't go anywhere yet
 # should be used to check for core attributes (lat lon time) in the dataset
-def checkDataValidity(dasJson) -> bool:
-    for key, value in dasJson.items():
-        if isinstance(value, dict):
-            if {"latitude", "longitude"} not in key:
-                return False
-            else:
-                return True
+# def checkDataValidity(dasJson) -> bool:
+#     for key, value in dasJson.items():
+#         if isinstance(value, dict):
+#             if {"latitude", "longitude"} not in key:
+#                 return False
+#             else:
+#                 return True

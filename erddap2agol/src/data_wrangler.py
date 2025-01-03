@@ -1,6 +1,5 @@
-from . import erddap_client as ec
+from . import erddap_wrangler as ec
 from . import das_client as dc
-from logs import updatelog as ul
 from src.utils import OverwriteFS
 from arcgis.gis import GIS
 
@@ -36,7 +35,6 @@ class DatasetWrangler:
     
     def __post_init__(self):
         """Building the dataset objects"""
-        print(f"\nConstructing the dataset object: {self.dataset_id}")
         if self.server == "https://gliders.ioos.us/erddap/tabledap/":
             self.is_glider = True
 
@@ -142,6 +140,7 @@ class DatasetWrangler:
                         
         except requests.exceptions.Timeout:
             print(f"Request timed out after 90 seconds for {self.dataset_id}, skipping")
+            self.has_error = True
 
         except Exception as e:
             print(f"Error fetching dataset size: {e}")
@@ -158,10 +157,10 @@ class DatasetWrangler:
             else:
                 self.needs_Subset = False
 
+    @skipFromError
     def calculateTimeSubset(self, record_limit = 50000) -> dict:
         """Calculate time subsets based on row count.
-        Returns Subset_N: {'start': time, 'end': time}
-        """
+            Method applies if self.needs_Subset is True """
         if not self.needs_Subset:
             return None
         
@@ -180,7 +179,6 @@ class DatasetWrangler:
             seconds_per_record = total_seconds / total_records
             seconds_per_chunk = seconds_per_record * records_per_chunk
 
-            # Create equal-sized chunks
             time_chunks = {}
             chunk_start = start
             
@@ -200,6 +198,7 @@ class DatasetWrangler:
 
         except Exception as e:
             print(f"Error calculating time subset: {e}")
+            self.has_error = True
             return None
             
     def add_time_subset(self, subset_name: str, start: str, end: str) -> None:
@@ -231,6 +230,7 @@ class DatasetWrangler:
             )
             url = (
                 f"{self.server}{self.dataset_id}.{dataformat}?"
+                # hard coded time here
                 f"time%2C{attrs_encoded}"
                 f"{time_constraints}"
             )
@@ -244,7 +244,7 @@ class DatasetWrangler:
                 )
                 url = (
                     f"{self.server}{self.dataset_id}.{dataformat}?"
-                    f"{attrs_encoded}"
+                    f"time%2C{attrs_encoded}"
                     f"{time_constraints}"
                 )
                 urls.append(url)
@@ -252,31 +252,35 @@ class DatasetWrangler:
         self.url_s = urls
         return urls
     
-
+    # We can enhance this function. If a url returns a bad response, we should come back to it.
+    # We also might want to dump some sort of log to help the user pick up where they left off.
+    @skipFromError
     def writeErddapData(self) -> str | list[str]:
         """Write ERDDAP data to CSV files"""
         filepaths = []
         
         def process_url(url: str, subset_num: int = None) -> str:
             try:
-                response = requests.get(url)
-                response.raise_for_status()
-                
-                csvData = StringIO(response.text)
-                df = pd.read_csv(csvData, header=None, low_memory=False)
-                
-                temp_dir = ec.getTempDir()
-                if subset_num is not None:
-                    filename = f"{self.dataset_id}_subset_{subset_num}.csv"
-                else:
-                    filename = f"{self.dataset_id}.csv"
+                if not self.has_error:
+                    response = requests.get(url)
+                    response.raise_for_status()
                     
-                file_path = os.path.join(temp_dir, filename)
-                df.to_csv(file_path, index=False, header=False)
-                return file_path
+                    csvData = StringIO(response.text)
+                    df = pd.read_csv(csvData, header=None, low_memory=False)
+                    
+                    temp_dir = ec.getTempDir()
+                    if subset_num is not None:
+                        filename = f"{self.dataset_id}_subset_{subset_num}.csv"
+                    else:
+                        filename = f"{self.dataset_id}.csv"
+                        
+                    file_path = os.path.join(temp_dir, filename)
+                    df.to_csv(file_path, index=False, header=False)
+                    return file_path
                 
             except Exception as e:
                 print(f"Error processing URL {url}: {e}")
+                self.has_error = True
                 return None
         
         if not self.needs_Subset:
@@ -288,7 +292,7 @@ class DatasetWrangler:
         else:
             print(f"\nDownloading data for {self.dataset_id}")
             for i, url in enumerate(self.url_s, 1):
-                print(f"Downloading subset {i}/{len(self.url_s)}")
+                print(f"Downloading subset {i}/{len(self.url_s)}\t({self.dataset_id})")
                 filepath = process_url(url, i)
                 if filepath:
                     filepaths.append(filepath)

@@ -1,4 +1,4 @@
-from . import ago_wrapper
-from . import erddap_client
+from . import agol_wrangler
+from . import erddap_wrangler
 from . import das_client
 from . import data_wrangler

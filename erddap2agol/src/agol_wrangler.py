@@ -2,11 +2,12 @@ from arcgis.gis import GIS
 from arcgis.features import FeatureLayer, FeatureLayerCollection
 from arcgis.gis._impl._content_manager import SharingLevel
 from . import data_wrangler as dw
-from . import erddap_client as ec
+from . import erddap_wrangler as ec
 from . import das_client as dc
 import copy, os, sys, time, pandas as pd, numpy as np, json
 from dataclasses import dataclass, field
 from typing import Optional, List, Dict
+import concurrent.futures
 
 @dataclass
 class AgolWrangler:
@@ -50,17 +51,52 @@ class AgolWrangler:
         except Exception as e:
             print(f"AGOL connection error: {e}")
 
+    def skipFromError(func):
+        """General skip error decorator that will be applied to all dataset methods"""
+        def wrapper(self, *args, **kwargs):
+            if dw.DatasetWrangler.has_error == True:
+                print(f"Skipping {func.__name__} - due to processing error {self.dataset_id}")
+                return None
+            return func(self, *args, **kwargs)
+        return wrapper
+
     def shareDatasetObjAttrs(self) -> None:
-        erddapObj = self.erddap_obj
         """Add datasets from the provided ERDDAPHandler instance."""
+        erddapObj = self.erddap_obj
         if hasattr(erddapObj, 'datasets'):
             self.datasets.extend(erddapObj.datasets)
             print(f"Added {len(erddapObj.datasets)} datasets from erddap_obj to AgolWrangler.")
         else:
             print("The provided erddap_obj does not have a 'datasets' attribute.")
 
+    @skipFromError
     def makeItemProperties(self) -> None:
         """Creates item properties using dataset attributes"""
+        
+        def createDescription(dataset, props):
+            """
+            Incorporate nc_global metadata into AGOL item description if available.
+            """
+            existing_desc = props.get("description", "")
+            desc_parts = []
+
+            for key, label in [
+                ("project", "Project"),
+                ("comment", "Comment"),
+                ("publisher_name", "Publisher"),
+                ("publisher_email", "Publisher Email"),
+            ]:
+                entry = dataset.nc_global.get(key, {}).get("value", "")
+                if entry:
+                    desc_parts.append(f"{label}: {entry}")
+
+            merged_description = (
+                existing_desc.strip() + "\n\n" + "\n".join(desc_parts)
+                if existing_desc
+                else "\n".join(desc_parts)
+            )
+            props["description"] = merged_description.strip()
+
         if self.datasets:
             for dataset in self.datasets:
                 try:
@@ -74,43 +110,41 @@ class AgolWrangler:
                         props["tags"].extend(dataset.attribute_list)
                     
                     if dataset.is_nrt is True:
-                        props["tags"].extend(["e2a_nrt"])
+                        props["tags"].append("e2a_nrt")
 
                     if dataset.server:
-                        props["tags"].extend([str(dataset.server)])
-
+                        props["tags"].append(str(dataset.server))
 
                     if dataset.nc_global:
-                        # Set institution
                         if "institution" in dataset.nc_global:
                             props["accessInformation"] = dataset.nc_global["institution"].get("value", "")
                         elif "creator_institution" in dataset.nc_global:
                             props["accessInformation"] = dataset.nc_global["creator_institution"].get("value", "")
-                        
-                        # Set license
+
                         if "license" in dataset.nc_global:
                             props["licenseInfo"] = dataset.nc_global["license"].get("value", "")
-                        
-                        # Set title and summary
-                        dataset_title = dataset.dataset_id
 
+                        dataset_title = dataset.dataset_id
                         props["title"] = dataset_title
 
-                        server_name = dataset.server.split('/erddap/')[0].split('://')[-1]
+                        server_name = dataset.server.split("/erddap/")[0].split("://")[-1]
                         summary = dataset.nc_global.get("summary", {}).get("value", "")
                         props["snippet"] = f"{summary}. {dataset_title} was generated with erddap2agol from the {server_name} ERDDAP."
+
+                        createDescription(dataset, props)
 
                     if dataset.is_glider:
                         props["tags"].append("Glider DAC")
                         props["type"] = "GeoJson"
-                        
+
                     self.item_properties[dataset.dataset_id] = props
-                    
+
                 except Exception as e:
                     print(f"Error creating item properties for {dataset.dataset_id}: {e}")
 
-
-    def pointTableToGeojsonLine(self,  X="longitude (degrees_east)", Y="latitude (degrees_north)") -> dict:
+    @skipFromError
+    def pointTableToGeojsonLine(self,  X="longitude (degrees_east)", Y="latitude (degrees_north)") -> None:
+        """For converting standard ERDDAP csvp into geojson"""
         for dataset in self.datasets:
             if dataset.is_glider == True:
                 filepath = dataset.data_filepath
@@ -130,12 +164,12 @@ class AgolWrangler:
 
                     for i in range(num_points - 1):
                         # Coordinates for the line segment
-                        point_start = [df.iloc[i][X], df.iloc[i][Y]]
-                        point_end = [df.iloc[i + 1][X], df.iloc[i + 1][Y]]
-                        coordinates = [point_start, point_end]
+                        line_start = [df.iloc[i][X], df.iloc[i][Y]]
+                        line_end = [df.iloc[i + 1][X], df.iloc[i + 1][Y]]
+                        coordinates = [line_start, line_end]
 
                         # Skip if any coordinate is None
-                        if None in point_start or None in point_end:
+                        if None in line_start or None in line_end:
                             continue
 
                         # Properties from the last point of the segment
@@ -168,7 +202,60 @@ class AgolWrangler:
                 else:
                     sys.exit()
 
-    def postAndPublish(self, inputDataType="csv") -> None:
+    #-------- Come back to the below function to figure out the multiprocessing stuff
+
+    # def pointTableToGeojsonLine(self, X="longitude (degrees_east)", Y="latitude (degrees_north)") -> dict:
+    #     """For converting standard ERDDAP csvp into geojson"""
+    #     def chunkCsv(df_chunk, X, Y, data_columns):
+    #         """Chunk csv into kv dict for multproc"""
+    #         df_chunk = df_chunk.dropna(subset=[X, Y]).replace({np.nan: None})
+    #         features = []
+    #         for i in range(len(df_chunk) - 1):
+    #             point_start = [df_chunk.iloc[i][X], df_chunk.iloc[i][Y]]
+    #             point_end = [df_chunk.iloc[i+1][X], df_chunk.iloc[i+1][Y]]
+    #             if None in point_start or None in point_end:
+    #                 continue
+    #             props = df_chunk.iloc[i+1][data_columns].to_dict()
+    #             feature = {
+    #                 "type": "Feature",
+    #                 "geometry": {"type": "LineString", "coordinates": [point_start, point_end]},
+    #                 "properties": props
+    #             }
+    #             features.append(feature)
+    #         return features
+        
+    #     for dataset in self.datasets:
+    #         if dataset.is_glider:
+    #             filepath = dataset.data_filepath
+    #             if filepath:
+    #                 chunksize = 10000  # adjust as needed
+    #                 futures = []
+    #                 data_columns = None
+    #                 with concurrent.futures.ProcessPoolExecutor() as executor:
+    #                     for df_chunk in pd.read_csv(filepath, chunksize=chunksize):
+    #                         if data_columns is None:
+    #                             data_columns = [col for col in df_chunk.columns if col not in [X, Y]]
+    #                         futures.append(executor.submit(chunkCsv, df_chunk, X, Y, data_columns))
+                    
+    #                 features = []
+    #                 for f in concurrent.futures.as_completed(futures):
+    #                     features.extend(f.result())
+
+    #                 geojson = {"type": "FeatureCollection", "features": features}
+                    
+    #                 savedir = ec.getTempDir()
+    #                 filename = dataset.dataset_id + "_line.geojson"
+    #                 savepath = os.path.join(savedir, filename)
+    #                 with open(savepath, "w") as f:
+    #                     json.dump(geojson, f)
+    #                 print(f"\nGeoJSON conversion complete @ {savepath}.")
+    #                 setattr(dataset, "data_filepath", savepath)
+
+    #             else:
+    #                 sys.exit()
+
+    @skipFromError
+    def postAndPublish(self, inputDataType="csv", timeoutTime=300) -> None:
         """Publishes all datasets in self.datasets to AGOL, handling subsets if needed."""
         geom_params = self.geoParams.copy()
         geom_params.pop('hasStaticData', None)  # Remove if exists, as done in stable code
@@ -231,7 +318,12 @@ class AgolWrangler:
 
                     # Publish
                     print(f"\nPublishing item for {dataset.dataset_id}...")
-                    published_item = item.publish(publish_parameters=geom_params, file_type=inputDataType)
+
+                    # set worker to keep track of time for publish.
+                    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                        future = executor.submit(item.publish, publish_parameters=geom_params, file_type=inputDataType)
+                        published_item = future.result(timeout=timeoutTime)
+                    
                     adjustSharingAndCapabilities(published_item)
 
                     # Append subsequent subsets
@@ -262,7 +354,11 @@ class AgolWrangler:
                     item = gis.content.add(item_properties=item_prop, data=path, HasGeometry=True)
                     # Publish
                     print(f"\nPublishing item for {dataset.dataset_id}...")
-                    published_item = item.publish(publish_parameters=geom_params, file_type=inputDataType)
+
+                    # set worker to keep track of time for publish.
+                    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                        future = executor.submit(item.publish, publish_parameters=geom_params, file_type=inputDataType)
+                        published_item = future.result(timeout=timeoutTime)
                     adjustSharingAndCapabilities(published_item)
                     #--------Single file scenario--------------
 
@@ -272,6 +368,9 @@ class AgolWrangler:
                 processed_count += 1
                 print(f"Finished processing dataset {dataset.dataset_id} in {dataset_processing_time:.2f} seconds")
 
+            except concurrent.futures.TimeoutError:
+                print(f"Publishing took longer than 3 minutes for {dataset.dataset_id}. Cancelling operation.")
+                future.cancel()
             except Exception as e:
                 print(f"An error occurred adding the item for {dataset.dataset_id}: {e}")
                 continue
@@ -344,22 +443,22 @@ class AgolWrangler:
     #     except Exception as e:
     #         print(f"An error occurred appending the CSV data: {e}")
 
-    def createFeatureService(self, item_prop: dict) -> str:
-        gis = self.gis
-        item_prop_mod = copy.deepcopy(item_prop)
-        item_prop_mod["title"] = item_prop_mod["title"] + "_AGOL"
-        isAvail = gis.content.is_service_name_available(item_prop_mod['title'], "Feature Service")
-        if isAvail == True:
-            try:
-                featureService = gis.content.create_service(item_prop_mod['title'], "Feature Service", has_static_data = False) 
-                featureService.update(item_properties = item_prop_mod)
-                print(f"Successfully created Feature Service {item_prop_mod['title']}")
-                return featureService.id
+    # def createFeatureService(self, item_prop: dict) -> str:
+    #     gis = self.gis
+    #     item_prop_mod = copy.deepcopy(item_prop)
+    #     item_prop_mod["title"] = item_prop_mod["title"] + "_AGOL"
+    #     isAvail = gis.content.is_service_name_available(item_prop_mod['title'], "Feature Service")
+    #     if isAvail == True:
+    #         try:
+    #             featureService = gis.content.create_service(item_prop_mod['title'], "Feature Service", has_static_data = False) 
+    #             featureService.update(item_properties = item_prop_mod)
+    #             print(f"Successfully created Feature Service {item_prop_mod['title']}")
+    #             return featureService.id
             
-            except Exception as e:
-                print(f"An error occurred creating the Feature Service: {e}")
-        else:
-            print(f"Feature Service {item_prop_mod['title']} already exists, use OverwriteFS to Update")
+    #         except Exception as e:
+    #             print(f"An error occurred creating the Feature Service: {e}")
+    #     else:
+    #         print(f"Feature Service {item_prop_mod['title']} already exists, use OverwriteFS to Update")
 
 
 
