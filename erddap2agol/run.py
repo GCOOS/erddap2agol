@@ -41,7 +41,6 @@ def default_add_menu():
 
     for datasetObj in datasetObjlist:
         datasetObj.generateUrl()
-        print(datasetObj.start_time, datasetObj.start_time)
         datasetObj.writeErddapData()
 
     agolObj = aw.AgolWrangler(erddap_obj= erddapObj)
