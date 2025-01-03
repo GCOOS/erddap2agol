@@ -7,6 +7,7 @@ from . import das_client as dc
 import copy, os, sys, time, pandas as pd, numpy as np, json
 from dataclasses import dataclass, field
 from typing import Optional, List, Dict
+#from line_profiler import profile
 import concurrent.futures
 
 @dataclass
@@ -47,7 +48,7 @@ class AgolWrangler:
         try:
             self.gis = GIS("home")
             gis = self.gis
-            print("\nSuccesfully connected to " + gis.properties.portalName + " on " + gis.properties.customBaseUrl)
+            print("\nSuccesfully connected to " + gis.properties.portalName + " as " + gis.properties.portalName)
         except Exception as e:
             print(f"AGOL connection error: {e}")
 
@@ -116,10 +117,12 @@ class AgolWrangler:
                         props["tags"].append(str(dataset.server))
 
                     if dataset.nc_global:
-                        if "institution" in dataset.nc_global:
-                            props["accessInformation"] = dataset.nc_global["institution"].get("value", "")
+                        if "publisher_institution" in dataset.nc_global:
+                            props["accessInformation"] = dataset.nc_global["publisher_institution"].get("value", "")
                         elif "creator_institution" in dataset.nc_global:
                             props["accessInformation"] = dataset.nc_global["creator_institution"].get("value", "")
+                        elif "publisher_institution" in dataset.nc_global:
+                            props["accessInformation"] = dataset.nc_global["publisher_institution"].get("value", "")
 
                         if "license" in dataset.nc_global:
                             props["licenseInfo"] = dataset.nc_global["license"].get("value", "")
@@ -143,6 +146,7 @@ class AgolWrangler:
                     print(f"Error creating item properties for {dataset.dataset_id}: {e}")
 
     @skipFromError
+    #@profile
     def pointTableToGeojsonLine(self,  X="longitude (degrees_east)", Y="latitude (degrees_north)") -> None:
         """For converting standard ERDDAP csvp into geojson"""
         for dataset in self.datasets:

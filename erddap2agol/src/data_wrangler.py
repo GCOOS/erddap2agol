@@ -2,7 +2,7 @@ from . import erddap_wrangler as ec
 from . import das_client as dc
 from src.utils import OverwriteFS
 from arcgis.gis import GIS
-
+from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Optional, Dict, List
@@ -153,7 +153,7 @@ class DatasetWrangler:
             #bypass for glider datasets
             if self.row_count > record_limit and self.is_glider != True:
                 self.needs_Subset = True
-                print(f"\nUh oh! {self.dataset_id} is too big ({self.row_count} records) and needs additional processing!")
+                print(f"\nUh oh! {self.dataset_id} is too big ({self.row_count} records) and needs to be chunked!")
             else:
                 self.needs_Subset = False
 
@@ -252,56 +252,184 @@ class DatasetWrangler:
         self.url_s = urls
         return urls
     
-    # We can enhance this function. If a url returns a bad response, we should come back to it.
-    # We also might want to dump some sort of log to help the user pick up where they left off.
+    # Come back and review this function. This might need some unit tests for bad responses.
     @skipFromError
-    def writeErddapData(self) -> str | list[str]:
-        """Write ERDDAP data to CSV files"""
+    def writeErddapData(self, connection_attempts: int = 3, timeout_time: int = 120) -> str | list[str]:
+        """
+        Write ERDDAP data to CSV files.
+        
+        :param connection_attempts: How many times to try fetching a URL before giving up.
+        :param timeout_time: Seconds before requests time out.
+        """
         filepaths = []
         
-        def process_url(url: str, subset_num: int = None) -> str:
+        def process_url(url: str, subset_num: int = None) -> str | None:
+            """
+            Attempt to download data from a single URL and write to CSV.
+            Returns the file path on success, or None on failure.
+            """
             try:
-                if not self.has_error:
-                    response = requests.get(url)
-                    response.raise_for_status()
-                    
-                    csvData = StringIO(response.text)
-                    df = pd.read_csv(csvData, header=None, low_memory=False)
-                    
-                    temp_dir = ec.getTempDir()
-                    if subset_num is not None:
-                        filename = f"{self.dataset_id}_subset_{subset_num}.csv"
-                    else:
-                        filename = f"{self.dataset_id}.csv"
-                        
-                    file_path = os.path.join(temp_dir, filename)
-                    df.to_csv(file_path, index=False, header=False)
-                    return file_path
-                
-            except Exception as e:
-                print(f"Error processing URL {url}: {e}")
-                self.has_error = True
+                # Make the request with specified timeout
+                response = requests.get(url, timeout=timeout_time)
+                response.raise_for_status()
+
+                csvData = StringIO(response.text)
+                df = pd.read_csv(csvData, header=None, low_memory=False)
+
+                temp_dir = ec.getTempDir()
+                if subset_num is not None:
+                    filename = f"{self.dataset_id}_subset_{subset_num}.csv"
+                else:
+                    filename = f"{self.dataset_id}.csv"
+
+                file_path = os.path.join(temp_dir, filename)
+                df.to_csv(file_path, index=False, header=False)
+                return file_path
+
+            except requests.exceptions.Timeout as e:
+                print(f"Timeout for URL: {url} | Error: {e}")
                 return None
-        
+            except requests.exceptions.RequestException as e:
+                # This catches all other request errors (e.g., 4xx, 5xx).
+                print(f"Request exception for URL: {url} | Error: {e}")
+                return None
+            except Exception as e:
+                # Catch any other unforeseen errors
+                print(f"Error processing URL: {url} | Exception: {e}")
+                return None
+
+        # ----------------------------------------------------
+        # Individual file download (no subsets)
         if not self.needs_Subset:
             print(f"\nDownloading data for {self.dataset_id}")
-            filepath = process_url(self.url_s[0])
+
+            # Track how many attempts we’ve made on this single URL
+            url = self.url_s[0]
+            attempts = 0
+            filepath = None
+
+            while attempts < connection_attempts and not filepath:
+                attempts += 1
+                print(f"Attempt {attempts}/{connection_attempts} for {url}")
+                filepath = process_url(url)
+                if not filepath:
+                    # Sleep or just continue; your choice
+                    pass
+            
             if filepath:
                 self.data_filepath = filepath
                 return filepath
+            else:
+                # If we failed after all attempts, set the error flag
+                self.has_error = True
+                return None
+
+        # ----------------------------------------------------
+        # Subset (chunked) file download
         else:
             print(f"\nDownloading data for {self.dataset_id}")
-            for i, url in enumerate(self.url_s, 1):
-                print(f"Downloading subset {i}/{len(self.url_s)}\t({self.dataset_id})")
-                filepath = process_url(url, i)
-                if filepath:
-                    filepaths.append(filepath)
+
+            # Use a queue to hold all subset URLs
+            urls_queue = deque(self.url_s)
+            # Dictionary to track attempts per URL
+            attempts_dict = {u: 0 for u in self.url_s}
+
+            # We also want to preserve original index for naming: i.e., subset_i
+            # One way: store (url, index) in the queue
+            urls_queue = deque([(url, i+1) for i, url in enumerate(self.url_s)])
             
+            while urls_queue:
+                url, subset_index = urls_queue.popleft()
+                attempts_dict[url] += 1
+                attempt_num = attempts_dict[url]
+                
+                print(
+                    f"Downloading subset {subset_index}/{len(self.url_s)} "
+                    f"(Attempt {attempt_num}/{connection_attempts}) "
+                    f"({self.dataset_id})"
+                )
+                
+                filepath = process_url(url, subset_num=subset_index)
+
+                if filepath:
+                    # Success: add to final filepaths
+                    filepaths.append(filepath)
+                else:
+                    # Failure or timeout
+                    if attempt_num < connection_attempts:
+                        # Skip now, but come back later by pushing to end of queue
+                        urls_queue.append((url, subset_index))
+                    else:
+                        # Exceeded attempts
+                        self.has_error = True
+                        print(f"Max retries exceeded for URL: {url}")
+                        # At this point, we can either:
+                        # 1) Decide to continue processing other URLs
+                        # 2) Break entirely
+                        # For now, we let other chunks attempt to download:
+                        # so we do not re-append it to the queue.
+                        pass
+
             if filepaths:
                 self.data_filepath = filepaths
                 return filepaths
+            
+            return None
+
+
+    # We can enhance this function. If a url returns a bad response, we should come back to it.
+    # We also might want to dump some sort of log to help the user pick up where they left off.
+    # @skipFromError
+    # def writeErddapData(self) -> str | list[str]:
+    #     """Write ERDDAP data to CSV files"""
+    #     filepaths = []
+        
+    #     def process_url(url: str, subset_num: int = None) -> str:
+    #         try:
+    #             if not self.has_error:
+    #                 response = requests.get(url)
+    #                 response.raise_for_status()
+                    
+    #                 csvData = StringIO(response.text)
+    #                 df = pd.read_csv(csvData, header=None, low_memory=False)
+                    
+    #                 temp_dir = ec.getTempDir()
+    #                 if subset_num is not None:
+    #                     filename = f"{self.dataset_id}_subset_{subset_num}.csv"
+    #                 else:
+    #                     filename = f"{self.dataset_id}.csv"
+                        
+    #                 file_path = os.path.join(temp_dir, filename)
+    #                 df.to_csv(file_path, index=False, header=False)
+    #                 return file_path
                 
-        return None
+    #         except Exception as e:
+    #             print(f"Error processing URL {url}: {e}")
+    #             self.has_error = True
+    #             return None
+        
+    #     # ----------------------------------------------------
+    #     # Individual file download
+    #     if not self.needs_Subset:
+    #         print(f"\nDownloading data for {self.dataset_id}")
+    #         filepath = process_url(self.url_s[0])
+    #         if filepath:
+    #             self.data_filepath = filepath
+    #             return filepath
+    #     # Subset file download
+    #     else:
+    #         print(f"\nDownloading data for {self.dataset_id}")
+    #         for i, url in enumerate(self.url_s, 1):
+    #             print(f"Downloading subset {i}/{len(self.url_s)}\t({self.dataset_id})")
+    #             filepath = process_url(url, i)
+    #             if filepath:
+    #                 filepaths.append(filepath)
+            
+    #         if filepaths:
+    #             self.data_filepath = filepaths
+    #             return filepaths
+                
+    #     return None
 
             
     def calculateTimeRange(self, intervalType=None) -> int:

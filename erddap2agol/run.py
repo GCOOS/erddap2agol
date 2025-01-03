@@ -3,6 +3,7 @@ from .src import data_wrangler as dw
 from .src import agol_wrangler as aw
 from .src import core
 from arcgis.gis import GIS
+import sys
 
 #-----------------ERDDAP2AGOL CUI-----------------
 
@@ -14,6 +15,7 @@ def cui():
         print("2. Create Glider DAC Datasets")
         print("3. Create NRT Items")
         print("4. Find & Update NRT Items")
+        print("5. Exit")
 
         user_choice = input(": ")  
 
@@ -25,6 +27,8 @@ def cui():
             nrt_add_menu()
         elif user_choice == "4":
             core.updateNRT()
+        elif user_choice == "5":
+            sys.exit()
         else:
             print("\nInvalid input. Please try again.")
 
@@ -97,11 +101,7 @@ def nrt_add_menu():
     print("\nReturning to main menu...")
     erddapObj.reset()
     cui()
-    
 
-def exit_program():
-    print("\nExiting program...")
-    exit()
 
 if __name__ == '__main__':
     cui()

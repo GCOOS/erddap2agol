@@ -21,3 +21,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+# commands for cProfiler
+# python -m cProfile -o profile_results.prof local_run.py
+# python -m pstats profile_results.prof
