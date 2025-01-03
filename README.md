@@ -33,9 +33,11 @@ Class methods relate to generating request URLS and handling response content.<b
 
 ### data_wrangler.py
 Contains the DataWrangler class. <br />
-This class is responsible for receiving and processing the ERDDAP datasets.<br />  
+This class is responsible for receiving and processing the ERDDAP datasets.<br />
+Determines the size of the requested dataset and chunks dataset requests if needed. <br />   
 
 ### ago_wrangler.py
+Contains the AgolWrangler class. <br />
 Responsible for connecting the client to AGOL and interfacing with the ArcGIS Python API. <br />
 Attributes of the NC Global section of the DAS are used to construct the item_properties dictionary. <br />
 A feature service is created and populated with the dataset returned by the ERDDAP_Client URL. <br />
