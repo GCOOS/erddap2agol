@@ -1,7 +1,7 @@
 from arcgis.gis import GIS
 from dataclasses import dataclass, field
 from typing import Optional, Dict
-import requests, os
+import sys
 
 @dataclass
 class UpdateManager:
@@ -20,10 +20,12 @@ class UpdateManager:
             self.gis = GIS("home")
             print(
                 f"\nSuccessfully connected to {self.gis.properties.portalName} "
-                f"as {self.gis.users.me.username}"
+                f"as {self.gis.users.me.username}."
             )
         except Exception as e:
-            print(f"AGOL connection error: {e}")
+            print(f"UH OH! AGOL connection error: {e}")
+            print(f"Since that's half the program, sys.exit!")
+            sys.exit
 
     def searchContent(self) -> None:
         """
@@ -37,8 +39,10 @@ class UpdateManager:
                 f"({tag_query}) AND owner:{self.gis.users.me.username} AND type:Feature Service"
             )
 
-            print(f"Searching for NRT datasets from: {self.gis.users.me.username}")
-            search_results = self.gis.content.search(query=search_query, max_items=1000)
+            # Commented out this print statement because we will want to eventually search org
+            # will need to verify user role for overwriting other datasets
+            #print(f"Searching for NRT datasets from: {self.gis.users.me.username}")
+            search_results = self.gis.content.search(query=search_query, max_items=5000)
 
             if not search_results:
                 print(f"No items found with tags {tags} for the logged-in user.")

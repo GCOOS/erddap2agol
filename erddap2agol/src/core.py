@@ -1,8 +1,7 @@
-#Runtime logic consolidated here
-import sys, os, requests, json
-import time  # Add this import at the top with other imports
-from . import erddap_client as ec
-from . import ago_wrapper as aw
+# Warning: Abstraction ahead
+import sys, os
+from . import erddap_wrangler as ec
+from . import agol_wrangler as aw
 from . import data_wrangler as dw
 from . import update_manager as um
 from erddap2agol import run

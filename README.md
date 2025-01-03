@@ -4,47 +4,42 @@ The purpose of this project is to develop a robust tool for reliably transferrin
 
 ### ERDDAP2AGOL v0.6: Major update!   
 
-## Roadmap
-The ERDDAP2AGOL tool is under active development. Stable features are indicated by the readme and version number. Currently, at version 0.4, NRT add is considered stable. To be notified when the tool is ready for use. <br />
-
 **Subscribe to the GCOOS newsletter for updates.** <br />
 
+## Who is this for?
+This tool was principally designed for data managers who wish to expand the utility and accessibility of their ERDDAP services. To use the data maintenance capabilities (NRT or Weekly updates), you must be an administrator of your ArcGIS Online orginization. That said, anyone can run this tool to create ERDDAP data on their ArcGIS Online account! With an easy to use command line user interface and a ready made ArcGIS Online notebook, virtually no programming experience is necessary! <br />       
 
-## What to expect
-* Your ERDDAP data will be available in three product levels.         
+**Please note that this program, if you ask it to, will obediently consume all your ArcGIS Online credits.** <br />       
+
+
+## Major Features
+- Manage your ERDDAP data on ArcGIS Online at a variety of time-scales or data types!         
 - NRT: 7 day moving window, Level 1. (Available now!)
-- Glider DAC Menu: Create multiline HFLs from the Glider DAC ERDDAP (Available now!)  
-- Historical: Updated weekly, contains all data, Level 2. (WIP)
+- Glider DAC Line Segments: Create multiline HFLs from the Glider DAC ERDDAP (Available now!)  
+- Historical: Updated weekly, contains all data, Level 2. (Coming Soon!)
 - QC Historical: QC Flags, low quality records removed, Level 3. (WIP) <br />
 
-* Multiple install options.
-- Install directly from an AGOL notebook.
+- Multiple install options (Updating README on program functionality soon!).
+- Install directly into an AGOL notebook.
 - Build AGOL environment locally. <br /> 
 
 
 ## Core Modules
-### Das_client.py
-The first point of contact with an ERDDAP server. <br />
-The server response is converted from DAS to JSON and stored in-client. <br />
-Time functions to assess data currency.  <br />
-Relevant attributes to be encoded in the request url are identified. <br />
 
-### ERDDAP_client.py
+### erddap_wrangler.py
 Contains the ERDDAPHandler class.<br />
 Different ERDDAP Servers exist as objects of the ERDDAPHandler class. <br />
 Class methods relate to generating request URLS and handling response content.<br />
 
-### AGO_wrapper.py
+### data_wrangler.py
+Contains the DataWrangler class. <br />
+This class is responsible for receiving and processing the ERDDAP datasets.<br />  
+
+### ago_wrangler.py
 Responsible for connecting the client to AGOL and interfacing with the ArcGIS Python API. <br />
-Attributes of the DAS JSON file are used to construct the item_properties dictionary. <br />
+Attributes of the NC Global section of the DAS are used to construct the item_properties dictionary. <br />
 A feature service is created and populated with the dataset returned by the ERDDAP_Client URL. <br />
 
-## Additional Functionality
-
--Add ERDDAP data to ArcGIS Online with just an ERDDAP DatasetID  <br />
--ERDDAP2AGOL uses information contained within the metadata of the DAS (Data Attribute Structure) to fully populate AGOL item fields (Coming soon). <br />
--Ensure visibility of updates with update logs <br />
--Use state change or database log query to identify items for update<br />  
 
 ### Attributions
 Update / Overwrite Feature Service v2.1.4 <br />

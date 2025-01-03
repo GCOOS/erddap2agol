@@ -1,8 +1,8 @@
-import sys, os, requests, datetime 
+import sys, os, datetime 
 from datetime import datetime, timedelta
 import json
 from collections import OrderedDict
-from . import erddap_client as ec
+from . import erddap_wrangler as ec
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 

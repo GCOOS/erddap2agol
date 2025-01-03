@@ -2,7 +2,7 @@ from arcgis.gis import GIS
 from arcgis.features import FeatureLayer, FeatureLayerCollection
 from arcgis.gis._impl._content_manager import SharingLevel
 from . import data_wrangler as dw
-from . import erddap_client as ec
+from . import erddap_wrangler as ec
 from . import das_client as dc
 import copy, os, sys, time, pandas as pd, numpy as np, json
 from dataclasses import dataclass, field

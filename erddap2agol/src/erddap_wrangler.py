@@ -1,7 +1,6 @@
 import sys, os, requests, json, pandas as pd
 from datetime import datetime, timedelta
 from io import StringIO
-from typing import Optional, Dict, List
 import tempfile
 from . import data_wrangler as dw
 
