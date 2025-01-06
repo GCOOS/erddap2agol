@@ -1,8 +1,6 @@
-# ERDDAP2AGOL v.0.6.6 
+# ERDDAP2AGOL v.0.6.6: Major update! 
 
 The purpose of this project is to develop a robust tool for reliably transferring datasets between ERDDAPTM services and ArcGIS Online (AGOL). Erddap2agol is a "hands-off" Python package designed to operate seamlessly within the AGOL environment. Its core functionalities include creating, managing, and updating ERDDAPTM datasets at various levels of granularity. Developed by the Gulf of Mexico Ocean Observing System (GCOOS), erddap2agol is available for use by data providers leveraging ERDDAPTM services, as well as individuals and organizations aiming to analyze and visualize ERDDAPTM data on a GIS platform.
-
-### ERDDAP2AGOL v0.6: Major update!   
 
 **Subscribe to the GCOOS newsletter for updates.** <br />
 
@@ -30,7 +28,7 @@ Erddap2agol can be pip installed into any active ArcGIS Conda Environment, wheth
 
 The following is an example of the code required to access the erddap2agol CUI
 
-(In your terminal) !pip install https://github.com/GCOOS/erddap2agol/archive/refs/heads/main.zip <br /> 
+!pip install https://github.com/GCOOS/erddap2agol/archive/refs/heads/main.zip <br /> 
 
 import erddap2agol <br /> 
 from erddap2agol import run <br /> 
@@ -42,7 +40,7 @@ Functionality in erddap2agol is divided into two major components, each with the
 1. **Command-Line User Interface (CUI)**
 - To access the CUI, follow the instructions from instillation options. </br> 
 2. **Standalone Notebook functions** (e.g., `_updateNRT`)
-- The underscore functions within the run module indicate functions that are to be used in AGOL hosted notebooks. To deploy these capabilities, simply follow the pip install/import process outlined above, then schedule the notebook to run at your desired interval. </br>
+- The underscore functions within the run module are to be used in AGOL hosted notebooks. To deploy these capabilities, simply follow the pip install/import process outlined above, then schedule the notebook to run at your desired interval. </br>
 
 
 ## Core Modules
