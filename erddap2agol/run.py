@@ -28,6 +28,8 @@ def cui():
         elif user_choice == "4":
             core.updateNRT()
         elif user_choice == "5":
+            print("Goodbye!")
+            ec.cleanTemp()
             sys.exit()
         else:
             print("\nInvalid input. Please try again.")
