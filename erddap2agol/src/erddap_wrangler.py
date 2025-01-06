@@ -1,10 +1,11 @@
-#ERDDAP stuff is handled here with the ERDDAPHandler class.
-import sys, os, requests, json
+import sys, os, requests, json, pandas as pd
 from datetime import datetime, timedelta
-import pandas as pd
-from urllib.parse import urlparse, parse_qsl, urlencode, urlunparse
 from io import StringIO
 import tempfile
+from . import data_wrangler as dw
+
+#--------------------------------------------------------------------------------
+
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
@@ -23,7 +24,7 @@ def cleanTemp() -> None:
     filepath = os.path.join('/arcgis/home', 'e2a_temp')
     if os.path.exists(filepath):
         for filename in os.listdir(filepath):
-            if filename.endswith(".csv"):
+            if filename.endswith(".csv") or filename.endswith("geojson"):
                 full_path = os.path.join(filepath, filename)
                 try:
                     os.remove(full_path)
@@ -31,6 +32,9 @@ def cleanTemp() -> None:
                     print(f"An unexpected error occurred while deleting {full_path}: {e}")
     else:
         print(f"The directory {filepath} does not exist.")
+
+
+#--------------------------------------------------------------------------------
 
 #Sometimes the directory or file isnt created 
 def getErddapConfDir():
@@ -76,21 +80,62 @@ def showErddapList() -> None:
 
 #--------------------------------------------------------------------------------
 class ERDDAPHandler:
-    def __init__(self, server, serverInfo, datasetid, attributes, fileType, longitude, latitude, time, start_time, end_time, geoParams):
+    def __init__(self, server, serverInfo, datasetid, fileType, geoParams):
+        self.availData = None
         self.server = server
         self.serverInfo = serverInfo
         self.datasetid = datasetid
-        self.attributes = attributes
         self.fileType = fileType
-        self.longitude = longitude
-        self.latitude = latitude
-        self.time = time
-        self.start_time = start_time
-        self.end_time = end_time
         self.geoParams = geoParams
+        self.datasets = []
+        self.is_nrt = False
+        
+    
+    @property
+    def availData(self): 
+        if self._availData is None:
+            self._availData = self.getDatasetIDList()
+        return self._availData
 
-   
+    @availData.setter 
+    def availData(self, value):
+        """Set available datasets"""
+        self._availData = value   
+
+    def reset(self) -> None:
+        """
+        Reset all class attributes to none.
+
+        Called after postAndPublish in the CUI
+        """
+        self.availData = None
+        self.server = None
+        self.serverInfo = None
+        self.datasetid = None
+        self.fileType = None
+        self.geoParams = None
+        self.datasets = []
+        self.is_nrt = False
+
+    def __iter__(self):
+        """Make ERDDAPHandler directly iterable"""
+        return iter(self.datasets)
+    
+    def __len__(self):
+        """Get number of datasets"""
+        return len(self.datasets)
+    
+    def __getitem__(self, index):
+        """Allow index access to datasets"""
+        return self.datasets[index]
+    
+    # def get_unprocessed(self) -> List[dw.DatasetWrangler]:
+    #         return [d for d in self.datasets if not d.is_processed]
+    
+
     def getDatasetIDList(self) -> list:
+        """Fetches a list of dataset IDs from the ERDDAP server.
+           spits out list of dataset IDs"""
         url = f"{self.serverInfo}"
         try:
             response = requests.get(url)
@@ -115,19 +160,21 @@ class ERDDAPHandler:
         except Exception as e:
             print(f"Error fetching dataset ID list: {e}")
             return []
-
         
+    #This was occuring later than I thought, and it might not be nessecary 
+    def addDatasets_list(self, dataset_ids: list) -> None:
+        """Creates DatasetWrangler objects for each dataset ID"""
+        for dataset_id in dataset_ids:
+            dataset = dw.DatasetWrangler(
+                dataset_id= dataset_id,
+                server= self.server,
+                is_nrt= self.is_nrt
+            )
+            self.datasets.append(dataset)
+    
+    
     #Gets dataset DAS    
-    def getDas(self, datasetid: str) -> str:
-        dataset_id_list = self.getDatasetIDList()
-        if datasetid not in dataset_id_list:
-            print(f"\nDataset ID {datasetid} not found in the list of available datasets.")
-            return None
-        else:
-            url = f"{self.server}{datasetid}.das"
-            response = requests.get(url)
-            return response.text
-        
+
         
     def setErddap(self, erddapIndex: int):
         filepath = getErddapList()
@@ -180,56 +227,6 @@ class ERDDAPHandler:
             print(f"Error using getDatasetsFromSearch: {e}")
             return None
                 
-    # Generates URL for ERDDAP request based on class object attributes
-    def generate_url(self, isSeed: bool, additionalAttr: list = None, dataformat="csvp", seedDays = 7) -> str:
-        # the attribute list
-        attrs = []
-
-        if additionalAttr and 'depth' in additionalAttr:
-            additionalAttr.remove('depth')
-            attrs.append('depth')
-
-        attrs.extend([self.longitude, self.latitude])
-
-        if additionalAttr:
-            attrs.extend(additionalAttr)
-
-        # Finally, add 'time'
-        attrs.append(self.time)
-
-        # Join the attributes into the URL
-        attrs_str = '%2C'.join(attrs)
-
-        # Construct time constraints
-        if isSeed:
-            if isinstance(self.start_time, str):
-                self.start_time = datetime.strptime(self.start_time, '%Y-%m-%dT%H:%M:%S')
-            endtime_seed = self.start_time + timedelta(days= seedDays)
-            endtime_seed_str = endtime_seed.strftime('%Y-%m-%dT%H:%M:%S')
-            start_time_str = self.start_time.strftime('%Y-%m-%dT%H:%M:%S')
-            time_constraints = (
-                f"&{self.time}%3E%3D{start_time_str}Z"
-                f"&{self.time}%3C%3D{endtime_seed_str}Z"
-            )
-            print(f"Start Time: {start_time_str}", f"End Time: {endtime_seed_str}")
-        else:
-            time_constraints = (
-                f"&{self.time}%3E%3D{self.start_time}Z"
-                f"&{self.time}%3C%3D{self.end_time}Z"
-            )
-
-        # Construct the full URL
-        url = (
-            f"{self.server}{self.datasetid}.{dataformat}?"
-            f"{attrs_str}"
-            f"{time_constraints}"
-        )
-
-        
-        print(f"\nGenerated URL: {url}")
-
-        return url
-        
     def fetchData(self, url):
         response, responseCode = self.return_response(url)
         if responseCode != 200:
@@ -270,43 +267,28 @@ class ERDDAPHandler:
         return valid_attributes
 
 
+    #--------------------------------------------------------------------------------
 
-    #Works and important. Breaks when no lat or lon lol. 
-    def responseToCsv(self, response: any) -> str:
-        csvResponse = response[0]
-        responseCode = response[1]
-        if responseCode != 200:
-            return None
-        try:
-            csvData = StringIO(csvResponse)
+    # def responseToCsv(self, response: any) -> str:
+    #     csvResponse = response[0]
+    #     responseCode = response[1]
+    #     if responseCode != 200:
+    #         return None
+    #     try:
+    #         csvData = StringIO(csvResponse)
 
-            df = pd.read_csv(csvData, header=None, low_memory=False)
+    #         df = pd.read_csv(csvData, header=None, low_memory=False)
 
-            temp_dir = getTempDir()
-            file_path = os.path.join(temp_dir, f"{self.datasetid}.csv")
+    #         temp_dir = getTempDir()
+    #         file_path = os.path.join(temp_dir, f"{self.datasetid}.csv")
 
-            df.to_csv(file_path, index=False, header=False)
+    #         df.to_csv(file_path, index=False, header=False)
 
-            return file_path
-        except Exception as e:
-            print(f"Error converting response to CSV: {e}")
-            return None
+    #         return file_path
+    #     except Exception as e:
+    #         print(f"Error converting response to CSV: {e}")
+    #         return None
 
-    #Works and important
-    def responseToJson(self, response: any) -> str:
-        jsonResponse = response
-        jsonData = StringIO(jsonResponse)
-
-        df = pd.read_json(jsonData, orient='records')
-
-        currentpath = os.getcwd()
-        directory = "/temp/"
-        file_path = f"{currentpath}{directory}{self.datasetid}.json"
-        print(file_path)
-
-        df.to_json(file_path, orient='records')
-
-        return file_path
 
     # Creates a list of time values between start and end time
     def iterateTime(self, incrementType: str, increment: int) -> list:
@@ -324,75 +306,6 @@ class ERDDAPHandler:
                 current += datetime.timedelta(hours=increment)
         return timeList
     
-    # We will use this to decide how to chunk the dataset
-    def calculateTimeRange(self, intervalType=None) -> int:
-        start = datetime.fromisoformat(self.start_time)
-        end = datetime.fromisoformat(self.end_time)
-        
-        if intervalType is None:
-            return (end - start).days
-        
-        elif intervalType == "months":
-            year_diff = end.year - start.year
-            month_diff = end.month - start.month
-            
-            total_months = year_diff * 12 + month_diff
-            return total_months
-
-        else:
-            raise ValueError("Invalid interval type.")
-
-
-    # Creates a seed URL to download a small amount of data. There are probably better ways to just grab the first record.
-    def createSeedUrl(self, additionalAttr: list = None) -> str:
-        oldStart = self.start_time
-        oldEnd = self.end_time
-
-        time_list = self.iterateTime("hours", 3)
-
-        self.start_time = time_list[0]
-        self.end_time = time_list[1]
-        generated_url = self.generate_url(True, additionalAttr)
-
-        self.start_time = self.end_time
-        self.end_time = oldEnd
-        return generated_url
-
-    #Last update is read from database, currentTime is from current time function
-    @staticmethod
-    def generateUpdateUrl(full_url: str, last_update: str, currentTime: str) -> str:
-        if '?' in full_url:
-            base_url, query_string = full_url.split('?', 1)
-        else:
-            base_url = full_url
-            query_string = ""
-
-        # Split along encoding
-        params = query_string.split('&')
-
-        updated_params = []
-
-        #Note: time params are hardcoded here.
-        for param in params:
-            if param.startswith('time%3E%3D'):
-                updated_params.append(f"time%3E%3D{last_update}Z")
-            elif param.startswith('time%3C%3D'):
-                updated_params.append(f"time%3C%3D{currentTime}Z")
-            else:
-                updated_params.append(param)
-
-
-        # Join the updated parameters back into a query string
-        updated_query_string = '&'.join(updated_params)
-
-        updated_url = f"{base_url}?{updated_query_string}"
-
-        return updated_url
-
-    @staticmethod
-    def updateObjectfromParams(erddapObject: "ERDDAPHandler", params: dict) -> None:
-        for key, value in params.items():
-            setattr(erddapObject, key, value)
 
 
     @staticmethod
@@ -405,66 +318,28 @@ class ERDDAPHandler:
             print(f"Unexpected error occurred: {err}")
             return None, None
 
-
-    @staticmethod
-    def get_current_time() -> str:
-        return str(datetime.datetime.now().isoformat())
-    
-
-
-
-# Below we can specify different configurations for the ERDDAP object.
-
-# Since lat/lon and time are essentially default parameters, we can set them here.
-
-erddapGcoos = ERDDAPHandler(
-    server='https://erddap.gcoos.org/erddap/tabledap/',
-    serverInfo = 'https://erddap.gcoos.org/erddap/info/index.json',
-    datasetid = None,
-    attributes=None,
-    fileType = None,
-    longitude = "longitude",
-    latitude = "latitude",
-    time = 'time',
-    start_time = None,
-    end_time = None,
-    geoParams = {"locationType": "coordinates",
-        "latitudeFieldName": "latitude (degrees_north)",
-        "longitudeFieldName": "longitude (degrees_east)"}
-)
-
-coastwatch = ERDDAPHandler(
-    server='https://coastwatch.pfeg.noaa.gov/erddap/tabledap/',
-    serverInfo = 'https://coastwatch.pfeg.noaa.gov/erddap/info/index.json',
-    datasetid = None,
-    attributes=None,
-    fileType = None,
-    longitude = "longitude",
-    latitude = "latitude",
-    time = 'time',
-    start_time = None,
-    end_time= None,
-    geoParams = {"locationType": "coordinates",
-        "latitudeFieldName": "latitude (degrees_north)",
-        "longitudeFieldName": "longitude (degrees_east)"}
-    )
-
 custom_server = ERDDAPHandler(
-    server= None,
+    server = None,
     serverInfo = None,
     datasetid = None,
-    attributes=None,
     fileType = None,
-    longitude = "longitude",
-    latitude = "latitude",
-    time = 'time',
-    start_time = None,
-    end_time= None,
     geoParams = {
     "locationType": "coordinates",
     "latitudeFieldName": "latitude__degrees_north_",
     "longitudeFieldName": "longitude__degrees_east_",
     "timeFieldName": "time__UTC_",
-    }
+    },
 )
+
+# # class ERDDAPHandler:
+#     def __init__(self, server, serverInfo, datasetid, attributes, fileType, longitude, latitude, time, start_time, end_time, geoParams):
+#         self.availData = None
+#         self.server = server
+#         self.serverInfo = serverInfo
+#         self.datasetid = datasetid
+#         self.attributes = attributes
+#         self.fileType = fileType
+#         self.geoParams = geoParams
+#         self.datasets = []
+#         self.is_nrt = False
 

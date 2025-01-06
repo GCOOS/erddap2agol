@@ -378,7 +378,7 @@ Returns: Outcome Dictionary
                 #"itemDetails": backupDetails.get( "itemDetails", item.backupItemProperties),
                 #"itemThumbnail": backupDetails.get( "itemThumbnail", item.backupItemThumbnail),
                 "itemDetails": item.backupItemProperties,
-                "itemThumbnail": item.backupItemThumbnail,
+                #"itemThumbnail": item.backupItemThumbnail,
                 "serviceDetails": serviceDetails,
 ##                "serviceDetails": item.backupServiceProperties,
                 "itemData": item.backupItemData,

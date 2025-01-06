@@ -1,14 +1,12 @@
-#Runtime logic consolidated here
-import sys, os, requests, json
-import time  # Add this import at the top with other imports
-from . import erddap_client as ec
-from . import das_client as dc
-from . import ago_wrapper as aw
-from . import level_manager as lm
+# Warning: Abstraction ahead
+import sys, os
+from . import erddap_wrangler as ec
+from . import agol_wrangler as aw
+from . import data_wrangler as dw
+from . import update_manager as um
 from erddap2agol import run
-from logs import updatelog as ul
 from src.utils import OverwriteFS
-
+from IPython.display import clear_output
 from arcgis.gis import GIS
 
 ###################################
@@ -24,7 +22,6 @@ def enablePrint():
     sys.stdout = sys.__stdout__
 
 
-
 def checkInputForList(user_input):
     return ',' in user_input
 
@@ -33,7 +30,8 @@ def inputToList(user_input) -> list:
     return dataset_list
 
  # Show erddap menu and define gcload with selection
-def erddapSelection(GliderServ = False) -> ec.ERDDAPHandler:
+ # Survives refactor
+def erddapSelection(GliderServ = False, nrtAdd = False) -> ec.ERDDAPHandler:
     if GliderServ == True:
         erddapObj = ec.ERDDAPHandler.setErddap(ec.custom_server, 15)
         return erddapObj
@@ -48,7 +46,11 @@ def erddapSelection(GliderServ = False) -> ec.ERDDAPHandler:
 
             if uc.lower() == "y":
                 print("\nContinuing with selected server...")
-                return erddapObj
+                if nrtAdd is True:
+                    erddapObj.is_nrt = True
+                    return erddapObj
+                else:
+                    return erddapObj
             else:
                 print("\nReturning to main menu...")
                 return None
@@ -59,8 +61,29 @@ def erddapSelection(GliderServ = False) -> ec.ERDDAPHandler:
 # Select dataset from list and return list of datasets
 # This includes logic not found elsewhere, not a wrapper like other core funcs.
 # need to handle misinputs
-def selectDatasetFromList(erddapObj, dispLength=50) -> list:
+
+# Survives refactor
+def selectDatasetFromList(erddapObj, dispLength=75) -> list:
+    """The big search function that allows users to search datasets and select them for processing.
+        
+        Returns a list of selected datasets. Should pass to the erddapObj list constructor."""
     def _updateDatasetList(erddapObj, search_term=None):
+        original_info = erddapObj.serverInfo
+        base_url = original_info.split('/erddap/')[0] + '/erddap'
+        
+        if erddapObj.is_nrt is True:
+            
+            search_url = (
+                f"{base_url}/search/advanced.json?"
+                f"page=1&itemsPerPage=10000000&minTime=now-7days&maxTime=&protocol=tabledap"
+            )
+
+            # print(f"\nSEARCH URL: {search_url}")
+            erddapObj.serverInfo = search_url
+            dataset_id_list = erddapObj.getDatasetIDList()
+            erddapObj.serverInfo = original_info
+            return dataset_id_list
+
         if search_term:
             original_info = erddapObj.serverInfo
             # Extract the base URL (remove everything after /erddap/)
@@ -73,6 +96,7 @@ def selectDatasetFromList(erddapObj, dispLength=50) -> list:
             dataset_id_list = erddapObj.getDatasetIDList()
             erddapObj.serverInfo = original_info
             return dataset_id_list
+        
         return erddapObj.getDatasetIDList()
 
     dataset_id_list = _updateDatasetList(erddapObj)
@@ -93,12 +117,13 @@ def selectDatasetFromList(erddapObj, dispLength=50) -> list:
     current_page = 1
     input_list = []
     
-    def clear_screen():
+    def clearScreen():
         import os
         os.system('cls' if os.name == 'nt' else 'clear')
+        clear_output()
     
     while True:
-        clear_screen()
+        clearScreen()
         start_index = (current_page - 1) * dispLength
         end_index = min(start_index + dispLength, len(dataset_id_list))
         current_page_datasets = dataset_id_list[start_index:end_index]
@@ -146,6 +171,7 @@ def selectDatasetFromList(erddapObj, dispLength=50) -> list:
             run.cui()
 
         elif idx_select == "done":
+            clearScreen()
             print("\nPassing the following datasets to the next step...")
             print(f"{input_list}")
             return input_list
@@ -188,78 +214,9 @@ def selectDatasetFromList(erddapObj, dispLength=50) -> list:
             except Exception as e:
                 print("An unexpected error occurred:", e)
                 input("Press Enter to continue...")
+     
+   
 
-    
-        
-
-
-# DAS parsing and attribute definitions for non-NRT datasets
-# Wraps getDas, parseDasResponse, convertToDict, saveToJson, openDasJson, getActualAttributes, convertFromUnix, displayAttributes
-def parseDas(erddapObj, dataset):
-    das_resp = ec.ERDDAPHandler.getDas(erddapObj, dataset)
-    
-    if das_resp is None:
-        print(f"\nNo data found for dataset {dataset}.")
-        return None
-    
-    parsed_response = dc.convertToDict(dc.parseDasResponse(das_resp))
-    dc.saveToJson(parsed_response, dataset)
-    #print(f"\nDas converted to JSON successfully")
-
-    
-    attribute_list = dc.getActualAttributes(dc.openDasJson(dataset), erddapObj)
-
-    unixtime = (dc.getTimeFromJson(dataset))
-    start, end = dc.convertFromUnix(unixtime)
-    
-    setattr(erddapObj, "start_time", start)
-    setattr(erddapObj, "end_time", end)
-    setattr(erddapObj, "datasetid", dataset)
-    setattr(erddapObj, "attributes", attribute_list)
-
-    timeintv = ec.ERDDAPHandler.calculateTimeRange(erddapObj)
-    dc.displayAttributes(timeintv, attribute_list)
-    
-    # Ask about seed file after showing record count
-    if getattr(erddapObj, 'seed_choice', None) is None:
-        seed_choice = input(f"\nDataset contains {timeintv} days of records. Would you like to create a seed file? (y/n): ").lower()
-        setattr(erddapObj, 'seed_choice', seed_choice == 'y')
-    
-    return attribute_list
-
-# DAS parsing and attribute definitions for NRT datasets
-def parseDasNRT(erddapObj, dataset) -> list:
-    das_resp = ec.ERDDAPHandler.getDas(erddapObj, dataset)
-    if das_resp is None:
-        print(f"\nNo data found for dataset {dataset}.")
-        return None
-    
-    parsed_response = dc.convertToDict(dc.parseDasResponse(das_resp))
-    fp = dc.saveToJson(parsed_response, dataset)
-    print(f"\nDas converted to JSON successfully")
-
-    
-    attribute_list = dc.getActualAttributes(dc.openDasJson(dataset), erddapObj)
-
-    window_start, window_end = lm.movingWindow(isStr=True)
-
-    overlapBool = lm.checkDataRange(dataset)
-    
-    if overlapBool == False:
-        print(f"\nNo data found for dataset {dataset} within the last 7 days.")
-        return None
-    
-    else:
-        setattr(erddapObj, "start_time", window_start)
-        setattr(erddapObj, "end_time", window_end)
-        setattr(erddapObj, "datasetid", dataset)
-        setattr(erddapObj, "attributes", attribute_list)
-
-        timeintv = ec.ERDDAPHandler.calculateTimeRange(erddapObj)
-        dc.displayAttributes(timeintv, attribute_list)
-        
-        return attribute_list
-    
 
 # AGOL publishing and log updating
 # Terminal
@@ -273,196 +230,45 @@ def check_dataset_exists(dataset_id: str) -> bool:
         print(f"Error checking dataset existence: {e}")
         return False
 
-def agolPublish(erddapObj, attribute_list:list, isNRT: int, skip_check: bool = False) -> None:
-    start_time = time.time()
-    print(f"\nProcessing dataset: {erddapObj.datasetid}")
-    
-    # Check if dataset exists unless skip_check is True
-    if not skip_check and check_dataset_exists(erddapObj.datasetid):
-        print(f"\nWarning: Dataset {erddapObj.datasetid} already exists in AGOL. Skipping processing.")
-        return
-    
-    if isNRT == 0:
-        seedbool = getattr(erddapObj, 'seed_choice', False)
-    else:
-        seedbool = False
-
-    full_url = erddapObj.generate_url(seedbool, attribute_list)
-    response = ec.ERDDAPHandler.return_response(full_url)
-    filepath = ec.ERDDAPHandler.responseToCsv(erddapObj, response)
-
-    if filepath:
-        
-        propertyDict = aw.makeItemProperties(erddapObj)
-
-        table_id = aw.postAndPublish(propertyDict, erddapObj.geoParams, filepath, erddapObj)
-        ul.updateLog(erddapObj.datasetid, table_id, "None", full_url, erddapObj.end_time, ul.get_current_time(), isNRT)
-        ec.cleanTemp()
-        
-        end_time = time.time()
-        processing_time = end_time - start_time
-        print(f"Processing completed in {processing_time:.2f} seconds")
-    else:
-        end_time = time.time()
-        processing_time = end_time - start_time
-        print(f"Processing failed after {processing_time:.2f} seconds")
-        print(f"Skipping {erddapObj.datasetid} due to bad response.")
-
-# Modified agol publish function for glider datasets
-def agolPublish_glider(erddapObj, attribute_list:list, isNRT: int, dataformat="geojson", skip_check: bool = False) -> None:
-
-    # Check if dataset exists unless skip_check is True
-    if not skip_check and check_dataset_exists(erddapObj.datasetid):
-        print(f"\nWarning: Dataset {erddapObj.datasetid} already exists in AGOL. Skipping processing.")
-        return
-
-    full_url = erddapObj.generate_url(0, attribute_list)
-
-    response = ec.ERDDAPHandler.return_response(full_url)
-    filepath = ec.ERDDAPHandler.responseToCsv(erddapObj, response)
-
-    geojson_path = aw.pointTableToGeojsonLine(filepath, erddapObj)
-    
-    propertyDict = aw.makeItemProperties(erddapObj)
-       
-    table_id = aw.postAndPublish(propertyDict, erddapObj.geoParams, geojson_path, erddapObj, inputDataType= dataformat)
-
-    ul.updateLog(erddapObj.datasetid, table_id, "None", full_url, erddapObj.end_time, ul.get_current_time(), isNRT)
-    ec.cleanTemp()
-
-
-# When users provide multiple datasets for manual upload 
-# Terminal
-def agolPublishList(dataset_list, erddapObj, isNRT: int, skip_check: bool = False):
-    if not dataset_list:
-        print("No datasets to process.")
-        return
-
-    total_start_time = time.time()
-    processed_count = 0
-    skipped_count = 0
-    
-    # Store original server info
-    original_info = erddapObj.serverInfo
-    
-    # Get available datasets using original server info
-    erddapObj.serverInfo = original_info
-    available_datasets = ec.ERDDAPHandler.getDatasetIDList(erddapObj)
-    
-    # Determine which publish function to use based on the server flag
-    is_glider_server = getattr(erddapObj, 'is_glider', False)
-    publish_function = agolPublish_glider if is_glider_server else agolPublish
-
-    if isNRT == 0:
-        for dataset in dataset_list:
-            dataset_start_time = time.time()
-            print(f"\nProcessing dataset: {dataset}")
-            
-            if dataset not in available_datasets:
-                print(f"Dataset ID '{dataset}' not found in the list of available datasets.")
-                continue
-
-            # Check if dataset exists unless skip_check is True
-            if not skip_check and check_dataset_exists(dataset):
-                print(f"\nWarning: Dataset {dataset} already exists in AGOL. Skipping processing.")
-                skipped_count += 1
-                continue
-
-            attribute_list = parseDas(erddapObj, dataset)
-            if attribute_list is None:
-                print(f"\nNo data found for dataset '{dataset}', trying next.")
-                continue
-            else:
-                if is_glider_server:
-                    publish_function(erddapObj, attribute_list, isNRT, skip_check=skip_check)
-                else:
-                    publish_function(erddapObj, attribute_list, isNRT, skip_check=skip_check)
-            
-            dataset_end_time = time.time()
-            processing_time = dataset_end_time - dataset_start_time
-            processed_count += 1
-            print(f"Dataset processed in {processing_time:.2f} seconds")
-        ec.cleanTemp()
-    else:
-        for dataset in dataset_list:
-            dataset_start_time = time.time()
-            print(f"\nProcessing dataset: {dataset}")
-            
-            if dataset not in available_datasets:
-                print(f"Dataset ID '{dataset}' not found in the list of available datasets.")
-                continue
-
-            # Check if dataset exists unless skip_check is True
-            if not skip_check and check_dataset_exists(dataset):
-                print(f"\nWarning: Dataset {dataset} already exists in AGOL. Skipping processing.")
-                skipped_count += 1
-                continue
-
-            attribute_list = parseDasNRT(erddapObj, dataset)
-            if attribute_list is None:
-                print(f"\nNo data found for dataset '{dataset}', trying next.")
-                continue
-            publish_function(erddapObj, attribute_list, isNRT, skip_check=skip_check)
-            dataset_end_time = time.time()
-            processing_time = dataset_end_time - dataset_start_time
-            processed_count += 1
-            print(f"Dataset processed in {processing_time:.2f} seconds")
-        ec.cleanTemp()
-
-    total_end_time = time.time()
-    total_time = total_end_time - total_start_time
-    print(f"\nProcessing completed for {processed_count} datasets")
-    if skipped_count > 0:
-        print(f"Skipped {skipped_count} datasets that already existed in AGOL")
-    print(f"Total processing time: {total_time:.2f} seconds")
-    print("\nAll done!")
-
-
 
 ###################################
 ##### Functions for Notebooks #####
 ###################################
 
-def NRTUpdateAGOL(skip_check: bool = True) -> None:
-    #This is hardcoded for GCOOS ERDDAP
-    erddapObj = ec.erddapGcoos    
+# Basic integration of the update function now.  
+def updateNRT() -> None:
+    """Searches your ArcGIS Online account for datasets with the NRT tags, then runs the 
+        typical NRT post, but passes a URL providing OFS with the destination data"""
+    update_manager = um.UpdateManager()
+    gis = update_manager.gis
+    update_manager.searchContent()
+    dataset_list = []
 
-    nrt_dict  = lm.NRTFindAGOL()
-    for datasetid, itemid in nrt_dict.items():
-        if datasetid and itemid:
-            try: 
-                startWindow, endWindow = lm.movingWindow(isStr=True)
-                das_resp = ec.ERDDAPHandler.getDas(erddapObj, datasetid)
-                parsed_response = dc.convertToDict(dc.parseDasResponse(das_resp))
-                fp = dc.saveToJson(parsed_response, datasetid)
-                das_data = dc.openDasJson(datasetid)
-                attribute_list = dc.getActualAttributes(das_data, erddapObj)
+    for datasetid, info in update_manager.datasets.items():
+        serverurl = info.get('base_url')
+        print(serverurl)
+        datasetObj = dw.DatasetWrangler(
+            dataset_id= datasetid,
+            server= serverurl,
+            is_nrt= True
+        )
 
-                setattr(erddapObj, "start_time", startWindow)
-                setattr(erddapObj, "end_time", endWindow)
-                setattr(erddapObj, "datasetid", datasetid)
-                setattr(erddapObj, "attributes", attribute_list)
+        datasetObj.generateUrl()
 
-                url = erddapObj.generate_url(False, attribute_list)
+        agol_id = info.get('agol_id')
+        content_item = gis.content.get(agol_id) 
 
-                gis = aw.agoConnect()
-                
-                content = gis.content.get(itemid)
+        try:
+            OverwriteFS.overwriteFeatureService(content_item, datasetObj.url_s[0], verbose=True, preserveProps=False, ignoreAge = True)
+        except Exception as e:
+            raise e
 
+    
 
-                OverwriteFS.overwriteFeatureService(content, url, verbose=True, preserveProps=False, ignoreAge = True)
-            
-            except Exception as e:
-                    print(f"Error: {e}")
-                    pass
-
-def gliderWorkflow(search_term: str = None, isNRT: int = 0, skip_check: bool = False) -> None:
+def gliderWorkflow(search_term: str = None) -> None:
     """
     Automates the workflow for glider data:
-    1. Selects glider ERDDAP server
-    2. Searches for datasets with given search term
-    3. Processes and publishes found datasets
-    
+
     Args:
         search_term (str, optional): Term to search for in dataset names. Defaults to None.
         isNRT (int, optional): Whether to treat as near-real-time data. Defaults to 0.
@@ -494,8 +300,54 @@ def gliderWorkflow(search_term: str = None, isNRT: int = 0, skip_check: bool = F
         if dataset_list:
             print(f"\nFound {len(dataset_list)} datasets matching search term '{search_term}'")
             # Process and publish datasets
-            agolPublishList(dataset_list, erddapObj, isNRT, skip_check=skip_check)
+
+            erddapObj.addDatasets_list(dataset_list)
+            datasetObjlist = (erddapObj.datasets)
+            for datasetObj in datasetObjlist:
+                datasetObj.generateUrl()
+                datasetObj.writeErddapData()
+
+            agolObj = aw.AgolWrangler(erddap_obj= erddapObj)
+            agolObj.datasets = erddapObj.datasets
+            agolObj.makeItemProperties()
+            agolObj.pointTableToGeojsonLine()
+            agolObj.postAndPublish()
         else:
             print(f"No datasets found matching search term '{search_term}'")
     else:
         print("No search term provided")
+
+# def NRTUpdateAGOL(skip_check: bool = True) -> None:
+#     #This is hardcoded for GCOOS ERDDAP
+#     erddapObj = ec.erddapGcoos    
+
+#     nrt_dict  = dw.NRTFindAGOL()
+#     for datasetid, itemid in nrt_dict.items():
+#         if datasetid and itemid:
+#             try: 
+#                 startWindow, endWindow = dw.movingWindow(isStr=True)
+#                 das_resp = ec.ERDDAPHandler.getDas(erddapObj, datasetid)
+#                 parsed_response = dc.convertToDict(dc.parseDasResponse(das_resp))
+#                 fp = dc.saveToJson(parsed_response, datasetid)
+#                 das_data = dc.openDasJson(datasetid)
+#                 attribute_list = dc.getActualAttributes(das_data, erddapObj)
+
+#                 setattr(erddapObj, "start_time", startWindow)
+#                 setattr(erddapObj, "end_time", endWindow)
+#                 setattr(erddapObj, "datasetid", datasetid)
+#                 setattr(erddapObj, "attributes", attribute_list)
+
+#                 url = erddapObj.generate_url(False, attribute_list)
+
+#                 gis = aw.agoConnect()
+                
+#                 content = gis.content.get(itemid)
+
+
+#                 OverwriteFS.overwriteFeatureService(content, url, verbose=True, preserveProps=False, ignoreAge = True)
+            
+#             except Exception as e:
+#                     print(f"Error: {e}")
+#                     pass
+
+
