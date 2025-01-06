@@ -52,6 +52,7 @@ def default_add_menu():
     agolObj.makeItemProperties()
     agolObj.postAndPublish()
     print("\nReturning to main menu...")
+    ec.cleanTemp()
     erddapObj.reset()
     cui()
 
@@ -77,6 +78,7 @@ def glider_add_menu():
     agolObj.pointTableToGeojsonLine()
     agolObj.postAndPublish()
     print("\nReturning to main menu...")
+    ec.cleanTemp()
     erddapObj.reset()
     cui()
 
@@ -100,6 +102,7 @@ def nrt_add_menu():
     agolObj.postAndPublish()
     print("\nReturning to main menu...")
     erddapObj.reset()
+    ec.cleanTemp()
     cui()
 
 

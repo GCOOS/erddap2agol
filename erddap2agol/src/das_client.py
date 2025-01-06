@@ -3,6 +3,8 @@ from datetime import datetime, timedelta
 import json
 from collections import OrderedDict
 from . import erddap_wrangler as ec
+from . import data_wrangler as dw
+from typing import Any, List
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
@@ -122,12 +124,14 @@ def displayAttributes(timeintv: int , attributes: list) -> None:
     print(f"\nThere are {timeintv} days worth of records")
     #print(f"\nAttributes: {attributes}")
 
-def getActualAttributes(dataset_id: str) -> list[str]:
+def getActualAttributes(data_Obj: Any) -> List[str]:
     """Load DAS JSON file and extract relevant attributes while filtering out QC variables.
     datasetid (str): The dataset identifier
         
     Returns list[str]: List of valid attribute names or None if error
     """
+    dataset_id = data_Obj.dataset_id
+
     das_conf_dir = getConfDir()
     filepath = os.path.join(das_conf_dir, f'{dataset_id}.json')
     
@@ -142,7 +146,11 @@ def getActualAttributes(dataset_id: str) -> list[str]:
             for var_name, var_attrs in data.items():
                 if not isinstance(var_attrs, dict):
                     continue
-                    
+
+                if var_name not in {"latitude", "longitude"}:
+                    data_Obj.has_error = True
+                    break
+
                 # Skip QC and coordinate variables
                 if ("_qc_" in var_name or 
                     "qartod_" in var_name or 

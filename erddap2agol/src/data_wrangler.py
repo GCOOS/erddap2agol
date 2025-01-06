@@ -88,7 +88,7 @@ class DatasetWrangler:
                 self.nc_global = DAS_Dict["NC_GLOBAL"]
             
             # Get attributes and time range
-            self.attribute_list = dc.getActualAttributes(self.dataset_id)
+            self.attribute_list = dc.getActualAttributes(self)
 
             try:
                 time_range = dc.getTimeFromJson(self.dataset_id)
