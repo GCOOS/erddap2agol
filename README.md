@@ -30,15 +30,12 @@ Erddap2agol can be pip installed into any active ArcGIS Conda Environment, wheth
 
 The following is an example of the code required to access the erddap2agol CUI
 
-(In your terminal) !pip install https://github.com/GCOOS/erddap2agol/archive/refs/heads/main.zip
+(In your terminal) !pip install https://github.com/GCOOS/erddap2agol/archive/refs/heads/main.zip <br /> 
 
-'''python
-{
-import erddap2agol
-from erddap2agol import run 
-run.cui()
-}
-'''
+import erddap2agol <br /> 
+from erddap2agol import run <br /> 
+run.cui() <br /> 
+
 
 ### Getting Started
 Functionality in erddap2agol is divided into two major components, each with their own use requirment:
