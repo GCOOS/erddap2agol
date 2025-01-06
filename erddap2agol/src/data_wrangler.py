@@ -310,7 +310,7 @@ class DatasetWrangler:
 
             while attempts < connection_attempts and not filepath:
                 attempts += 1
-                print(f"Downloading data from {url} (Attempt: {attempts}/{connection_attempts})")
+                print(f"\nDownloading data from {url} (Attempt: {attempts}/{connection_attempts})")
                 filepath = process_url(url)
                 if not filepath:
                     # Sleep or just continue; your choice

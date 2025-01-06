@@ -131,6 +131,8 @@ def getActualAttributes(data_Obj: Any) -> List[str]:
     Returns list[str]: List of valid attribute names or None if error
     """
     dataset_id = data_Obj.dataset_id
+    has_lat = False
+    has_lon = False
 
     das_conf_dir = getConfDir()
     filepath = os.path.join(das_conf_dir, f'{dataset_id}.json')
@@ -147,9 +149,10 @@ def getActualAttributes(data_Obj: Any) -> List[str]:
                 if not isinstance(var_attrs, dict):
                     continue
 
-                if var_name not in {"latitude", "longitude"}:
-                    data_Obj.has_error = True
-                    break
+                if var_name == "latitude":
+                    has_lat = True
+                elif var_name == "longitude":
+                    has_lon = True
 
                 # Skip QC and coordinate variables
                 if ("_qc_" in var_name or 
@@ -167,6 +170,9 @@ def getActualAttributes(data_Obj: Any) -> List[str]:
                 # Include variables with actual_range or single attribute
                 if 'actual_range' in var_attrs or len(var_attrs) == 1:
                     attributes_set.add(var_name)
+            
+            if not (has_lat and has_lon):
+                data_Obj.has_error = True
 
             return list(attributes_set)
             
