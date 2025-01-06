@@ -20,7 +20,7 @@ class UpdateManager:
             self.gis = GIS("home")
             print(
                 f"\nSuccessfully connected to {self.gis.properties.portalName} "
-                f"as {self.gis.users.me.username}."
+                # f"as {self.gis.users.me.username}."
             )
         except Exception as e:
             print(f"UH OH! AGOL connection error: {e}")
@@ -65,7 +65,7 @@ class UpdateManager:
                     "agol_id": item.id
                 }
 
-            print(f"\nFound {len(self.datasets)} datasets to update")
+            print(f"\nFound {len(self.datasets)} NRT datasets")
 
         except Exception as e:
             print(f"An error occurred while searching for items: {e}")

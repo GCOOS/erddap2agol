@@ -230,6 +230,25 @@ def check_dataset_exists(dataset_id: str) -> bool:
         print(f"Error checking dataset existence: {e}")
         return False
 
+def findExistingNRT(manager_obj: um.UpdateManager, dataset_list: list) -> list:
+    """
+    Compare dataset list against existing NRT datasets in AGOL and return non-duplicates.
+    """
+    existing_datasets = set(manager_obj.datasets.keys())
+    
+    new_datasets = set(dataset_list)
+    
+    duplicates = new_datasets.intersection(existing_datasets)
+                
+    new_datasets = list(new_datasets - existing_datasets)
+
+    if new_datasets:
+        print(f"\nFound {len(new_datasets)} new NRT datasets to add:")
+        for dataset_id in duplicates:
+            print(f"- {dataset_id}")
+    
+    return new_datasets
+
 
 ###################################
 ##### Functions for Notebooks #####

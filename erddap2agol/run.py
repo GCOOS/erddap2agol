@@ -1,6 +1,7 @@
 from .src import erddap_wrangler as ec
 from .src import data_wrangler as dw
 from .src import agol_wrangler as aw
+from .src import update_manager as um
 from .src import core
 from .src.core import gliderWorkflow, updateNRT
 from arcgis.gis import GIS
@@ -98,8 +99,17 @@ def nrt_add_menu():
 
     erddapObj = core.erddapSelection(nrtAdd= True)
     dataset_list = core.selectDatasetFromList(erddapObj)
-    
-    erddapObj.addDatasets_list(dataset_list)
+
+    manager_obj = um.UpdateManager()
+    manager_obj.searchContent()
+    dup_removed_list = core.findExistingNRT(manager_obj, dataset_list)
+
+    if len(dup_removed_list) > 0:
+        dataList = dup_removed_list
+    else:
+        dataList = dataset_list 
+
+    erddapObj.addDatasets_list(dataList)
 
     datasetObjlist = (erddapObj.datasets)
 

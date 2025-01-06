@@ -295,7 +295,7 @@ class DatasetWrangler:
                 return None
             except Exception as e:
                 # Catch any other unforeseen errors
-                print(f"Error processing URL: {url} | Exception: {e}")
+                print(f"Error processing URL | Exception: {e}")
                 return None
 
         # ----------------------------------------------------
