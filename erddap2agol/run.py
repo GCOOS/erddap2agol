@@ -2,8 +2,19 @@ from .src import erddap_wrangler as ec
 from .src import data_wrangler as dw
 from .src import agol_wrangler as aw
 from .src import core
+from .src.core import gliderWorkflow, updateNRT
 from arcgis.gis import GIS
 import sys
+
+
+
+#--------------Functions for Notebooks-----------------
+
+def _gliderWorkflow(search_term: str = None):
+    gliderWorkflow(search_term)
+
+def _updateNRT():
+    updateNRT()
 
 #-----------------ERDDAP2AGOL CUI-----------------
 
