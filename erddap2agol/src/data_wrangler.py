@@ -254,7 +254,7 @@ class DatasetWrangler:
     
     # Come back and review this function. This might need some unit tests for bad responses.
     @skipFromError
-    def writeErddapData(self, connection_attempts: int = 3, timeout_time: int = 120) -> str | list[str]:
+    def writeErddapData(self, connection_attempts: int= 3, timeout_time: int= 120) -> str | list[str]:
         """
         Write ERDDAP data to CSV files.
         
@@ -301,7 +301,7 @@ class DatasetWrangler:
         # ----------------------------------------------------
         # Individual file download (no subsets)
         if not self.needs_Subset:
-            print(f"\nDownloading data for {self.dataset_id}")
+            #print(f"\nDownloading data for {self.dataset_id}")
 
             # Track how many attempts we’ve made on this single URL
             url = self.url_s[0]
@@ -310,7 +310,7 @@ class DatasetWrangler:
 
             while attempts < connection_attempts and not filepath:
                 attempts += 1
-                print(f"Attempt {attempts}/{connection_attempts} for {url}")
+                print(f"Downloading data from {url} (Attempt: {attempts}/{connection_attempts})")
                 filepath = process_url(url)
                 if not filepath:
                     # Sleep or just continue; your choice
@@ -345,8 +345,8 @@ class DatasetWrangler:
                 
                 print(
                     f"Downloading subset {subset_index}/{len(self.url_s)} "
-                    f"(Attempt {attempt_num}/{connection_attempts}) "
                     f"({self.dataset_id})"
+                    f"(Attempt: {attempt_num}/{connection_attempts}) "
                 )
                 
                 filepath = process_url(url, subset_num=subset_index)

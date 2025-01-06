@@ -6,7 +6,7 @@ from . import data_wrangler as dw
 from . import update_manager as um
 from erddap2agol import run
 from src.utils import OverwriteFS
-
+from IPython.display import clear_output
 from arcgis.gis import GIS
 
 ###################################
@@ -120,6 +120,7 @@ def selectDatasetFromList(erddapObj, dispLength=75) -> list:
     def clearScreen():
         import os
         os.system('cls' if os.name == 'nt' else 'clear')
+        clear_output()
     
     while True:
         clearScreen()
