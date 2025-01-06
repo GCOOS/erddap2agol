@@ -24,6 +24,30 @@ This tool was principally designed for data managers who wish to expand the util
 - Build AGOL environment locally. <br /> 
 
 
+## Getting Started & Installation Options
+### Installation Options
+Erddap2agol can be pip installed into any active ArcGIS Conda Environment, whether that be on your desktop with an ArcGIS Python interpreter, or in an ArcGIS Online Hosted Notebook. </br>
+
+The following is an example of the code required to access the erddap2agol CUI
+
+(In your terminal) !pip install https://github.com/GCOOS/erddap2agol/archive/refs/heads/main.zip
+
+'''python
+{
+import erddap2agol
+from erddap2agol import run 
+run.cui()
+}
+'''
+
+### Getting Started
+Functionality in erddap2agol is divided into two major components, each with their own use requirment:
+1. **Command-Line User Interface (CUI)**
+- To access the CUI, follow the instructions from instillation options. </br> 
+2. **Standalone Notebook functions** (e.g., `_updateNRT`)
+- The underscore functions within the run module indicate functions that are to be used in AGOL hosted notebooks. To deploy these capabilities, simply follow the pip install/import process outlined above, then schedule the notebook to run at your desired interval. </br>
+
+
 ## Core Modules
 
 ### erddap_wrangler.py
