@@ -254,7 +254,7 @@ def findExistingNRT(manager_obj: um.UpdateManager, dataset_list: list) -> list:
 ###################################
 ##### Functions for Notebooks #####
 ###################################
-def ofsWorkerFunc(agol_id, url, verbose, preserveProps, ignoreAge):
+def ofsWorkerFunc(agol_id, url, verbose, preserveProps, ignoreAge, noProps):
         """
         Worker function that runs OFS a separate process.
         """
@@ -267,7 +267,8 @@ def ofsWorkerFunc(agol_id, url, verbose, preserveProps, ignoreAge):
             url,
             verbose=verbose,
             preserveProps=preserveProps,
-            ignoreAge=ignoreAge
+            ignoreAge=ignoreAge,
+            noProps=noProps
         )
         end = time.time()
         return end - start
@@ -276,6 +277,7 @@ def updateNRT(
     verbose_opt: bool = True,
     preserveProps_opt: bool = True,
     ignoreAge_opt: bool = True,
+    noProps_opt: bool = False,
     timeoutTime: int = 300,
     max_workers: int = 4 ) -> None:
     """
@@ -316,7 +318,8 @@ def updateNRT(
                 datasetObj.url_s[0],
                 verbose_opt,
                 preserveProps_opt,
-                ignoreAge_opt
+                ignoreAge_opt,
+                noProps_opt
             )
             futures[future] = datasetid
             start_times[future] = s_time

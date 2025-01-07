@@ -11,11 +11,11 @@ import sys
 #--------------Functions for Notebooks-----------------
 
 def _updateNRT(verbose_opt: bool = True, preserveProps_opt: bool=True, 
-               ignoreAge_opt: bool=True, timeout_Time = 300, max_workers: int = 4) -> None:
+               ignoreAge_opt: bool=True, noProps_opt: bool=False, timeout_Time = 300, max_workers: int = 4) -> None:
     """verbose_opt: bool = True, preserveProps_opt: bool=True, ignoreAge_opt: bool=True, timeoutTime = 300
     Searches your ArcGIS Online account for datasets with the NRT tags, then runs the 
     typical NRT post, but passes a URL providing OFS with the destination data"""
-    updateNRT(verbose_opt, preserveProps_opt, ignoreAge_opt, timeout_Time, max_workers)
+    updateNRT(verbose_opt, preserveProps_opt, ignoreAge_opt, noProps_opt, timeout_Time, max_workers)
 
 
 def _gliderWorkflow(search_term: str = None) -> None:
