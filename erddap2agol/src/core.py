@@ -1,5 +1,5 @@
 # Warning: Abstraction ahead
-import sys, os, concurrent.futures
+import sys, os, concurrent.futures, time
 from . import erddap_wrangler as ec
 from . import agol_wrangler as aw
 from . import data_wrangler as dw
@@ -8,6 +8,7 @@ from erddap2agol import run
 from src.utils import OverwriteFS
 from IPython.display import clear_output
 from arcgis.gis import GIS
+
 
 ###################################
 ###### CUI Wrapper Functions ######
@@ -253,51 +254,100 @@ def findExistingNRT(manager_obj: um.UpdateManager, dataset_list: list) -> list:
 ###################################
 ##### Functions for Notebooks #####
 ###################################
+def ofsWorkerFunc(agol_id, url, verbose, preserveProps, ignoreAge):
+        """
+        Worker function that runs OFS a separate process.
+        """
+        # get item content
+        start = time.time()
+        gis = GIS("Home")
+        item_content = gis.content.get(agol_id)
+        OverwriteFS.overwriteFeatureService(
+            item_content,      
+            url,
+            verbose=verbose,
+            preserveProps=preserveProps,
+            ignoreAge=ignoreAge
+        )
+        end = time.time()
+        return end - start
 
-# Basic integration of the update function now.  
-def updateNRT(timeoutTime = 300) -> None:
-    """Searches your ArcGIS Online account for datasets with the NRT tags, then runs the 
-        typical NRT post, but passes a URL providing OFS with the destination data"""
+def updateNRT(
+    verbose_opt: bool = True,
+    preserveProps_opt: bool = True,
+    ignoreAge_opt: bool = True,
+    timeoutTime: int = 300,
+    max_workers: int = 4 ) -> None:
+    """
+    Searches your ArcGIS Online account for datasets with the NRT tags, then
+    overwrites them in parallel using a single ProcessPoolExecutor.
+    """
     update_manager = um.UpdateManager()
     gis = update_manager.gis
     update_manager.searchContent()
-    dataset_list = []
 
-    for datasetid, info in update_manager.datasets.items():
-        serverurl = info.get('base_url')
-        # print(serverurl)
-        datasetObj = dw.DatasetWrangler(
-            dataset_id= datasetid,
-            server= serverurl,
-            is_nrt= True
-        )
-        datasetObj.generateUrl()
-        agol_id = info.get('agol_id')
+    # Grab all datasets at once
+    items = list(update_manager.datasets.items())  # Key = datasetid, Value = info
 
-        content_item = gis.content.get(agol_id) 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-            future = executor.submit(OverwriteFS.overwriteFeatureService,
-                                     content_item, 
-                                     datasetObj.url_s[0], 
-                                     verbose=True, 
-                                     preserveProps=True, 
-                                     ignoreAge = True
-                                     )
-        try:
-            future.result(timeout=timeoutTime)
+    futures = {}
+    start_times = {}
+    start_all = time.time()
 
-        except concurrent.futures.TimeoutError:
-            print(f"Timed out overwriting {datasetid} after 300 seconds.")
-            # pop from queue and put at end
-            pop = update_manager.datasets.pop(datasetid, None)
-            if pop:
-                update_manager.datasets[datasetid] = pop
-            continue
 
-        except Exception as e:
-            raise e
+    # --------------------------------------------------------------
+    # 1) Create ONE ProcessPoolExecutor outside the loop
+    # --------------------------------------------------------------
+    with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
 
-    
+        # ----------------------------------------------------------
+        # 2) Submit each dataset as a separate task
+        # ----------------------------------------------------------
+        for datasetid, info in items:
+            serverurl = info.get('base_url')
+            datasetObj = dw.DatasetWrangler(dataset_id=datasetid, server=serverurl, is_nrt=True)
+            datasetObj.generateUrl()  # sets datasetObj.url_s
+
+            agol_id = info.get('agol_id')
+
+            s_time = time.time()
+            future = executor.submit(
+                ofsWorkerFunc,
+                agol_id,
+                datasetObj.url_s[0],
+                verbose_opt,
+                preserveProps_opt,
+                ignoreAge_opt
+            )
+            futures[future] = datasetid
+            start_times[future] = s_time
+        # ----------------------------------------------------------
+        # 3) Collect results as they complete or fail
+        # ----------------------------------------------------------
+        for future in concurrent.futures.as_completed(futures):
+            datasetid = futures[future]
+            dataset_start = start_times[future]
+            dataset_end = time.time()
+            dataset_time = dataset_end - dataset_start
+            try:
+                duration = future.result(timeout=timeoutTime)
+                print(f"Dataset {datasetid} completed in {duration:.2f} seconds (worker time).")
+
+
+            except concurrent.futures.TimeoutError:
+                print(f"Timed out overwriting {datasetid} after {timeoutTime} seconds.")
+                # Re-append dataset to the end if needed
+                popped_info = update_manager.datasets.pop(datasetid, None)
+                if popped_info:
+                    update_manager.datasets[datasetid] = popped_info
+
+            except Exception as ex:
+                print(f"Error overwriting {datasetid}: {ex}")
+                # Depending on your needs, you might pop from update_manager.datasets
+                # or re-try, etc.
+
+    total_time = time.time() - start_all
+    print(f"All tasks completed in {total_time:.2f} seconds.")
+
 
 def gliderWorkflow(search_term: str = None) -> None:
     """
@@ -352,3 +402,44 @@ def gliderWorkflow(search_term: str = None) -> None:
         print("No search term provided")
 
 
+# def updateNRT(timeoutTime = 300) -> None:
+#     """Searches your ArcGIS Online account for datasets with the NRT tags, then runs the 
+#         typical NRT post, but passes a URL providing OFS with the destination data"""
+#     update_manager = um.UpdateManager()
+#     gis = update_manager.gis
+#     update_manager.searchContent()
+#     dataset_list = []
+
+#     for datasetid, info in update_manager.datasets.items():
+#         serverurl = info.get('base_url')
+#         # print(serverurl)
+#         datasetObj = dw.DatasetWrangler(
+#             dataset_id= datasetid,
+#             server= serverurl,
+#             is_nrt= True
+#         )
+#         datasetObj.generateUrl()
+#         agol_id = info.get('agol_id')
+
+#         content_item = gis.content.get(agol_id) 
+#         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+#             future = executor.submit(OverwriteFS.overwriteFeatureService,
+#                                      content_item, 
+#                                      datasetObj.url_s[0], 
+#                                      verbose=True, 
+#                                      preserveProps=True, 
+#                                      ignoreAge = True
+#                                      )
+#         try:
+#             future.result(timeout=timeoutTime)
+
+#         except concurrent.futures.TimeoutError:
+#             print(f"Timed out overwriting {datasetid} after 300 seconds.")
+#             # pop from queue and put at end
+#             pop = update_manager.datasets.pop(datasetid, None)
+#             if pop:
+#                 update_manager.datasets[datasetid] = pop
+#             continue
+
+#         except Exception as e:
+#             raise e

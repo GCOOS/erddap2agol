@@ -8,14 +8,26 @@ from arcgis.gis import GIS
 import sys
 
 
-
 #--------------Functions for Notebooks-----------------
 
-def _gliderWorkflow(search_term: str = None):
+def _updateNRT(verbose_opt: bool = True, preserveProps_opt: bool=True, 
+               ignoreAge_opt: bool=True, timeout_Time = 300, max_workers: int = 4) -> None:
+    """verbose_opt: bool = True, preserveProps_opt: bool=True, ignoreAge_opt: bool=True, timeoutTime = 300
+    Searches your ArcGIS Online account for datasets with the NRT tags, then runs the 
+    typical NRT post, but passes a URL providing OFS with the destination data"""
+    updateNRT(verbose_opt, preserveProps_opt, ignoreAge_opt, timeout_Time, max_workers)
+
+
+def _gliderWorkflow(search_term: str = None) -> None:
+    """
+    Automates the workflow for glider data:
+    Args:
+        search_term (str, optional): Term to search for in dataset names. Defaults to None.
+        isNRT (int, optional): Whether to treat as near-real-time data. Defaults to 0.
+        skip_check (bool, optional): Whether to skip the dataset existence check. Defaults to False.
+        """
     gliderWorkflow(search_term)
 
-def _updateNRT():
-    updateNRT()
 
 #-----------------ERDDAP2AGOL CUI-----------------
 

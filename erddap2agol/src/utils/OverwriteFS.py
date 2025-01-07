@@ -1741,7 +1741,9 @@ Or
 
     return outcome
 
-def overwriteFeatureService( item, updateFile=None, touchItems=True, verbose=None, touchTimeSeries=True, outcome=None, ignoreItems=[], serviceLastModified=0, noIndexes=False, preserveProps=True, noWait=False, noProps=False, converter=None, outPath="", dryRun=False, ignoreAge=False):
+def overwriteFeatureService( item, updateFile=None, touchItems=True, verbose=None, touchTimeSeries=True, outcome=None, ignoreItems=[], 
+                            serviceLastModified=0, noIndexes=False, preserveProps=True, noWait=False, noProps=False, converter=None, 
+                            outPath="", dryRun=False, ignoreAge=False):
     """Function: overwriteFeatureService( <item>[, <updateFile>[, <touchItems>[, <verbose>[, <touchTimeSeries>[, <outcome>[, <ignoreItems>[, <serviceLastModified>[, <preserveProps>[, <noWait>[, <noProps>[, <converter>[, <outPath>[, <dryRun>[, <ignoreAge>]]]]]]]]]]]]]])
 
     Overwrites an Existing Feature Service with new Data matching Schema of data used during initial Publication.

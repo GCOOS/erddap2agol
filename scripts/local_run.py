@@ -15,7 +15,8 @@ from erddap2agol.src import update_manager as um
 
 
 def main():
-    run.cui()
+    # run.cui()
+    run._updateNRT(verbose_opt=True, timeoutTime=180)
     
 
 if __name__ == "__main__":
