@@ -48,9 +48,10 @@ class UpdateManager:
                 print(f"No items found with tags {tags} for the logged-in user.")
                 return
 
-            # Populate self.datasets dict
+            # Populate self.datasets dict from attributes of the content item
             for item in search_results:
-                dataset_id = item.title
+                # e2a items should always retain the data id, whatever comes after that can be customized
+                dataset_id = item.title.split(" ")[0] if ' ' in item.title else item.title
                 base_url = None
 
                 # Check tags for one starting with https://
