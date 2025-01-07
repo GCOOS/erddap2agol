@@ -265,7 +265,7 @@ def updateNRT() -> None:
 
     for datasetid, info in update_manager.datasets.items():
         serverurl = info.get('base_url')
-        print(serverurl)
+        # print(serverurl)
         datasetObj = dw.DatasetWrangler(
             dataset_id= datasetid,
             server= serverurl,
@@ -278,7 +278,7 @@ def updateNRT() -> None:
         content_item = gis.content.get(agol_id) 
 
         try:
-            OverwriteFS.overwriteFeatureService(content_item, datasetObj.url_s[0], verbose=True, preserveProps=False, ignoreAge = True)
+            OverwriteFS.overwriteFeatureService(content_item, datasetObj.url_s[0], verbose=True, preserveProps=True, ignoreAge = True)
         except Exception as e:
             raise e
 
