@@ -1,5 +1,5 @@
 # Warning: Abstraction ahead
-import sys, os
+import sys, os, concurrent.futures
 from . import erddap_wrangler as ec
 from . import agol_wrangler as aw
 from . import data_wrangler as dw
@@ -255,7 +255,7 @@ def findExistingNRT(manager_obj: um.UpdateManager, dataset_list: list) -> list:
 ###################################
 
 # Basic integration of the update function now.  
-def updateNRT() -> None:
+def updateNRT(timeoutTime = 300) -> None:
     """Searches your ArcGIS Online account for datasets with the NRT tags, then runs the 
         typical NRT post, but passes a URL providing OFS with the destination data"""
     update_manager = um.UpdateManager()
@@ -271,14 +271,29 @@ def updateNRT() -> None:
             server= serverurl,
             is_nrt= True
         )
-
         datasetObj.generateUrl()
-
         agol_id = info.get('agol_id')
-        content_item = gis.content.get(agol_id) 
 
+        content_item = gis.content.get(agol_id) 
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(OverwriteFS.overwriteFeatureService,
+                                     content_item, 
+                                     datasetObj.url_s[0], 
+                                     verbose=True, 
+                                     preserveProps=True, 
+                                     ignoreAge = True
+                                     )
         try:
-            OverwriteFS.overwriteFeatureService(content_item, datasetObj.url_s[0], verbose=True, preserveProps=True, ignoreAge = True)
+            future.result(timeout=timeoutTime)
+
+        except concurrent.futures.TimeoutError:
+            print(f"Timed out overwriting {datasetid} after 300 seconds.")
+            # pop from queue and put at end
+            pop = update_manager.datasets.pop(datasetid, None)
+            if pop:
+                update_manager.datasets[datasetid] = pop
+            continue
+
         except Exception as e:
             raise e
 
@@ -335,38 +350,5 @@ def gliderWorkflow(search_term: str = None) -> None:
             print(f"No datasets found matching search term '{search_term}'")
     else:
         print("No search term provided")
-
-# def NRTUpdateAGOL(skip_check: bool = True) -> None:
-#     #This is hardcoded for GCOOS ERDDAP
-#     erddapObj = ec.erddapGcoos    
-
-#     nrt_dict  = dw.NRTFindAGOL()
-#     for datasetid, itemid in nrt_dict.items():
-#         if datasetid and itemid:
-#             try: 
-#                 startWindow, endWindow = dw.movingWindow(isStr=True)
-#                 das_resp = ec.ERDDAPHandler.getDas(erddapObj, datasetid)
-#                 parsed_response = dc.convertToDict(dc.parseDasResponse(das_resp))
-#                 fp = dc.saveToJson(parsed_response, datasetid)
-#                 das_data = dc.openDasJson(datasetid)
-#                 attribute_list = dc.getActualAttributes(das_data, erddapObj)
-
-#                 setattr(erddapObj, "start_time", startWindow)
-#                 setattr(erddapObj, "end_time", endWindow)
-#                 setattr(erddapObj, "datasetid", datasetid)
-#                 setattr(erddapObj, "attributes", attribute_list)
-
-#                 url = erddapObj.generate_url(False, attribute_list)
-
-#                 gis = aw.agoConnect()
-                
-#                 content = gis.content.get(itemid)
-
-
-#                 OverwriteFS.overwriteFeatureService(content, url, verbose=True, preserveProps=False, ignoreAge = True)
-            
-#             except Exception as e:
-#                     print(f"Error: {e}")
-#                     pass
 
 
