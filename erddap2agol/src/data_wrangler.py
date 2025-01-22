@@ -90,11 +90,11 @@ class DatasetWrangler:
             # Get attributes and time range
             self.attribute_list = dc.getActualAttributes(self)
 
-            try:
-                time_range = dc.getTimeFromJson(self.dataset_id)
-                if time_range:
-                    self.start_time, self.end_time = time_range
-            except Exception as e:
+            
+            time_range = dc.getTimeFromJson(self.dataset_id)
+            if time_range:
+                self.start_time, self.end_time = time_range
+            else:
                 self.has_error = True
                 pass
 
@@ -147,7 +147,7 @@ class DatasetWrangler:
             
         return None
     
-    def needsSubsetting(self, record_limit = 50000) -> bool:
+    def needsSubsetting(self, record_limit = 49999) -> bool:
         """Check if dataset needs to be split into chunks"""
         if self.row_count is not None:
             #bypass for glider datasets
@@ -156,9 +156,9 @@ class DatasetWrangler:
                 print(f"\nUh oh! {self.dataset_id} is too big ({self.row_count} records) and needs to be chunked!")
             else:
                 self.needs_Subset = False
-
+    #This might be cutting off the last handful of records
     @skipFromError
-    def calculateTimeSubset(self, record_limit = 50000) -> dict:
+    def calculateTimeSubset(self, chunk_size = 49999) -> dict:
         """Calculate time subsets based on row count.
             Method applies if self.needs_Subset is True """
         if not self.needs_Subset:
@@ -171,7 +171,7 @@ class DatasetWrangler:
 
             # Calculate exact chunks needed
             total_records = self.row_count
-            records_per_chunk = record_limit
+            records_per_chunk = chunk_size
             chunks_needed = math.ceil(total_records / records_per_chunk)
             
             # Calculate time per chunk

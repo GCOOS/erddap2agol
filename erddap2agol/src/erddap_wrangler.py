@@ -3,6 +3,8 @@ from datetime import datetime, timedelta
 from io import StringIO
 import tempfile
 from . import data_wrangler as dw
+from erddap2agol import run
+
 
 #--------------------------------------------------------------------------------
 
@@ -182,8 +184,8 @@ class ERDDAPHandler:
             data = json.load(f)
         
         if erddapIndex > len(data) or erddapIndex < 1:
-            print(f"Please select a number between 1 and {len(data)}.")
-            return None
+            print(f"\nOf the {len(data)} options, input:{erddapIndex} was not one of them.")
+            run.cui()            
         else:
             erddap_dict = data[erddapIndex - 1]
             print(f"\nSelected ERDDAP Server: {erddap_dict['name']}")
