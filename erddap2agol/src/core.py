@@ -54,7 +54,7 @@ def erddapSelection(GliderServ = False, nrtAdd = False) -> ec.ERDDAPHandler:
                     return erddapObj
             else:
                 print("\nReturning to main menu...")
-                return None
+                run.cui()
         else:
             print("\nInput cannot be none")
             return None

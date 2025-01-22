@@ -313,12 +313,19 @@ class AgolWrangler:
 
             try:
                 gis = self.gis
-
+                user_root = gis.content.folders.get()
                 if dataset.needs_Subset:
                 # -------------Subset file scenario-------------
+                # -------------First file-------------
                     first_path = paths[0]
                     print(f"\nAdding first subset item for {dataset.dataset_id} to AGOL...")
-                    item = gis.content.add(item_properties=item_prop, data=first_path, HasGeometry=True)
+                    try:
+                        item_future = user_root.add(item_properties=item_prop, file=first_path)
+                        item = item_future.result()
+                    except Exception as e:
+                        print(f"Unfortunately adding the first subset failed: {e}")
+                        dataset.has_error = True
+                        break
 
                     # Publish
                     print(f"\nPublishing item for {dataset.dataset_id}...")
@@ -330,11 +337,13 @@ class AgolWrangler:
                     
                     adjustSharingAndCapabilities(published_item)
 
-                    # Append subsequent subsets
+                    # -------------Append Subsets-------------
                     if published_item.layers:
                         feature_layer = published_item.layers[0]
+                        subset_idx = 1
                         for subset_path in paths[1:]:
-                            subset_item = gis.content.add({}, data=subset_path, HasGeometry=True)
+                            subset_item_future = user_root.add(item_properties=item_prop, file=subset_path)
+                            subset_item = subset_item_future.result()
                             analyze_params = gis.content.analyze(item=subset_item.id)
                             append_success = feature_layer.append(
                                 item_id=subset_item.id,
@@ -344,21 +353,28 @@ class AgolWrangler:
                                 upsert=False
                             )
                             if append_success:
-                                print(f"Appended {subset_item.title} to {published_item.title}")
+                                subset_idx + 1
+                                print(f"Appended Subset {subset_idx} of {(len(paths))-1} to {published_item.title}")
                             else:
-                                print(f"\nFailed to append {subset_item.title}")
+                                print(f"\nFailed to append subset # {subset_idx} to {published_item.title}")
                             subset_item.delete(permanent=True)
-                # -------------Subset file scenario-------------
+                # -------------End Subset file scenario-------------
 
                 else:
                     #--------Single file scenario--------------
                     #path = paths if isinstance(paths, str) else paths[0]
                     path = dataset.data_filepath
                     print(f"\nAdding item for {dataset.dataset_id} to AGOL...")
-                    item = gis.content.add(item_properties=item_prop, data=path, HasGeometry=True)
+                    try:
+                        item_future = user_root.add(item_properties=item_prop, file=path)
+                        item = item_future.result()
+                    except Exception as e:
+                        print(f"Unfortunately adding the first subset failed: {e}")
+                        dataset.has_error = True
+                        pass
                     # Publish
-                    print(f"\nPublishing item for {dataset.dataset_id}...")
 
+                    print(f"\nPublishing item for {dataset.dataset_id}...")
                     # set worker to keep track of time for publish.
                     with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
                         future = executor.submit(item.publish, publish_parameters=geom_params, file_type=inputDataType)
@@ -382,9 +398,12 @@ class AgolWrangler:
         # After all datasets processed, print total time
         total_end_time = time.time()
         total_time = total_end_time - total_start_time
-        print("\nAll done!")
-        print(f"Processing completed for {processed_count} datasets")
-        print(f"Total processing time: {total_time:.2f} seconds")
+        if processed_count == 0:
+            print("\n 0 datasets processed")
+        else:
+            print("\nAll done!")
+            print(f"Processing completed for {processed_count} datasets")
+            print(f"Total processing time: {total_time:.2f} seconds")
         
 
 
