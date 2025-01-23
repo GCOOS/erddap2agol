@@ -71,14 +71,20 @@ def selectDatasetFromList(erddapObj, dispLength=75) -> list:
     def _updateDatasetList(erddapObj, search_term=None):
         original_info = erddapObj.serverInfo
         base_url = original_info.split('/erddap/')[0] + '/erddap'
-        
+      
         if erddapObj.is_nrt is True:
+            if search_term:
+                search_url = (
+                    f"{base_url}/search/advanced.json?"
+                    f"searchFor={search_term}"
+                    f"&page=1&itemsPerPage=10000000&minTime=now-7days&maxTime=&protocol=tabledap" #hardcoded to 7 days
+                )
+            else:
+                search_url = (
+                    f"{base_url}/search/advanced.json?"                
+                    f"page=1&itemsPerPage=10000000&minTime=now-7days&maxTime=&protocol=tabledap"
+                )
             
-            search_url = (
-                f"{base_url}/search/advanced.json?"
-                f"page=1&itemsPerPage=10000000&minTime=now-7days&maxTime=&protocol=tabledap"
-            )
-
             # print(f"\nSEARCH URL: {search_url}")
             erddapObj.serverInfo = search_url
             dataset_id_list = erddapObj.getDatasetIDList()
@@ -138,7 +144,7 @@ def selectDatasetFromList(erddapObj, dispLength=75) -> list:
             print(f"{start_index + index + 1}. {dataset}")
 
         print("\nEnter the number(s) of the dataset(s) you want to select")
-        print("Commands: 'next', 'back', 'addAll', 'addPage', 'done', 'exit', or 'search:keyword'")
+        print("Commands: 'next', 'back', 'addAll', 'addPage', 'done', 'exit', or 'search:keyword1+keyword2'")
         idx_select = input(": ")
         
         if idx_select.startswith('search:'):
@@ -239,7 +245,7 @@ def findExistingNRT(manager_obj: um.UpdateManager, dataset_list: list) -> list:
     
     new_datasets = set(dataset_list)
     
-    duplicates = new_datasets.intersection(existing_datasets)
+    #duplicates = new_datasets.intersection(existing_datasets)
                 
     new_datasets = list(new_datasets - existing_datasets)
 

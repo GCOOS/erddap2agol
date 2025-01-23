@@ -112,16 +112,16 @@ def nrt_add_menu():
     erddapObj = core.erddapSelection(nrtAdd= True)
     dataset_list = core.selectDatasetFromList(erddapObj)
 
-    manager_obj = um.UpdateManager()
-    manager_obj.searchContent()
-    dup_removed_list = core.findExistingNRT(manager_obj, dataset_list)
+    #manager_obj = um.UpdateManager()
+    #manager_obj.searchContent()
+    # dup_removed_list = core.findExistingNRT(manager_obj, dataset_list)
 
-    if len(dup_removed_list) > 0:
-        dataList = dup_removed_list
-    else:
-        dataList = dataset_list 
+    # if len(dup_removed_list) > 0:
+    #     dataList = dup_removed_list
+    # else:
+    #     dataList = dataset_list 
 
-    erddapObj.addDatasets_list(dataList)
+    erddapObj.addDatasets_list(dataset_list)
 
     datasetObjlist = (erddapObj.datasets)
 
