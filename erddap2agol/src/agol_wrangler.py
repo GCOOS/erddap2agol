@@ -1,4 +1,4 @@
-from arcgis.gis import GIS
+from arcgis.gis import GIS, ItemProperties
 from arcgis.features import FeatureLayer, FeatureLayerCollection
 from arcgis.gis._impl._content_manager import SharingLevel
 from . import data_wrangler as dw
@@ -206,57 +206,20 @@ class AgolWrangler:
                 else:
                     sys.exit()
 
-    #-------- Come back to the below function to figure out the multiprocessing stuff
-
-    # def pointTableToGeojsonLine(self, X="longitude (degrees_east)", Y="latitude (degrees_north)") -> dict:
-    #     """For converting standard ERDDAP csvp into geojson"""
-    #     def chunkCsv(df_chunk, X, Y, data_columns):
-    #         """Chunk csv into kv dict for multproc"""
-    #         df_chunk = df_chunk.dropna(subset=[X, Y]).replace({np.nan: None})
-    #         features = []
-    #         for i in range(len(df_chunk) - 1):
-    #             point_start = [df_chunk.iloc[i][X], df_chunk.iloc[i][Y]]
-    #             point_end = [df_chunk.iloc[i+1][X], df_chunk.iloc[i+1][Y]]
-    #             if None in point_start or None in point_end:
-    #                 continue
-    #             props = df_chunk.iloc[i+1][data_columns].to_dict()
-    #             feature = {
-    #                 "type": "Feature",
-    #                 "geometry": {"type": "LineString", "coordinates": [point_start, point_end]},
-    #                 "properties": props
-    #             }
-    #             features.append(feature)
-    #         return features
-        
-    #     for dataset in self.datasets:
-    #         if dataset.is_glider:
-    #             filepath = dataset.data_filepath
-    #             if filepath:
-    #                 chunksize = 10000  # adjust as needed
-    #                 futures = []
-    #                 data_columns = None
-    #                 with concurrent.futures.ProcessPoolExecutor() as executor:
-    #                     for df_chunk in pd.read_csv(filepath, chunksize=chunksize):
-    #                         if data_columns is None:
-    #                             data_columns = [col for col in df_chunk.columns if col not in [X, Y]]
-    #                         futures.append(executor.submit(chunkCsv, df_chunk, X, Y, data_columns))
-                    
-    #                 features = []
-    #                 for f in concurrent.futures.as_completed(futures):
-    #                     features.extend(f.result())
-
-    #                 geojson = {"type": "FeatureCollection", "features": features}
-                    
-    #                 savedir = ec.getTempDir()
-    #                 filename = dataset.dataset_id + "_line.geojson"
-    #                 savepath = os.path.join(savedir, filename)
-    #                 with open(savepath, "w") as f:
-    #                     json.dump(geojson, f)
-    #                 print(f"\nGeoJSON conversion complete @ {savepath}.")
-    #                 setattr(dataset, "data_filepath", savepath)
-
-    #             else:
-    #                 sys.exit()
+    def mapItemProperties(self, dataset_id) -> ItemProperties:
+        """
+        Maps the self.item_properties dict to an arcgis.gis.ItemProperties instance. 
+        """
+        props = self.item_properties.get(dataset_id, {})
+        return ItemProperties(
+            title=props.get("title", ""),
+            item_type=props.get("type", ""),
+            snippet=props.get("snippet", ""),
+            description=props.get("description", ""),
+            tags=props.get("tags", []),
+            access_information=props.get("accessInformation", ""),
+            license_info=props.get("licenseInfo", "")
+        )
 
     @skipFromError
     def postAndPublish(self, inputDataType="csv", timeoutTime=300) -> None:
@@ -320,7 +283,7 @@ class AgolWrangler:
                     first_path = paths[0]
                     print(f"\nAdding first subset item for {dataset.dataset_id} to AGOL...")
                     try:
-                        item_future = user_root.add(item_properties=item_prop, file=first_path)
+                        item_future = user_root.add(item_properties=self.mapItemProperties(dataset_id=dataset.dataset_id), file=first_path)
                         item = item_future.result()
                     except Exception as e:
                         print(f"Unfortunately adding the first subset failed: {e}")
@@ -342,7 +305,7 @@ class AgolWrangler:
                         feature_layer = published_item.layers[0]
                         subset_idx = 1
                         for subset_path in paths[1:]:
-                            subset_item_future = user_root.add(item_properties=item_prop, file=subset_path)
+                            subset_item_future = user_root.add(item_properties=self.mapItemProperties(dataset_id=dataset.dataset_id), file=subset_path)
                             subset_item = subset_item_future.result()
                             analyze_params = gis.content.analyze(item=subset_item.id)
                             append_success = feature_layer.append(
@@ -366,7 +329,7 @@ class AgolWrangler:
                     path = dataset.data_filepath
                     print(f"\nAdding item for {dataset.dataset_id} to AGOL...")
                     try:
-                        item_future = user_root.add(item_properties=item_prop, file=path)
+                        item_future = user_root.add(item_properties=self.mapItemProperties(dataset_id=dataset.dataset_id), file=path)
                         item = item_future.result()
                     except Exception as e:
                         print(f"Unfortunately adding the first subset failed: {e}")

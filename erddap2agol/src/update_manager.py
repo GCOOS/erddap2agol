@@ -46,7 +46,7 @@ class UpdateManager:
 
             if not search_results:
                 print(f"No items found with tags {tags} for the logged-in user.")
-                return
+                pass
 
             # Populate self.datasets dict from attributes of the content item
             for item in search_results:
@@ -55,11 +55,10 @@ class UpdateManager:
                 base_url = None
 
                 # Check tags for one starting with https://
-                for t in item.tags:
-                    if t.lower().startswith("https://"):
-                        base_url = t
-                        break
-
+                for tagz in item.tags:
+                    if tagz.lower().startswith("https://"):
+                        base_url = tagz
+                
                 # Store the info by dataset_id
                 self.datasets[dataset_id] = {
                     "base_url": base_url,
