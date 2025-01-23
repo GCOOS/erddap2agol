@@ -244,11 +244,12 @@ def findExistingNRT(manager_obj: um.UpdateManager, dataset_list: list) -> list:
     new_datasets = list(new_datasets - existing_datasets)
 
     if new_datasets:
-        print(f"\nFound {len(new_datasets)} new NRT datasets to add:")
-        for dataset_id in duplicates:
-            print(f"- {dataset_id}")
-    
-    return new_datasets
+        # print(f"\nFound {len(new_datasets)} new NRT datasets to add:")
+        # for dataset_id in duplicates:
+        #     print(f"- {dataset_id}")
+        return new_datasets
+    else:
+        return None
 
 
 ###################################
