@@ -101,6 +101,7 @@ class ERDDAPHandler:
         self.fileType = fileType
         self.geoParams = geoParams
         self.datasets = []
+        self.datasetTitles = {}
         self.is_nrt = False
         self.moving_window_days = 7
         self._availData = None
@@ -195,32 +196,51 @@ class ERDDAPHandler:
         """Allow index access to datasets"""
         return self.datasets[index]
     
-    # def get_unprocessed(self) -> List[dw.DatasetWrangler]:
-    #         return [d for d in self.datasets if not d.is_processed]
-    
-    # come back to this to add title to the fetch
+  
     def getDatasetIDList(self) -> list:
-        """Fetches a list of dataset IDs from the ERDDAP server.
-           spits out list of dataset IDs"""
+        """Fetches a list of dataset IDs and titles from the ERDDAP server.
+           spits out list of dataset IDs and {datasetid, title} dictionary"""
+        
+        # serverInfo requests a json
         url = f"{self.serverInfo}"
         try:
             response = requests.get(url)
+            response.raise_for_status()
             data = response.json()
-            
-            if not data.get('table') or 'columnNames' not in data['table']:
+
+            if not data.get("table") or "columnNames" not in data["table"]:
                 print(f"Invalid response format from {url}")
                 return []
 
-            column_names = data['table']['columnNames']
-            dataset_id_index = column_names.index("Dataset ID") if "Dataset ID" in column_names else None
-            
-            if dataset_id_index is None:
-                print("Dataset ID column not found in response")
+            col_names = data["table"]["columnNames"]
+            rows = data["table"]["rows"]
+
+            # Find the index of "Dataset ID"
+            try:
+                datasetid_idx = col_names.index("Dataset ID")
+            except ValueError:
+                print("No 'Dataset ID' column found in server response.")
                 return []
 
-            rows = data['table']['rows']
-            dataset_id_list = [row[dataset_id_index] for row in rows if row[dataset_id_index] != "allDatasets"]
-            
+            title_idx = col_names.index("Title")
+                  
+            dataset_id_list = []
+            self.datasetTitles = {}  # reset or build fresh each time
+
+            for row in rows:
+                data_id = row[datasetid_idx]
+                # Skip the special "allDatasets" row if present
+                if data_id == "allDatasets":
+                    continue
+
+                # If there's a valid title column, retrieve it; otherwise None
+                dataset_title = None
+                if title_idx is not None:
+                    dataset_title = row[title_idx]
+
+                dataset_id_list.append(data_id)
+                self.datasetTitles[data_id] = dataset_title
+
             return dataset_id_list
 
         except Exception as e:
@@ -233,6 +253,7 @@ class ERDDAPHandler:
         for dataset_id in dataset_ids:
             dataset = dw.DatasetWrangler(
                 dataset_id= dataset_id,
+                datasetTitle=(self.datasetTitles.get(dataset_id))[0],
                 server= self.server,
                 is_nrt= self.is_nrt
             )

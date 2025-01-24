@@ -15,6 +15,7 @@ from datetime import timedelta, datetime
 @dataclass
 class DatasetWrangler:
     dataset_id: str
+    datasetTitle: dict
     server: str
     row_count: Optional[int] = None
     attribute_list: Optional[List[str]] = field(default_factory=list)

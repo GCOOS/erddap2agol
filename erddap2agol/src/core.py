@@ -123,7 +123,7 @@ def selectDatasetFromList(erddapObj, dispLength=75, interactive=True) -> list:
         """
         Manages the dataset list, pagination, and selected items (the "cart").
         """
-        def __init__(self, erddapObj, dispLength=75):
+        def __init__(self, erddapObj, dispLength=50):
             self.erddapObj = erddapObj
             self.dispLength = dispLength
             
@@ -228,7 +228,6 @@ def selectDatasetFromList(erddapObj, dispLength=75, interactive=True) -> list:
                         right_int = int(right)
 
                         # Make sure left_int < right_int in a typical sense,
-                        # but if not, we can handle it gracefully:
                         low = min(left_int, right_int)
                         high = max(left_int, right_int)
 
@@ -309,7 +308,10 @@ def selectDatasetFromList(erddapObj, dispLength=75, interactive=True) -> list:
         # final_selection = mgr.selectedDatasets
         return mgr
 
+
     # ---------------------- CUI WhileLoop ----------------------
+
+
     while True:
         def clearScreen():
             os.system('cls' if os.name == 'nt' else 'clear')
@@ -321,7 +323,12 @@ def selectDatasetFromList(erddapObj, dispLength=75, interactive=True) -> list:
         current_ds = mgr.currentPageDatasets()
         start_idx = (mgr.currentPage - 1) * mgr.dispLength
         for i, ds in enumerate(current_ds):
-            print(f"{start_idx + i + 1}. {ds}")
+            titles = erddapObj.datasetTitles.get(ds,"")
+            title_str = f"{start_idx + i + 1}. {titles}"
+            # id_str = f"ID: {ds}"
+            print(title_str) 
+            # print(f"{start_idx + i + 1}. {titles}\tID: {ds}")
+            
 
         print("\nCommands:")
         print("'next', 'back', 'addAll', 'addPage', 'done', 'mainMenu', 'exit'")
