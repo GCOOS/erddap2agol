@@ -197,7 +197,7 @@ class ERDDAPHandler:
     # def get_unprocessed(self) -> List[dw.DatasetWrangler]:
     #         return [d for d in self.datasets if not d.is_processed]
     
-
+    # come back to this to add title to the fetch
     def getDatasetIDList(self) -> list:
         """Fetches a list of dataset IDs from the ERDDAP server.
            spits out list of dataset IDs"""
