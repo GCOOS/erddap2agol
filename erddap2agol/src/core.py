@@ -1,5 +1,5 @@
 # Warning: Abstraction ahead
-import sys, os, concurrent.futures, time
+import sys, os, concurrent.futures, time, math
 from . import erddap_wrangler as ec
 from . import agol_wrangler as aw
 from . import data_wrangler as dw
@@ -64,16 +64,6 @@ def erddapSelection(GliderServ = False, nrtAdd = False) -> ec.ERDDAPHandler:
             return None
         
 
-import math
-import os
-import sys
-from IPython.display import clear_output
-
-import math
-import os
-import sys
-from IPython.display import clear_output
-
 def selectDatasetFromList(erddapObj, dispLength=75, interactive=True) -> list:
     """
     The big search function that allows users to search datasets and select them for processing.
@@ -100,12 +90,12 @@ def selectDatasetFromList(erddapObj, dispLength=75, interactive=True) -> list:
                 search_url = (
                     f"{base_url}/search/advanced.json?"
                     f"searchFor={search_term}"
-                    f"&page=1&itemsPerPage=10000000&minTime=now-7days&maxTime=&protocol=tabledap"
+                    f"&page=1&itemsPerPage=10000000&minTime=now-{erddapObj.moving_window_days}days&maxTime=&protocol=tabledap"
                 )
             else:
                 search_url = (
                     f"{base_url}/search/advanced.json?"
-                    f"page=1&itemsPerPage=10000000&minTime=now-7days&maxTime=&protocol=tabledap"
+                    f"page=1&itemsPerPage=10000000&minTime=now-{erddapObj.moving_window_days}days&maxTime=&protocol=tabledap"
                 )
             erddapObj.serverInfo = search_url
             dataset_id_list = erddapObj.getDatasetIDList()
@@ -136,15 +126,25 @@ def selectDatasetFromList(erddapObj, dispLength=75, interactive=True) -> list:
         def __init__(self, erddapObj, dispLength=75):
             self.erddapObj = erddapObj
             self.dispLength = dispLength
+            
             self._allDatasetIds = _updateDatasetList(erddapObj)
+            total_datasets = len(self._allDatasetIds)
 
-            # If the total list is smaller than dispLength, adjust accordingly
-            if len(self._allDatasetIds) < self.dispLength:
-                self.dispLength = len(self._allDatasetIds)
+            if total_datasets < self.dispLength:
+                self.dispLength = total_datasets
 
-            self.currentPage = 1
-            self.numPages = math.ceil(len(self._allDatasetIds) / self.dispLength)
-            self.selectedDatasets = []  # The "cart"
+            if total_datasets == 0:
+                # if no datasets returned
+                self.numPages = 0
+                self.currentPage = 0
+                print("No datasets available for this server or search term.")
+            else:
+                # pagination
+                self.numPages = math.ceil(total_datasets / self.dispLength)
+                self.currentPage = 1
+
+             # the user's "cart"
+            self.selectedDatasets = []
 
         @property
         def totalDatasets(self):
@@ -276,17 +276,23 @@ def selectDatasetFromList(erddapObj, dispLength=75, interactive=True) -> list:
     def cmdDone(manager: DatasetListManager, _arg):
         # Return True to indicate "finished"
         return True
+    
+    def cmdMainMenu(manager: DatasetListManager, _arg):
+        print("Returning to Main Menu...")
+        erddapObj.reset()
+        run.cui()
 
     def cmdExit(manager: DatasetListManager, _arg):
         print("Exiting selection.")
         sys.exit()
 
-    COMMANDS = {
+    command_map = {
         "next": cmdNext,
         "back": cmdBack,
         "addAll": cmdAddAll,
         "addPage": cmdAddPage,
         "done": cmdDone,
+        "mainMenu":cmdMainMenu,
         "exit": cmdExit
     }
 
@@ -318,9 +324,9 @@ def selectDatasetFromList(erddapObj, dispLength=75, interactive=True) -> list:
             print(f"{start_idx + i + 1}. {ds}")
 
         print("\nCommands:")
-        print("'next', 'back', 'addAll', 'addPage', 'done', 'exit'")
-        print("or type 'search:keyword' to search datasets.")
-        print("or enter comma-separated indices (e.g. '10,12-15') for single or range selection.")
+        print("'next', 'back', 'addAll', 'addPage', 'done', 'mainMenu', 'exit'")
+        print(" type 'search:keyword' to search datasets.")
+        print(" enter comma-separated indices (e.g. '10,12-15') for single or range selection.")
         user_input = input(": ")
 
         # Check search syntax
@@ -330,11 +336,11 @@ def selectDatasetFromList(erddapObj, dispLength=75, interactive=True) -> list:
             continue
 
         # Check if it matches one of our known commands
-        if user_input in COMMANDS:
-            finished = COMMANDS[user_input](mgr, None)
+        if user_input in command_map:
+            finished = command_map[user_input](mgr, None)
             if finished:
                 clearScreen()
-                print("\Adding the following datasets to the next step:")
+                print("\nAdding the following datasets to the next step:")
                 print(mgr.selectedDatasets)
                 return mgr.selectedDatasets
         else:

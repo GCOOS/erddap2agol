@@ -102,6 +102,7 @@ class ERDDAPHandler:
         self.geoParams = geoParams
         self.datasets = []
         self.is_nrt = False
+        self.moving_window_days = 7
         self._availData = None
 
     @classmethod            
@@ -239,10 +240,7 @@ class ERDDAPHandler:
     
     
     #Gets dataset DAS    
-
-        
-
-        
+       
     def getDatasetsFromSearch(self, search: str) -> list:
         url = f"{self.serverInfo}"
         try:
