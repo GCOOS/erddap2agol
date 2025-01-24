@@ -82,8 +82,19 @@ def showErddapList() -> None:
 
 #--------------------------------------------------------------------------------
 class ERDDAPHandler:
-    def __init__(self, server, serverInfo, datasetid, fileType, geoParams):
-        self.availData = None
+    def __init__(
+            self, 
+            server: str = None,
+            serverInfo: str = None, 
+            datasetid= None, 
+            fileType: str = None, 
+            geoParams={
+            "locationType": "coordinates",
+            "latitudeFieldName": "latitude__degrees_north_",
+            "longitudeFieldName": "longitude__degrees_east_",
+            "timeFieldName": "time__UTC_",
+            } 
+        ):
         self.server = server
         self.serverInfo = serverInfo
         self.datasetid = datasetid
@@ -91,8 +102,60 @@ class ERDDAPHandler:
         self.geoParams = geoParams
         self.datasets = []
         self.is_nrt = False
+        self._availData = None
+
+    @classmethod            
+    def setErddap(cls, erddapIndex: int):
+        """ Loads the json list from IMI and defines server url attributes of ERDDAPHandler
+        based upon the index of a user input.
         
-    
+        Returns ERDDAPHandler obj.
+        """
+        filepath = getErddapList()
+        with open(filepath, 'r') as f:
+            data = json.load(f)
+        
+        if erddapIndex > len(data) or erddapIndex < 1:
+            print(f"\nOf the {len(data)} options, input:{erddapIndex} was not one of them.")
+            run.cui()            
+        else:
+            erddap_dict = data[erddapIndex - 1]
+            print(f"\nSelected ERDDAP Server: {erddap_dict['name']}")
+
+            # server_obj = custom_server
+            baseurl = erddap_dict['url']
+
+            # Remove index.html and trailing slashes
+            if baseurl.endswith("index.html"):
+                baseurl = baseurl[:-10].rstrip('/')
+
+            try:
+                serv_check = requests.get(baseurl)
+                serv_check.raise_for_status()
+
+                server_url = f"{baseurl}/tabledap/"
+                # setattr(server_obj, 'server', server_url)
+
+                # Set server info URL 
+                server_info_url = f"{baseurl}/info/index.json?itemsPerPage=100000"
+                # setattr(server_obj, 'serverInfo', server_info_url)
+
+                return cls(
+                    server= server_url,
+                    serverInfo= server_info_url,
+                    datasetid=None,
+                    fileType = None,
+                    geoParams = {
+                    "locationType": "coordinates",
+                    "latitudeFieldName": "latitude__degrees_north_",
+                    "longitudeFieldName": "longitude__degrees_east_",
+                    "timeFieldName": "time__UTC_",
+                    },
+                )
+            
+            except requests.exceptions.HTTPError as http_err:
+                print(f"HTTP error {http_err} occurred when connecting to {baseurl}")
+                return None
     @property
     def availData(self): 
         if self._availData is None:
@@ -178,41 +241,6 @@ class ERDDAPHandler:
     #Gets dataset DAS    
 
         
-    def setErddap(self, erddapIndex: int):
-        filepath = getErddapList()
-        with open(filepath, 'r') as f:
-            data = json.load(f)
-        
-        if erddapIndex > len(data) or erddapIndex < 1:
-            print(f"\nOf the {len(data)} options, input:{erddapIndex} was not one of them.")
-            run.cui()            
-        else:
-            erddap_dict = data[erddapIndex - 1]
-            print(f"\nSelected ERDDAP Server: {erddap_dict['name']}")
-
-            server_obj = custom_server
-            baseurl = erddap_dict['url']
-
-            # Remove index.html and trailing slashes
-            if baseurl.endswith("index.html"):
-                baseurl = baseurl[:-10].rstrip('/')
-
-            try:
-                serv_check = requests.get(baseurl)
-                serv_check.raise_for_status()
-
-                server_url = f"{baseurl}/tabledap/"
-                setattr(server_obj, 'server', server_url)
-
-                # Set server info URL 
-                server_info_url = f"{baseurl}/info/index.json?itemsPerPage=100000"
-                setattr(server_obj, 'serverInfo', server_info_url)
-
-                return server_obj
-            
-            except requests.exceptions.HTTPError as http_err:
-                print(f"HTTP error {http_err} occurred when connecting to {baseurl}")
-                return None
 
         
     def getDatasetsFromSearch(self, search: str) -> list:
@@ -268,30 +296,6 @@ class ERDDAPHandler:
 
         return valid_attributes
 
-
-    #--------------------------------------------------------------------------------
-
-    # def responseToCsv(self, response: any) -> str:
-    #     csvResponse = response[0]
-    #     responseCode = response[1]
-    #     if responseCode != 200:
-    #         return None
-    #     try:
-    #         csvData = StringIO(csvResponse)
-
-    #         df = pd.read_csv(csvData, header=None, low_memory=False)
-
-    #         temp_dir = getTempDir()
-    #         file_path = os.path.join(temp_dir, f"{self.datasetid}.csv")
-
-    #         df.to_csv(file_path, index=False, header=False)
-
-    #         return file_path
-    #     except Exception as e:
-    #         print(f"Error converting response to CSV: {e}")
-    #         return None
-
-
     # Creates a list of time values between start and end time
     def iterateTime(self, incrementType: str, increment: int) -> list:
         timeList = []
@@ -320,28 +324,16 @@ class ERDDAPHandler:
             print(f"Unexpected error occurred: {err}")
             return None, None
 
-custom_server = ERDDAPHandler(
-    server = None,
-    serverInfo = None,
-    datasetid = None,
-    fileType = None,
-    geoParams = {
-    "locationType": "coordinates",
-    "latitudeFieldName": "latitude__degrees_north_",
-    "longitudeFieldName": "longitude__degrees_east_",
-    "timeFieldName": "time__UTC_",
-    },
-)
-
-# # class ERDDAPHandler:
-#     def __init__(self, server, serverInfo, datasetid, attributes, fileType, longitude, latitude, time, start_time, end_time, geoParams):
-#         self.availData = None
-#         self.server = server
-#         self.serverInfo = serverInfo
-#         self.datasetid = datasetid
-#         self.attributes = attributes
-#         self.fileType = fileType
-#         self.geoParams = geoParams
-#         self.datasets = []
-#         self.is_nrt = False
+# custom_server = ERDDAPHandler(
+#     server = None,
+#     serverInfo = None,
+#     datasetid = None,
+#     fileType = None,
+#     geoParams = {
+#     "locationType": "coordinates",
+#     "latitudeFieldName": "latitude__degrees_north_",
+#     "longitudeFieldName": "longitude__degrees_east_",
+#     "timeFieldName": "time__UTC_",
+#     },
+# )
 

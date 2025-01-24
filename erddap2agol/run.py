@@ -44,11 +44,11 @@ def cui():
         user_choice = input(": ")  
 
         if user_choice == "1":
-            default_add_menu()
+            add_menu("Create static ERDDAP Item")
         elif user_choice == "2":
-            glider_add_menu()
+            add_menu("Create Glider DAC Tracks", glider=True)
         elif user_choice == "3":
-            nrt_add_menu()
+            add_menu("Create NRT Items", nrt=True)
         elif user_choice == "4":
             core.updateNRT()
         elif user_choice == "5":
@@ -58,85 +58,105 @@ def cui():
         else:
             print("\nInvalid input. Please try again.")
 
+def add_menu(menu_title:str, glider: bool = False, nrt: bool = False):
+    print(f"\nWelcome to {menu_title}")
 
-def default_add_menu():
-    print("\nCreate ERDDAP Item")
-    erddapObj = core.erddapSelection()
+    # pass user params to erddapSelection
+    erddapObj = core.erddapSelection(
+        GliderServ=glider,
+        nrtAdd=nrt
+    )
+
+    # create list of dataset_id str and add to erddapObj
+    dataset_list = core.selectDatasetFromList(erddapObj)
+    erddapObj.addDatasets_list(dataset_list)
+
+    datasetObjlist = (erddapObj.datasets)
+
+    for datasetObj in datasetObjlist:
+        datasetObj.generateUrl()
+        datasetObj.writeErddapData()
+    
+    agolObj = aw.AgolWrangler(erddap_obj=erddapObj)
+    agolObj.datasets = erddapObj.datasets
+    agolObj.makeItemProperties()
+
+    if glider:
+        agolObj.pointTableToGeojsonLine()
+
+    agolObj.postAndPublish()
+    print("\nReturning to main menu...")
+    erddapObj.reset()
+    cui()
+
+# def default_add_menu():
+#     print("\nCreate ERDDAP Item")
+#     erddapObj = core.erddapSelection()
       
-    dataset_list = core.selectDatasetFromList(erddapObj)
+#     dataset_list = core.selectDatasetFromList(erddapObj)
     
-    erddapObj.addDatasets_list(dataset_list)
+#     erddapObj.addDatasets_list(dataset_list)
 
-    datasetObjlist = (erddapObj.datasets)
+#     datasetObjlist = (erddapObj.datasets)
 
-    for datasetObj in datasetObjlist:
-        datasetObj.generateUrl()
-        datasetObj.writeErddapData()
+#     for datasetObj in datasetObjlist:
+#         datasetObj.generateUrl()
+#         datasetObj.writeErddapData()
 
-    agolObj = aw.AgolWrangler(erddap_obj= erddapObj)
-    agolObj.datasets = erddapObj.datasets
-    agolObj.makeItemProperties()
-    agolObj.postAndPublish()
-    print("\nReturning to main menu...")
-    erddapObj.reset()
-    cui()
+#     agolObj = aw.AgolWrangler(erddap_obj= erddapObj)
+#     agolObj.datasets = erddapObj.datasets
+#     agolObj.makeItemProperties()
+#     agolObj.postAndPublish()
+#     print("\nReturning to main menu...")
+#     erddapObj.reset()
+#     cui()
 
-def glider_add_menu():
-    print("\nWelcome to the *Special* Glider DAC Menu.")
+# def glider_add_menu():
+#     print("\nWelcome to the *Special* Glider DAC Menu.")
 
-    erddapObj = core.erddapSelection(GliderServ=True)
-    erddapObj.server = "https://gliders.ioos.us/erddap/tabledap/"
+#     erddapObj = core.erddapSelection(GliderServ=True)
+#     erddapObj.server = "https://gliders.ioos.us/erddap/tabledap/"
     
-    dataset_list = core.selectDatasetFromList(erddapObj)
+#     dataset_list = core.selectDatasetFromList(erddapObj)
     
-    erddapObj.addDatasets_list(dataset_list)
+#     erddapObj.addDatasets_list(dataset_list)
 
-    datasetObjlist = (erddapObj.datasets)
+#     datasetObjlist = (erddapObj.datasets)
 
-    for datasetObj in datasetObjlist:
-        datasetObj.generateUrl()
-        datasetObj.writeErddapData()
+#     for datasetObj in datasetObjlist:
+#         datasetObj.generateUrl()
+#         datasetObj.writeErddapData()
 
-    agolObj = aw.AgolWrangler(erddap_obj= erddapObj)
-    agolObj.datasets = erddapObj.datasets
-    agolObj.makeItemProperties()
-    agolObj.pointTableToGeojsonLine()
-    agolObj.postAndPublish()
-    print("\nReturning to main menu...")
-    erddapObj.reset()
-    cui()
+#     agolObj = aw.AgolWrangler(erddap_obj= erddapObj)
+#     agolObj.datasets = erddapObj.datasets
+#     agolObj.makeItemProperties()
+#     agolObj.pointTableToGeojsonLine()
+#     agolObj.postAndPublish()
+#     print("\nReturning to main menu...")
+#     erddapObj.reset()
+#     cui()
 
-def nrt_add_menu():
-    print("\nWelcome to the NRT Menu.")
+# def nrt_add_menu():
+#     print("\nWelcome to the NRT Menu.")
 
-    erddapObj = core.erddapSelection(nrtAdd= True)
-    dataset_list = core.selectDatasetFromList(erddapObj)
+#     erddapObj = core.erddapSelection(nrtAdd= True)
+#     dataset_list = core.selectDatasetFromList(erddapObj)
 
-    #manager_obj = um.UpdateManager()
-    #manager_obj.searchContent()
-    # dup_removed_list = core.findExistingNRT(manager_obj, dataset_list)
+#     erddapObj.addDatasets_list(dataset_list)
 
-    # if len(dup_removed_list) > 0:
-    #     dataList = dup_removed_list
-    # else:
-    #     dataList = dataset_list 
+#     datasetObjlist = (erddapObj.datasets)
 
-    erddapObj.addDatasets_list(dataset_list)
+#     for datasetObj in datasetObjlist:
+#         datasetObj.generateUrl()
+#         datasetObj.writeErddapData()
 
-    datasetObjlist = (erddapObj.datasets)
-
-    for datasetObj in datasetObjlist:
-        datasetObj.generateUrl()
-        datasetObj.writeErddapData()
-
-    agolObj = aw.AgolWrangler(erddap_obj= erddapObj)
-    agolObj.datasets = erddapObj.datasets
-    agolObj.makeItemProperties()
-    agolObj.postAndPublish()
-    print("\nReturning to main menu...")
-    erddapObj.reset()
-    cui()
-
+#     agolObj = aw.AgolWrangler(erddap_obj= erddapObj)
+#     agolObj.datasets = erddapObj.datasets
+#     agolObj.makeItemProperties()
+#     agolObj.postAndPublish()
+#     print("\nReturning to main menu...")
+#     erddapObj.reset()
+#     cui()
 
 if __name__ == '__main__':
     cui()

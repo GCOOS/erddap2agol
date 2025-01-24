@@ -34,14 +34,18 @@ def inputToList(user_input) -> list:
  # Survives refactor
 def erddapSelection(GliderServ = False, nrtAdd = False) -> ec.ERDDAPHandler:
     if GliderServ == True:
-        erddapObj = ec.ERDDAPHandler.setErddap(ec.custom_server, 15)
+        erddapObj = ec.ERDDAPHandler()
+        erddapObj.setErddap(15)
         return erddapObj
     else:
         ec.getErddapList()
         ec.showErddapList()
         uc = input("\nSelect an ERDDAP server to use: ")
         if uc:
-            erddapObj = ec.ERDDAPHandler.setErddap(ec.custom_server, int(uc))
+            erddapObj = ec.ERDDAPHandler()
+            erddapObj =  erddapObj.setErddap(int(uc))
+           
+            # erddapObj = ec.ERDDAPHandler.setErddap(int(uc))
             print(f"\nSelected server: {erddapObj.server}")
             uc = input("Proceed with server selection? (y/n): ")
 
