@@ -62,10 +62,11 @@ def erddapSelection(GliderServ = False, nrtAdd = False) -> ec.ERDDAPHandler:
             print("\nInput cannot be none")
             return None
         
-
-def selectDatasetFromList(erddapObj, dispLength=75, interactive=True) -> list:
+# if you want to change dispLength, do that here.
+def selectDatasetFromList(erddapObj, dispLength=50, interactive=True) -> list:
     """
     The big search function that allows users to search datasets and select them for processing.
+    Encapuslates the DatalistManager class.
     
     If 'interactive' is True, this prompts for user input (CLI).
     If 'interactive' is False, you can manage the selection programmatically by
@@ -122,15 +123,15 @@ def selectDatasetFromList(erddapObj, dispLength=75, interactive=True) -> list:
         """
         Manages the dataset list, pagination, and selected items (the "cart").
         """
-        def __init__(self, erddapObj, dispLength=50):
+        def __init__(self, erddapObj, _dispLength):
             self.erddapObj = erddapObj
-            self.dispLength = dispLength
+            self._dispLength = _dispLength
             
             self._allDatasetIds = _updateDatasetList(erddapObj)
             total_datasets = len(self._allDatasetIds)
 
-            if total_datasets < self.dispLength:
-                self.dispLength = total_datasets
+            if total_datasets < self._dispLength:
+                self._dispLength = total_datasets
 
             if total_datasets == 0:
                 # if no datasets returned
@@ -139,10 +140,10 @@ def selectDatasetFromList(erddapObj, dispLength=75, interactive=True) -> list:
                 print("No datasets available for this server or search term.")
             else:
                 # pagination
-                self.numPages = math.ceil(total_datasets / self.dispLength)
+                self.numPages = math.ceil(total_datasets / self._dispLength)
                 self.currentPage = 1
 
-             # the user's "cart"
+             # list of selectedDatasets (the cart)
             self.selectedDatasets = []
 
         @property
@@ -153,8 +154,8 @@ def selectDatasetFromList(erddapObj, dispLength=75, interactive=True) -> list:
             """
             Return the dataset IDs for the current page.
             """
-            start_index = (self.currentPage - 1) * self.dispLength
-            end_index = min(start_index + self.dispLength, self.totalDatasets)
+            start_index = (self.currentPage - 1) * self._dispLength
+            end_index = min(start_index + self._dispLength, self.totalDatasets)
             return self._allDatasetIds[start_index:end_index]
 
         def goNextPage(self):
@@ -178,7 +179,7 @@ def selectDatasetFromList(erddapObj, dispLength=75, interactive=True) -> list:
                 print(f"No datasets found matching '{search_term}'.")
             self._allDatasetIds = new_list
             self.currentPage = 1
-            self.numPages = math.ceil(len(self._allDatasetIds) / self.dispLength)
+            self.numPages = math.ceil(len(self._allDatasetIds) / self._dispLength)
 
         def addPage(self):
             """
@@ -207,11 +208,11 @@ def selectDatasetFromList(erddapObj, dispLength=75, interactive=True) -> list:
             """
             Parses user input to allow:
               - comma-separated single indices (e.g. "10,15")
-              - comma-separated ranges (e.g. "10-15, 20-25")
-              - or a mix ("10,12-14")
+              - comma-separated ranges (e.g. "10:15, 20:25")
+              - or a mix ("10,12:14")
             Index references are for the current page only.
             """
-            start_index = (self.currentPage - 1) * self.dispLength
+            start_index = (self.currentPage - 1) * self._dispLength
             current_page_ds = self.currentPageDatasets()
 
             # The global numbers user sees go from start_index+1 to start_index+len(current_page_ds)
@@ -219,10 +220,11 @@ def selectDatasetFromList(erddapObj, dispLength=75, interactive=True) -> list:
 
             tokens = [token.strip() for token in indices_str.split(',')]
             for token in tokens:
-                if '-' in token:
+                #potentially change range to colon 
+                if ':' in token:
                     # It's a range
                     try:
-                        left, right = token.split('-', 1)
+                        left, right = token.split(':', 1)
                         left_int = int(left)
                         right_int = int(right)
 
@@ -233,7 +235,7 @@ def selectDatasetFromList(erddapObj, dispLength=75, interactive=True) -> list:
                         for idx_int in range(low, high + 1):
                             self._addSingleIndex(idx_int, start_index, current_page_ds)
                     except ValueError:
-                        print(f"Invalid range input: '{token}'. Please use something like '10-15'.")
+                        print(f"Invalid range input: '{token}'. Please use something like '10:15'.")
                 else:
                     # It's a single index
                     if token.isdigit():
@@ -258,7 +260,7 @@ def selectDatasetFromList(erddapObj, dispLength=75, interactive=True) -> list:
             else:
                 print(f"Invalid index {idx_int} for this page.")
 
-    # ---------------------- COMMAND MAP ----------------------
+    # ---------------------- CUI Cmd Map ----------------------
     def cmdNext(manager: DatasetListManager, _arg):
         manager.goNextPage()
 
@@ -295,7 +297,7 @@ def selectDatasetFromList(erddapObj, dispLength=75, interactive=True) -> list:
     }
 
     # Create our manager with the initial dataset IDs
-    mgr = DatasetListManager(erddapObj, dispLength=dispLength)
+    mgr = DatasetListManager(erddapObj, _dispLength=dispLength)
 
     # If not interactive, just return the manager's selection or
     # potentially return the manager object so we can manipulate it programmatically.
@@ -319,9 +321,13 @@ def selectDatasetFromList(erddapObj, dispLength=75, interactive=True) -> list:
         clearScreen()
 
         print(f"\nPage {mgr.currentPage} of {mgr.numPages} | Cart: {len(mgr.selectedDatasets)} datasets")
+        #Get current page
         current_ds = mgr.currentPageDatasets()
-        start_idx = (mgr.currentPage - 1) * mgr.dispLength
+        #starting index
+        start_idx = (mgr.currentPage - 1) * mgr._dispLength
+        #enumerate through current ds, idx used for selection
         for i, ds in enumerate(current_ds):
+            #ref datasetTitles dict
             titles = erddapObj.datasetTitles.get(ds,"")
             title_str = f"{start_idx + i + 1}. {titles}"
             # id_str = f"ID: {ds}"
@@ -331,8 +337,8 @@ def selectDatasetFromList(erddapObj, dispLength=75, interactive=True) -> list:
 
         print("\nCommands:")
         print("'next', 'back', 'addAll', 'addPage', 'done', 'mainMenu', 'exit'")
-        print(" type 'search:keyword' to search datasets.")
-        print(" enter comma-separated indices (e.g. '10,12-15') for single or range selection.")
+        print(" type 'search:keyword1+keyword2' to search datasets.")
+        print(" enter comma-separated indices (e.g. '10,12:15') for single or range selection.")
         user_input = input(": ")
 
         # Check search syntax
@@ -352,6 +358,7 @@ def selectDatasetFromList(erddapObj, dispLength=75, interactive=True) -> list:
         else:
             # Possibly indices or ranges
             mgr.addByIndices(user_input)
+            # here is where we will put a check for flags
             input("Press Enter to continue...")
 
 # programmatic example of accessing a dataset id list 

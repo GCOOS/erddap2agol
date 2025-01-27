@@ -4,7 +4,7 @@ from src.utils import OverwriteFS
 from arcgis.gis import GIS
 from collections import deque
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Dict, List
 from io import StringIO
 import datetime, requests, re, math, os, pandas as pd
@@ -96,6 +96,13 @@ class DatasetWrangler:
             time_range = dc.getTimeFromJson(self.dataset_id)
             if time_range:
                 self.start_time, self.end_time = time_range
+                if self.start_time.tzinfo is None:
+                    self.start_time = self.start_time.replace(tzinfo=timezone.utc)
+                if self.end_time.tzinfo is None:
+                    self.end_time = self.end_time.replace(tzinfo=timezone.utc)
+                
+                now_utc = datetime.now(timezone.utc)
+
             else:
                 self.has_error = True
                 pass
@@ -168,8 +175,16 @@ class DatasetWrangler:
         
         try:
             # Ensure datetime objects
-            start = self.start_time if isinstance(self.start_time, datetime) else datetime.fromisoformat(self.start_time)
-            end = self.end_time if isinstance(self.end_time, datetime) else datetime.fromisoformat(self.end_time)
+
+            start = self.start_time
+            end = self.end_time
+            
+            
+            #end = self.end_time if isinstance(self.end_time, datetime) else datetime.fromisoformat(self.end_time)
+            # if self.end_time.tzinfo is None:
+            #     self.end_time = self.end_time.replace(tzinfo=timezone.utc)
+            #now_utc = datetime.now(timezone.utc)
+            #end = now_utc
 
             # Calculate exact chunks needed
             total_records = self.row_count
@@ -239,11 +254,22 @@ class DatasetWrangler:
             urls.append(url)
         else:
             # Multiple URLs for subsetted datasets
-            for subset_name, times in self.subsetDict.items():
-                time_constraints = (
-                    f"&time%3E%3D{times['start']}Z"
-                    f"&time%3C%3D{times['end']}Z"
-                )
+            for i, (subset_name, times) in enumerate(self.subsetDict.items()):
+                # not the final chunch, < for upper bound
+                if i < (len(self.subsetDict) -1):
+                    time_constraints = (
+                        f"&time%3E%3D{times['start']}Z"
+                        f"&time%3C{times['end']}Z"
+                    # f"&time%3C%3D{times['end']}Z"
+                    )
+
+                else:
+                    # the final chunk, <=
+                    time_constraints = (
+                        f"&time%3E%3D{times['start']}Z"
+                        f"&time%3C%3D{times['end']}Z"
+                    )
+
                 url = (
                     f"{self.server}{self.dataset_id}.{dataformat}?"
                     f"time%2C{attrs_encoded}"
@@ -347,7 +373,7 @@ class DatasetWrangler:
                 
                 print(
                     f"Downloading subset {subset_index}/{len(self.url_s)} "
-                    f"({self.dataset_id})"
+                    f"({self.url_s[subset_index-1]})"
                     f"(Attempt: {attempt_num}/{connection_attempts}) "
                 )
                 
@@ -403,12 +429,15 @@ class DatasetWrangler:
 #This function returns the start and end time of the moving window
     def nrtTimeSet(self):
         """Sets start_time/end_time in ISO format (e.g., 2023-09-29T14:05:12)"""
-        now = datetime.now()
-        seven_days_ago = now - timedelta(days=self.moving_window_days)
+        now_utc = datetime.now(timezone.utc)
+        seven_days_ago = now_utc - timedelta(days=self.moving_window_days)
 
         self.start_time = seven_days_ago.strftime('%Y-%m-%dT%H:%M:%S')
-        self.end_time = now.strftime('%Y-%m-%dT%H:%M:%S')
+        self.end_time = now_utc.strftime('%Y-%m-%dT%H:%M:%S')
             
+
+
+# ---------------------------------
 #This function checks if the dataset has data within the last 7 days
     # def checkDataRange(datasetid) -> bool:
     #     def movingWindow(self):        

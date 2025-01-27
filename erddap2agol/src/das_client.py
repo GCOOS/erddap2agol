@@ -1,5 +1,5 @@
 import sys, os, datetime 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import json
 from collections import OrderedDict
 from . import erddap_wrangler as ec
@@ -85,11 +85,11 @@ def getTimeFromJson(datasetid) -> tuple:
             if time[0] < 0:
                 start = datetime(1970, 1, 1) + timedelta(seconds=time[0])
             else:
-                start = datetime.fromtimestamp(time[0]).strftime('%Y-%m-%dT%H:%M:%S')  
+                start = datetime.fromtimestamp(time[0], tz=timezone.utc) 
             if time[1] < 0:
                 end = datetime(1970, 1, 1) + timedelta(seconds=time[0])
             else:
-                end = datetime.fromtimestamp(time[1]).strftime('%Y-%m-%dT%H:%M:%S')
+                end = datetime.fromtimestamp(time[1], tz=timezone.utc)
                             
             return start, end
         except Exception as e:
