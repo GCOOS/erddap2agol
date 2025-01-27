@@ -37,8 +37,9 @@ class DatasetWrangler:
     
     def __post_init__(self):
         """Building the dataset objects"""
-        if self.server == "https://gliders.ioos.us/erddap/tabledap/":
-            self.is_glider = True
+        if self.is_glider == True:
+            # improved glider optimizations will go here
+            pass
 
         # For NRT we bypass the dataset size step
         if self.is_nrt == True:
@@ -109,6 +110,7 @@ class DatasetWrangler:
 
         except requests.RequestException as e:
             print(f"\nError fetching DAS for {self.dataset_id}: {e}")
+            self.has_error = True
             self.DAS_response = False
         except Exception as e:
             print(f"\nError parsing DAS for {self.dataset_id}: {e}")

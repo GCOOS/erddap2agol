@@ -253,12 +253,18 @@ class ERDDAPHandler:
     #This was occuring later than I thought, and it might not be nessecary 
     def addDatasets_list(self, dataset_ids: list) -> None:
         """Creates DatasetWrangler objects for each dataset ID"""
+        if "gliders.ioos.us" in self.server:
+            gliderBool = True
+        else:
+            gliderBool = False
+            
         for dataset_id in dataset_ids:
             dataset = dw.DatasetWrangler(
                 dataset_id= dataset_id,
                 datasetTitle=(self.datasetTitles.get(dataset_id))[0],
                 server= self.server,
-                is_nrt= self.is_nrt
+                is_nrt= self.is_nrt,
+                is_glider= gliderBool
             )
             self.datasets.append(dataset)
     

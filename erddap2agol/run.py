@@ -69,6 +69,8 @@ def add_menu(menu_title:str, glider: bool = False, nrt: bool = False):
 
     # create list of dataset_id str and add to erddapObj
     dataset_list = core.selectDatasetFromList(erddapObj)
+
+    # Transforms list into dataset objects 
     erddapObj.addDatasets_list(dataset_list)
 
     datasetObjlist = (erddapObj.datasets)

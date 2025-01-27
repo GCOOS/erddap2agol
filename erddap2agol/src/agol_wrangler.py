@@ -154,7 +154,7 @@ class AgolWrangler:
                 filepath = dataset.data_filepath
                 if dataset.data_filepath:
                     print(f"\nConverting {filepath} to GeoJSON...")
-                    df = pd.read_csv(filepath)
+                    df = pd.read_csv(filepath, low_memory=False)
 
                     # Replace NaN with None in the entire DataFrame
                     df = df.replace({np.nan: None})
@@ -316,7 +316,7 @@ class AgolWrangler:
                                 upsert=False
                             )
                             if append_success:
-                                subset_idx + 1
+                                subset_idx += 1
                                 print(f"Appended Subset {subset_idx} of {(len(paths))-1} to {published_item.title}")
                             else:
                                 print(f"\nFailed to append subset # {subset_idx} to {published_item.title}")
