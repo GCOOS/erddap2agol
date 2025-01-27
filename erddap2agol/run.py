@@ -20,6 +20,7 @@ def _updateNRT(verbose_opt: bool = True, preserveProps_opt: bool=True,
 
 def _gliderWorkflow(search_term: str = None) -> None:
     """
+    This will be deprecated soon as program-based workflows are refined.
     Automates the workflow for glider data:
     Args:
         search_term (str, optional): Term to search for in dataset names. Defaults to None.
@@ -50,7 +51,7 @@ def cui():
         elif user_choice == "3":
             add_menu("Create NRT Items", nrt=True)
         elif user_choice == "4":
-            core.updateNRT()
+            _updateNRT()
         elif user_choice == "5":
             print("Goodbye!")
             ec.cleanTemp()
