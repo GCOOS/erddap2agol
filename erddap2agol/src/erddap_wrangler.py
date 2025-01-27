@@ -108,7 +108,10 @@ class ERDDAPHandler:
 
     @classmethod            
     def setErddap(cls, erddapIndex: int):
-        """ Loads the json list from IMI and defines server url attributes of ERDDAPHandler
+        """ 
+        Important: This method is used to intialize an erddap object instance from the IMI list of erddaps
+
+        Loads the json list from IMI and defines server url attributes of ERDDAPHandler
         based upon the index of a user input.
         
         Returns ERDDAPHandler obj.

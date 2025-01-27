@@ -34,8 +34,7 @@ def inputToList(user_input) -> list:
  # Survives refactor
 def erddapSelection(GliderServ = False, nrtAdd = False) -> ec.ERDDAPHandler:
     if GliderServ == True:
-        erddapObj = ec.ERDDAPHandler()
-        erddapObj.setErddap(15)
+        erddapObj = ec.ERDDAPHandler.setErddap(15)
         return erddapObj
     else:
         ec.getErddapList()
