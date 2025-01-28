@@ -131,7 +131,9 @@ class AgolWrangler:
                         props["title"] = dataset_title
 
                         server_name = dataset.server.split("/erddap/")[0].split("://")[-1]
+
                         summary = dataset.nc_global.get("summary", {}).get("value", "")
+                        
                         props["snippet"] = f"{summary}. {dataset_title} was generated with erddap2agol from the {server_name} ERDDAP."
 
                         createDescription(dataset, props)
