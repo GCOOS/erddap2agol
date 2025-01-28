@@ -12,7 +12,7 @@ This tool was principally designed for data managers who wish to expand the util
 
 ## Major Features
 - Manage your ERDDAP data on ArcGIS Online at a variety of time-scales or data types!
-- Explore data on 63 ERDDAP services with search featur  
+- Explore data on 63 ERDDAP services with search features  
 - Create ERDDAP data in batch.          
 - NRT: 7 day moving window, Level 1. (Available now!)
 - Glider DAC Line Segments: Create multiline HFLs from the Glider DAC ERDDAP (Available now!)  
