@@ -11,7 +11,9 @@ This tool was principally designed for data managers who wish to expand the util
 
 
 ## Major Features
-- Manage your ERDDAP data on ArcGIS Online at a variety of time-scales or data types!         
+- Manage your ERDDAP data on ArcGIS Online at a variety of time-scales or data types!
+- Explore data on 63 ERDDAP services with search featur  
+- Create ERDDAP data in batch.          
 - NRT: 7 day moving window, Level 1. (Available now!)
 - Glider DAC Line Segments: Create multiline HFLs from the Glider DAC ERDDAP (Available now!)  
 - Historical: Updated weekly, contains all data, Level 2. (Coming Soon!)
@@ -42,6 +44,8 @@ Functionality in erddap2agol is divided into two major components, each with the
 2. **Standalone Notebook functions** (e.g., `_updateNRT`)
 - The underscore functions within the run module are to be used in AGOL hosted notebooks. To deploy these capabilities, simply follow the pip install/import process outlined above, then schedule the notebook to run at your desired interval. </br>
 
+### Use the Ready-To-Go Notebook on ArcGIS Online
+Access the ArcGIS Online Notebook that is configured to run the CUI [here](https://gcoos.maps.arcgis.com/home/item.html?id=5984f942bfac44e9988406193d3486ee)
 
 ## Core Modules
 
