@@ -4,17 +4,18 @@ from src.utils import OverwriteFS
 from arcgis.gis import GIS
 from collections import deque
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Dict, List
 from io import StringIO
 import datetime, requests, re, math, os, pandas as pd
 from datetime import timedelta, datetime
 
-################## Experimenting with new class ##################
+#---------------------DatasetWrangler---------------------
 
 @dataclass
 class DatasetWrangler:
     dataset_id: str
+    datasetTitle: dict
     server: str
     row_count: Optional[int] = None
     attribute_list: Optional[List[str]] = field(default_factory=list)
@@ -26,6 +27,7 @@ class DatasetWrangler:
     subsetDict: Optional[Dict] = field(default_factory=dict)
     is_processed: bool = False
     is_nrt: bool = None
+    moving_window_days: int = 7
     nc_global: Dict = field(default_factory=dict)
     DAS_filepath: Optional[os.PathLike] = None
     data_filepath:Optional[os.PathLike | list[os.PathLike]] = None
@@ -35,8 +37,9 @@ class DatasetWrangler:
     
     def __post_init__(self):
         """Building the dataset objects"""
-        if self.server == "https://gliders.ioos.us/erddap/tabledap/":
-            self.is_glider = True
+        if self.is_glider == True:
+            # improved glider optimizations will go here
+            pass
 
         # For NRT we bypass the dataset size step
         if self.is_nrt == True:
@@ -94,12 +97,20 @@ class DatasetWrangler:
             time_range = dc.getTimeFromJson(self.dataset_id)
             if time_range:
                 self.start_time, self.end_time = time_range
+                if self.start_time.tzinfo is None:
+                    self.start_time = self.start_time.replace(tzinfo=timezone.utc)
+                if self.end_time.tzinfo is None:
+                    self.end_time = self.end_time.replace(tzinfo=timezone.utc)
+                
+                now_utc = datetime.now(timezone.utc)
+
             else:
                 self.has_error = True
                 pass
 
         except requests.RequestException as e:
             print(f"\nError fetching DAS for {self.dataset_id}: {e}")
+            self.has_error = True
             self.DAS_response = False
         except Exception as e:
             print(f"\nError parsing DAS for {self.dataset_id}: {e}")
@@ -166,8 +177,16 @@ class DatasetWrangler:
         
         try:
             # Ensure datetime objects
-            start = self.start_time if isinstance(self.start_time, datetime) else datetime.fromisoformat(self.start_time)
-            end = self.end_time if isinstance(self.end_time, datetime) else datetime.fromisoformat(self.end_time)
+
+            start = self.start_time
+            end = self.end_time
+            
+            
+            #end = self.end_time if isinstance(self.end_time, datetime) else datetime.fromisoformat(self.end_time)
+            # if self.end_time.tzinfo is None:
+            #     self.end_time = self.end_time.replace(tzinfo=timezone.utc)
+            #now_utc = datetime.now(timezone.utc)
+            #end = now_utc
 
             # Calculate exact chunks needed
             total_records = self.row_count
@@ -237,11 +256,22 @@ class DatasetWrangler:
             urls.append(url)
         else:
             # Multiple URLs for subsetted datasets
-            for subset_name, times in self.subsetDict.items():
-                time_constraints = (
-                    f"&time%3E%3D{times['start']}Z"
-                    f"&time%3C%3D{times['end']}Z"
-                )
+            for i, (subset_name, times) in enumerate(self.subsetDict.items()):
+                # not the final chunch, < for upper bound
+                if i < (len(self.subsetDict) -1):
+                    time_constraints = (
+                        f"&time%3E%3D{times['start']}Z"
+                        f"&time%3C{times['end']}Z"
+                    # f"&time%3C%3D{times['end']}Z"
+                    )
+
+                else:
+                    # the final chunk, <=
+                    time_constraints = (
+                        f"&time%3E%3D{times['start']}Z"
+                        f"&time%3C%3D{times['end']}Z"
+                    )
+
                 url = (
                     f"{self.server}{self.dataset_id}.{dataformat}?"
                     f"time%2C{attrs_encoded}"
@@ -345,7 +375,7 @@ class DatasetWrangler:
                 
                 print(
                     f"Downloading subset {subset_index}/{len(self.url_s)} "
-                    f"({self.dataset_id})"
+                    f"({self.url_s[subset_index-1]})"
                     f"(Attempt: {attempt_num}/{connection_attempts}) "
                 )
                 
@@ -375,6 +405,78 @@ class DatasetWrangler:
                 return filepaths
             
             return None
+
+
+            
+    def calculateTimeRange(self, intervalType=None) -> int:
+        start = datetime.fromisoformat(self.start_time)
+        end = datetime.fromisoformat(self.end_time)
+        
+        if intervalType is None:
+            return (end - start).days
+        
+        elif intervalType == "months":
+            year_diff = end.year - start.year
+            month_diff = end.month - start.month
+            
+            total_months = year_diff * 12 + month_diff
+            return total_months
+
+        else:
+            raise ValueError("Invalid interval type.")
+
+
+################## NRT Functions ##################
+
+#This function returns the start and end time of the moving window
+    def nrtTimeSet(self):
+        """Sets start_time/end_time in ISO format (e.g., 2023-09-29T14:05:12)"""
+        now_utc = datetime.now(timezone.utc)
+        seven_days_ago = now_utc - timedelta(days=self.moving_window_days)
+
+        self.start_time = seven_days_ago.strftime('%Y-%m-%dT%H:%M:%S')
+        self.end_time = now_utc.strftime('%Y-%m-%dT%H:%M:%S')
+            
+
+
+# ---------------------------------
+#This function checks if the dataset has data within the last 7 days
+    # def checkDataRange(datasetid) -> bool:
+    #     def movingWindow(self):        
+    #         self.start_time = datetime.now() - timedelta(days=self.moving_window_days)
+    #         self.end_time = datetime.now()
+    #     startDas, endDas = dc.convertFromUnixDT(dc.getTimeFromJson(datasetid))
+    #     window_start, window_end = movingWindow(isStr=False)
+    #     if startDas <= window_end and endDas >= window_start:
+    #         return True
+    #     else:
+    #         return False  
+
+#This function returns all datasetIDs that have data within the last 7 days
+#Maybe request a fresh json everytime?
+# def batchNRTFind(ERDDAPObj: ec.ERDDAPHandler) -> list:
+#     ValidDatasetIDs = []
+#     DIDList = ec.ERDDAPHandler.getDatasetIDList(ERDDAPObj)
+#     for datasetid in DIDList:
+#         if dc.checkForJson(datasetid) == False:
+#             das_resp = ec.ERDDAPHandler.getDas(ERDDAPObj, datasetid=datasetid)
+#             parsed_response = dc.parseDasResponse(das_resp)
+#             parsed_response = dc.convertToDict(parsed_response)
+#             dc.saveToJson(parsed_response, datasetid)
+        
+
+#             if checkDataRange(datasetid) == True:
+#                 ValidDatasetIDs.append(datasetid)
+#         else:
+#             if checkDataRange(datasetid) == True:
+#                 ValidDatasetIDs.append(datasetid)
+    
+#     print(f"Found {len(ValidDatasetIDs)} datasets with data within the last 7 days.")
+#     return ValidDatasetIDs
+
+# def NRTFindAGOL() -> list:
+#     nrt_dict  = ul.updateCallFromNRT(1)
+#     return nrt_dict
 
 
     # We can enhance this function. If a url returns a bad response, we should come back to it.
@@ -430,75 +532,6 @@ class DatasetWrangler:
     #             return filepaths
                 
     #     return None
-
-            
-    def calculateTimeRange(self, intervalType=None) -> int:
-        start = datetime.fromisoformat(self.start_time)
-        end = datetime.fromisoformat(self.end_time)
-        
-        if intervalType is None:
-            return (end - start).days
-        
-        elif intervalType == "months":
-            year_diff = end.year - start.year
-            month_diff = end.month - start.month
-            
-            total_months = year_diff * 12 + month_diff
-            return total_months
-
-        else:
-            raise ValueError("Invalid interval type.")
-
-
-################## NRT Functions ##################
-
-#This function returns the start and end time of the moving window
-    def nrtTimeSet(self):
-        """Sets start_time/end_time in ISO format (e.g., 2023-09-29T14:05:12)"""
-        now = datetime.now()
-        seven_days_ago = now - timedelta(days=7)
-
-        self.start_time = seven_days_ago.strftime('%Y-%m-%dT%H:%M:%S')
-        self.end_time = now.strftime('%Y-%m-%dT%H:%M:%S')
-            
-#This function checks if the dataset has data within the last 7 days
-    def checkDataRange(datasetid) -> bool:
-        def movingWindow(self):        
-            self.start_time = datetime.now() - timedelta(days=7)
-            self.end_time = datetime.now()
-        startDas, endDas = dc.convertFromUnixDT(dc.getTimeFromJson(datasetid))
-        window_start, window_end = movingWindow(isStr=False)
-        if startDas <= window_end and endDas >= window_start:
-            return True
-        else:
-            return False  
-
-#This function returns all datasetIDs that have data within the last 7 days
-#Maybe request a fresh json everytime?
-# def batchNRTFind(ERDDAPObj: ec.ERDDAPHandler) -> list:
-#     ValidDatasetIDs = []
-#     DIDList = ec.ERDDAPHandler.getDatasetIDList(ERDDAPObj)
-#     for datasetid in DIDList:
-#         if dc.checkForJson(datasetid) == False:
-#             das_resp = ec.ERDDAPHandler.getDas(ERDDAPObj, datasetid=datasetid)
-#             parsed_response = dc.parseDasResponse(das_resp)
-#             parsed_response = dc.convertToDict(parsed_response)
-#             dc.saveToJson(parsed_response, datasetid)
-        
-
-#             if checkDataRange(datasetid) == True:
-#                 ValidDatasetIDs.append(datasetid)
-#         else:
-#             if checkDataRange(datasetid) == True:
-#                 ValidDatasetIDs.append(datasetid)
-    
-#     print(f"Found {len(ValidDatasetIDs)} datasets with data within the last 7 days.")
-#     return ValidDatasetIDs
-
-# def NRTFindAGOL() -> list:
-#     nrt_dict  = ul.updateCallFromNRT(1)
-#     return nrt_dict
-
 
 
 
