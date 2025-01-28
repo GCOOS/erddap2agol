@@ -121,8 +121,8 @@ class AgolWrangler:
                             props["accessInformation"] = dataset.nc_global["publisher_institution"].get("value", "")
                         elif "creator_institution" in dataset.nc_global:
                             props["accessInformation"] = dataset.nc_global["creator_institution"].get("value", "")
-                        elif "publisher_institution" in dataset.nc_global:
-                            props["accessInformation"] = dataset.nc_global["publisher_institution"].get("value", "")
+                        elif "institution" in dataset.nc_global:
+                            props["accessInformation"] = dataset.nc_global["institution"].get("value", "")
 
                         if "license" in dataset.nc_global:
                             props["licenseInfo"] = dataset.nc_global["license"].get("value", "")
@@ -312,7 +312,7 @@ class AgolWrangler:
                             analyze_params = gis.content.analyze(item=subset_item.id)
                             append_success = feature_layer.append(
                                 item_id=subset_item.id,
-                                #Probably wont have to worry about geojson for large files, but just in case this is where youd change it
+                                #to incorporate subsetting geojson we need to change this
                                 upload_format='csv',
                                 source_info=analyze_params['publishParameters'],
                                 upsert=False

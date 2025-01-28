@@ -38,6 +38,7 @@ class DatasetWrangler:
     def __post_init__(self):
         """Building the dataset objects"""
         if self.is_glider == True:
+            self.getDas()
             # improved glider optimizations will go here
             pass
 
@@ -74,7 +75,8 @@ class DatasetWrangler:
         return wrapper
 
     def getDas(self) -> None:
-        """Fetch and parse DAS metadata"""
+        """Fetch and parse DAS metadata.
+            Sets major attributes for the dataset"""
         url = f"{self.server}{self.dataset_id}.das"
         
         try:
