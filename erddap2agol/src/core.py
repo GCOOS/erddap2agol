@@ -1,4 +1,3 @@
-# Warning: Abstraction ahead
 import sys, os, concurrent.futures, time, math
 from . import erddap_wrangler as ec
 from . import agol_wrangler as aw
@@ -215,8 +214,6 @@ def selectDatasetFromList(erddapObj, dispLength=50, interactive=True) -> list:
             start_index = (self.currentPage - 1) * self._dispLength
             current_page_ds = self.currentPageDatasets()
 
-            # The global numbers user sees go from start_index+1 to start_index+len(current_page_ds)
-            # We'll parse each token, which might be a single index or a range.
 
             tokens = [token.strip() for token in indices_str.split(',')]
             for token in tokens:
