@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 from io import StringIO
 import tempfile
 from . import data_wrangler as dw
+from . import das_client as dc
 from erddap2agol import run
 
 
@@ -23,6 +24,7 @@ def getTempDir() -> os.PathLike:
     return temp_dir
 
 def cleanTemp() -> None:
+    dc.cleanConfDir()
     filepath = os.path.join('/arcgis/home', 'e2a_temp')
     if os.path.exists(filepath):
         for filename in os.listdir(filepath):
@@ -250,7 +252,6 @@ class ERDDAPHandler:
             print(f"Error fetching dataset ID list: {e}")
             return []
         
-    #This was occuring later than I thought, and it might not be nessecary 
     def addDatasets_list(self, dataset_ids: list) -> None:
         """Creates DatasetWrangler objects for each dataset ID"""
         if "gliders.ioos.us" in self.server:
@@ -269,7 +270,6 @@ class ERDDAPHandler:
             self.datasets.append(dataset)
     
     
-    #Gets dataset DAS    
        
     def getDatasetsFromSearch(self, search: str) -> list:
         url = f"{self.serverInfo}"

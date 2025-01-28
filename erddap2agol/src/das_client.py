@@ -131,6 +131,21 @@ def getConfDir():
     os.makedirs(das_conf_dir, exist_ok=True)
     return das_conf_dir
 
+def cleanConfDir():
+    agol_home = os.getenv('AGOL_HOME', '/arcgis/home')
+    base_dir = agol_home
+    filepath = os.path.join(base_dir, 'e2a_das_conf')
+    if os.path.exists(filepath):
+        for filename in os.listdir(filepath):
+            if filename.endswith(".json"):
+                full_path = os.path.join(filepath, filename)
+                try:
+                    os.remove(full_path)
+                except Exception as e:
+                    print(f"An unexpected error occurred while deleting {full_path}: {e}")
+    else:
+        print(f"The directory {filepath} does not exist.")
+
 def checkForJson(datasetid: str) -> bool:
     das_conf_dir = getConfDir()
     filepath = os.path.join(das_conf_dir, f'{datasetid}.json')
