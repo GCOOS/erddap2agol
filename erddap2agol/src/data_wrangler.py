@@ -245,7 +245,7 @@ class DatasetWrangler:
 
         if not self.needs_Subset:
             # Single URL for datasets not requiring subsetting
-            if nrt_update:
+            if nrt_update or self.is_nrt:
                 start = self.start_time
                 end = self.end_time
                 time_constraints = (

@@ -436,7 +436,7 @@ def updateNRT(
     update_manager.searchContent()
 
     # Grab all datasets at once
-    items = list(update_manager.datasets.items())  # Key = datasetid, Value = info
+    items = list(update_manager.datasets.items())  #  k d_id: v info
 
     futures = {}
     start_times = {}
