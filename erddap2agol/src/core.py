@@ -443,18 +443,18 @@ def updateNRT(
     start_all = time.time()
 
 
-    # --------------------------------------------------------------
-    # 1) Create ONE ProcessPoolExecutor outside the loop
-    # --------------------------------------------------------------
+    
+    # 1. Create 1 ProcessPoolExecutor outside the loop
+    #------------------------------------------------------
     with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
 
-        # ----------------------------------------------------------
-        # 2) Submit each dataset as a separate task
-        # ----------------------------------------------------------
+        
+        # 2. Submit each dataset as a separate task
+        #-------------------------------------------
         for datasetid, info in items:
             serverurl = info.get('base_url')
             datasetObj = dw.DatasetWrangler(dataset_id=datasetid, datasetTitle=None, server=serverurl, is_nrt=True)
-            datasetObj.generateUrl()  # sets datasetObj.url_s
+            datasetObj.generateUrl(nrt_update=True)  # sets datasetObj.url_s
 
             agol_id = info.get('agol_id')
 
@@ -470,9 +470,9 @@ def updateNRT(
             )
             futures[future] = datasetid
             start_times[future] = s_time
-        # ----------------------------------------------------------
-        # 3) Collect results as they complete or fail
-        # ----------------------------------------------------------
+        
+        # 3. Collect results as they complete or fail
+        #--------------------------------------------
         for future in concurrent.futures.as_completed(futures):
             datasetid = futures[future]
             dataset_start = start_times[future]
@@ -492,8 +492,6 @@ def updateNRT(
 
             except Exception as ex:
                 print(f"Error overwriting {datasetid}: {ex}")
-                # Depending on your needs, you might pop from update_manager.datasets
-                # or re-try, etc.
 
     total_time = time.time() - start_all
     print(f"All tasks completed in {total_time:.2f} seconds.")

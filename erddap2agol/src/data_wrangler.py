@@ -119,7 +119,7 @@ class DatasetWrangler:
             self.DAS_response = False
 
 
-    def getDatasetSizes(self, timeOut_time = 120) -> None:
+    def getDatasetSizes(self, timeOut_time: int = 120) -> None:
         """Gets row count for dataset from ERDDAP ncHeader response, sets to attribute"""
         if not self.DAS_response:
             return None
@@ -160,7 +160,7 @@ class DatasetWrangler:
             
         return None
     
-    def needsSubsetting(self, record_limit = 49999) -> bool:
+    def needsSubsetting(self, record_limit: int = 49999) -> bool:
         """Check if dataset needs to be split into chunks"""
         if self.row_count is not None:
             #bypass for glider datasets
@@ -171,7 +171,7 @@ class DatasetWrangler:
                 self.needs_Subset = False
     #This might be cutting off the last handful of records
     @skipFromError
-    def calculateTimeSubset(self, chunk_size = 49999) -> dict:
+    def calculateTimeSubset(self, chunk_size: int = 49999) -> dict:
         """Calculate time subsets based on row count.
             Method applies if self.needs_Subset is True """
         if not self.needs_Subset:
@@ -228,7 +228,7 @@ class DatasetWrangler:
             self.subsets = {}
         self.subsets[subset_name] = {'start': start, 'end': end}
 
-    def generateUrl(self, dataformat="csvp") -> list[str]:
+    def generateUrl(self, dataformat: str="csvp", nrt_update:bool = False) -> list[str]:
         """Builds request URLs for data, special approach for subsetting data"""
         urls = []
         additionalAttr = self.attribute_list
@@ -245,12 +245,20 @@ class DatasetWrangler:
 
         if not self.needs_Subset:
             # Single URL for datasets not requiring subsetting
-            start = self.start_time.strftime('%Y-%m-%dT%H:%M:%S')
-            end = self.end_time.strftime('%Y-%m-%dT%H:%M:%S')
-            time_constraints = (
-                f"&time%3E%3D{start}Z"
-                f"&time%3C%3D{end}Z"
-            )
+            if nrt_update:
+                start = self.start_time
+                end = self.end_time
+                time_constraints = (
+                    f"&time%3E%3D{start}Z"
+                    f"&time%3C%3D{end}Z"
+                )
+            else:
+                start = self.start_time.strftime('%Y-%m-%dT%H:%M:%S')
+                end = self.end_time.strftime('%Y-%m-%dT%H:%M:%S')
+                time_constraints = (
+                    f"&time%3E%3D{start}Z"
+                    f"&time%3C%3D{end}Z"
+                )
             url = (
                 f"{self.server}{self.dataset_id}.{dataformat}?"
                 # hard coded time here
