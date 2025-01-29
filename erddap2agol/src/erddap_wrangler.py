@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 from io import StringIO
 import tempfile
 from . import data_wrangler as dw
+from . import das_client as dc
 from erddap2agol import run
 
 
@@ -23,6 +24,7 @@ def getTempDir() -> os.PathLike:
     return temp_dir
 
 def cleanTemp() -> None:
+    dc.cleanConfDir()
     filepath = os.path.join('/arcgis/home', 'e2a_temp')
     if os.path.exists(filepath):
         for filename in os.listdir(filepath):
@@ -82,17 +84,85 @@ def showErddapList() -> None:
 
 #--------------------------------------------------------------------------------
 class ERDDAPHandler:
-    def __init__(self, server, serverInfo, datasetid, fileType, geoParams):
-        self.availData = None
+    def __init__(
+            self, 
+            server: str = None,
+            serverInfo: str = None, 
+            datasetid= None, 
+            fileType: str = None, 
+            geoParams={
+            "locationType": "coordinates",
+            "latitudeFieldName": "latitude__degrees_north_",
+            "longitudeFieldName": "longitude__degrees_east_",
+            "timeFieldName": "time__UTC_",
+            } 
+        ):
         self.server = server
         self.serverInfo = serverInfo
         self.datasetid = datasetid
         self.fileType = fileType
         self.geoParams = geoParams
         self.datasets = []
+        self.datasetTitles = {}
         self.is_nrt = False
+        self.moving_window_days = 7
+        self._availData = None
+
+    @classmethod            
+    def setErddap(cls, erddapIndex: int):
+        """ 
+        Important: This method is used to intialize an erddap object instance from the IMI list of erddaps
+
+        Loads the json list from IMI and defines server url attributes of ERDDAPHandler
+        based upon the index of a user input.
         
-    
+        Returns ERDDAPHandler obj.
+        """
+        filepath = getErddapList()
+        with open(filepath, 'r') as f:
+            data = json.load(f)
+        
+        if erddapIndex > len(data) or erddapIndex < 1:
+            print(f"\nOf the {len(data)} options, input:{erddapIndex} was not one of them.")
+            run.cui()            
+        else:
+            erddap_dict = data[erddapIndex - 1]
+            print(f"\nSelected ERDDAP Server: {erddap_dict['name']}")
+
+            # server_obj = custom_server
+            baseurl = erddap_dict['url']
+
+            # Remove index.html and trailing slashes
+            if baseurl.endswith("index.html"):
+                baseurl = baseurl[:-10].rstrip('/')
+
+            try:
+                serv_check = requests.get(baseurl)
+                serv_check.raise_for_status()
+
+                server_url = f"{baseurl}/tabledap/"
+                # setattr(server_obj, 'server', server_url)
+
+                # Set server info URL 
+                server_info_url = f"{baseurl}/info/index.json?itemsPerPage=100000"
+                # setattr(server_obj, 'serverInfo', server_info_url)
+
+                return cls(
+                    server= server_url,
+                    serverInfo= server_info_url,
+                    datasetid=None,
+                    fileType = None,
+                    geoParams = {
+                    "locationType": "coordinates",
+                    "latitudeFieldName": "latitude__degrees_north_",
+                    "longitudeFieldName": "longitude__degrees_east_",
+                    "timeFieldName": "time__UTC_",
+                    },
+                )
+            
+            except requests.exceptions.HTTPError as http_err:
+                print(f"HTTP error {http_err} occurred when connecting to {baseurl}")
+                return None
     @property
     def availData(self): 
         if self._availData is None:
@@ -131,90 +201,76 @@ class ERDDAPHandler:
         """Allow index access to datasets"""
         return self.datasets[index]
     
-    # def get_unprocessed(self) -> List[dw.DatasetWrangler]:
-    #         return [d for d in self.datasets if not d.is_processed]
-    
-
+  
     def getDatasetIDList(self) -> list:
-        """Fetches a list of dataset IDs from the ERDDAP server.
-           spits out list of dataset IDs"""
+        """Fetches a list of dataset IDs and titles from the ERDDAP server.
+           spits out list of dataset IDs and {datasetid, title} dictionary"""
+        
+        # serverInfo requests a json
         url = f"{self.serverInfo}"
         try:
             response = requests.get(url)
+            response.raise_for_status()
             data = response.json()
-            
-            if not data.get('table') or 'columnNames' not in data['table']:
+
+            if not data.get("table") or "columnNames" not in data["table"]:
                 print(f"Invalid response format from {url}")
                 return []
 
-            column_names = data['table']['columnNames']
-            dataset_id_index = column_names.index("Dataset ID") if "Dataset ID" in column_names else None
-            
-            if dataset_id_index is None:
-                print("Dataset ID column not found in response")
+            col_names = data["table"]["columnNames"]
+            rows = data["table"]["rows"]
+
+            # Find the index of "Dataset ID"
+            try:
+                datasetid_idx = col_names.index("Dataset ID")
+            except ValueError:
+                print("No 'Dataset ID' column found in server response.")
                 return []
 
-            rows = data['table']['rows']
-            dataset_id_list = [row[dataset_id_index] for row in rows if row[dataset_id_index] != "allDatasets"]
-            
+            title_idx = col_names.index("Title")
+                  
+            dataset_id_list = []
+            self.datasetTitles = {}  # reset or build fresh each time
+
+            for row in rows:
+                data_id = row[datasetid_idx]
+                # Skip the special "allDatasets" row if present
+                if data_id == "allDatasets":
+                    continue
+
+                # If there's a valid title column, retrieve it; otherwise None
+                dataset_title = None
+                if title_idx is not None:
+                    dataset_title = row[title_idx]
+
+                dataset_id_list.append(data_id)
+                self.datasetTitles[data_id] = dataset_title
+
             return dataset_id_list
 
         except Exception as e:
             print(f"Error fetching dataset ID list: {e}")
             return []
         
-    #This was occuring later than I thought, and it might not be nessecary 
     def addDatasets_list(self, dataset_ids: list) -> None:
         """Creates DatasetWrangler objects for each dataset ID"""
+        if "gliders.ioos.us" in self.server:
+            gliderBool = True
+        else:
+            gliderBool = False
+            
         for dataset_id in dataset_ids:
             dataset = dw.DatasetWrangler(
                 dataset_id= dataset_id,
+                datasetTitle=(self.datasetTitles.get(dataset_id))[0],
                 server= self.server,
-                is_nrt= self.is_nrt
+                is_nrt= self.is_nrt,
+                is_glider= gliderBool
             )
             self.datasets.append(dataset)
     
     
-    #Gets dataset DAS    
-
-        
-    def setErddap(self, erddapIndex: int):
-        filepath = getErddapList()
-        with open(filepath, 'r') as f:
-            data = json.load(f)
-        
-        if erddapIndex > len(data) or erddapIndex < 1:
-            print(f"\nOf the {len(data)} options, input:{erddapIndex} was not one of them.")
-            run.cui()            
-        else:
-            erddap_dict = data[erddapIndex - 1]
-            print(f"\nSelected ERDDAP Server: {erddap_dict['name']}")
-
-            server_obj = custom_server
-            baseurl = erddap_dict['url']
-
-            # Remove index.html and trailing slashes
-            if baseurl.endswith("index.html"):
-                baseurl = baseurl[:-10].rstrip('/')
-
-            try:
-                serv_check = requests.get(baseurl)
-                serv_check.raise_for_status()
-
-                server_url = f"{baseurl}/tabledap/"
-                setattr(server_obj, 'server', server_url)
-
-                # Set server info URL 
-                server_info_url = f"{baseurl}/info/index.json?itemsPerPage=100000"
-                setattr(server_obj, 'serverInfo', server_info_url)
-
-                return server_obj
-            
-            except requests.exceptions.HTTPError as http_err:
-                print(f"HTTP error {http_err} occurred when connecting to {baseurl}")
-                return None
-
-        
+       
     def getDatasetsFromSearch(self, search: str) -> list:
         url = f"{self.serverInfo}"
         try:
@@ -268,30 +324,6 @@ class ERDDAPHandler:
 
         return valid_attributes
 
-
-    #--------------------------------------------------------------------------------
-
-    # def responseToCsv(self, response: any) -> str:
-    #     csvResponse = response[0]
-    #     responseCode = response[1]
-    #     if responseCode != 200:
-    #         return None
-    #     try:
-    #         csvData = StringIO(csvResponse)
-
-    #         df = pd.read_csv(csvData, header=None, low_memory=False)
-
-    #         temp_dir = getTempDir()
-    #         file_path = os.path.join(temp_dir, f"{self.datasetid}.csv")
-
-    #         df.to_csv(file_path, index=False, header=False)
-
-    #         return file_path
-    #     except Exception as e:
-    #         print(f"Error converting response to CSV: {e}")
-    #         return None
-
-
     # Creates a list of time values between start and end time
     def iterateTime(self, incrementType: str, increment: int) -> list:
         timeList = []
@@ -320,28 +352,16 @@ class ERDDAPHandler:
             print(f"Unexpected error occurred: {err}")
             return None, None
 
-custom_server = ERDDAPHandler(
-    server = None,
-    serverInfo = None,
-    datasetid = None,
-    fileType = None,
-    geoParams = {
-    "locationType": "coordinates",
-    "latitudeFieldName": "latitude__degrees_north_",
-    "longitudeFieldName": "longitude__degrees_east_",
-    "timeFieldName": "time__UTC_",
-    },
-)
-
-# # class ERDDAPHandler:
-#     def __init__(self, server, serverInfo, datasetid, attributes, fileType, longitude, latitude, time, start_time, end_time, geoParams):
-#         self.availData = None
-#         self.server = server
-#         self.serverInfo = serverInfo
-#         self.datasetid = datasetid
-#         self.attributes = attributes
-#         self.fileType = fileType
-#         self.geoParams = geoParams
-#         self.datasets = []
-#         self.is_nrt = False
+# custom_server = ERDDAPHandler(
+#     server = None,
+#     serverInfo = None,
+#     datasetid = None,
+#     fileType = None,
+#     geoParams = {
+#     "locationType": "coordinates",
+#     "latitudeFieldName": "latitude__degrees_north_",
+#     "longitudeFieldName": "longitude__degrees_east_",
+#     "timeFieldName": "time__UTC_",
+#     },
+# )
 

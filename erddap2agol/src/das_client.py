@@ -1,5 +1,5 @@
 import sys, os, datetime 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import json
 from collections import OrderedDict
 from . import erddap_wrangler as ec
@@ -9,39 +9,118 @@ from typing import Any, List
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 
-def parseDasResponse(response_text):
-    """Parse the DAS response text into an ordered dictionary for conversion to JSON"""
+def parseDasResponse(response_text) -> OrderedDict:
+    """
+    Parse the DAS response text into an OrderedDict for conversion to JSON.
+    multi-line handling for NC_Global attributes
+    """
     data = OrderedDict()
     current_section = None
     section_name = None
 
-    for line in response_text.strip().splitlines():
-        line = line.strip()
+    inNcGlobal = False
+    inMultilineValue = False
+    mline_attr_name = None
+    mline_attr_type = None
+    mline_value_lines = []
 
+    # A state for if we see a license"
+    check_for_quotes = False
+
+    lines = response_text.strip().splitlines()
+
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        
+        # Skip 'Attributes {' line
         if line.startswith("Attributes {"):
             continue
-
+        
+        # Check if line ends with '{' => new section
         if line.endswith("{"):
-            section_name = line.split()[0]
+            section_name = line.split()[0]  # e.g. "NC_GLOBAL"
             current_section = OrderedDict()
             data[section_name] = current_section
+            
+            # if it's NC_GLOBAL, we allow multi-line
+            inNcGlobal = (section_name == "NC_GLOBAL")
             continue
-
+        
+        # Check if line == '}' => end of section
         if line == "}":
+            # end current section
+            inNcGlobal = False
             section_name = None
             current_section = None
+            check_for_quotes = False
             continue
-
+        
+        # If we're in a multline joining inside NC_GLOBAL
+        if inNcGlobal and inMultilineValue:
+            mline_value_lines.append(line)
+            # check if we reached the end: line ends with '";'
+            if line.endswith('";'):
+                inMultilineValue = False
+                combined_text = "\n".join(mline_value_lines)
+                combined_text = combined_text.rstrip('";').strip()
+                
+                current_section[mline_attr_name] = {
+                    "datatype": mline_attr_type,
+                    "value": combined_text
+                }
+                # reset
+                mline_attr_name = None
+                mline_attr_type = None
+                mline_value_lines = []
+            continue
+        
+        
+        if inNcGlobal and check_for_quotes:
+            check_for_quotes = False
+            inMultilineValue = True
+            mline_value_lines = [line]
+            continue
+        
+        # Normal one-line parse
         if current_section is not None:
             parts = line.split(maxsplit=2)
             if len(parts) == 3:
                 datatype, description, value = parts
-                current_section[description] = {
-                    "datatype": datatype,
-                    "value": value.strip('";')
-                }
+                
+                # if we're in NC_GLOBAL and it's a string
+                if inNcGlobal and datatype == "String":
+                    # Check if value includes quotes
+                    if value.startswith('"') and not value.endswith('";'):
+                        # => multi-line starts on same line
+                        inMultilineValue = True
+                        mline_attr_type = datatype
+                        mline_attr_name = description
+                        mline_value_lines = [value]
+                    elif not value.startswith('"'):
+                        # This means we have something like "String license" with no quotes
+                        # so the next line(s) will be the quotes
+                        mline_attr_type = datatype
+                        mline_attr_name = description
+                        check_for_quotes = True
+                    else:
+                        # single-line string
+                        val_clean = value.strip('";')
+                        current_section[description] = {
+                            "datatype": datatype,
+                            "value": val_clean
+                        }
+                else:
+                    # typical single-line attribute
+                    val_clean = value.strip('";')
+                    current_section[description] = {
+                        "datatype": datatype,
+                        "value": val_clean
+                    }
 
     return data
+
 
 def getConfDir():
 
@@ -51,6 +130,21 @@ def getConfDir():
 
     os.makedirs(das_conf_dir, exist_ok=True)
     return das_conf_dir
+
+def cleanConfDir():
+    agol_home = os.getenv('AGOL_HOME', '/arcgis/home')
+    base_dir = agol_home
+    filepath = os.path.join(base_dir, 'e2a_das_conf')
+    if os.path.exists(filepath):
+        for filename in os.listdir(filepath):
+            if filename.endswith(".json"):
+                full_path = os.path.join(filepath, filename)
+                try:
+                    os.remove(full_path)
+                except Exception as e:
+                    print(f"An unexpected error occurred while deleting {full_path}: {e}")
+    else:
+        print(f"The directory {filepath} does not exist.")
 
 def checkForJson(datasetid: str) -> bool:
     das_conf_dir = getConfDir()
@@ -80,16 +174,16 @@ def getTimeFromJson(datasetid) -> tuple:
     """Gets time from JSON file, returns max and min time as a tuple"""
     def convertFromUnix(time):
         """Convert from unix tuple to datetime tuple"""
-        #Now this is some elementary programming 
+        #Now this is programming 
         try:
             if time[0] < 0:
                 start = datetime(1970, 1, 1) + timedelta(seconds=time[0])
             else:
-                start = datetime.fromtimestamp(time[0]).strftime('%Y-%m-%dT%H:%M:%S')  
+                start = datetime.fromtimestamp(time[0], tz=timezone.utc) 
             if time[1] < 0:
                 end = datetime(1970, 1, 1) + timedelta(seconds=time[0])
             else:
-                end = datetime.fromtimestamp(time[1]).strftime('%Y-%m-%dT%H:%M:%S')
+                end = datetime.fromtimestamp(time[1], tz=timezone.utc)
                             
             return start, end
         except Exception as e:

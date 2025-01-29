@@ -121,8 +121,8 @@ class AgolWrangler:
                             props["accessInformation"] = dataset.nc_global["publisher_institution"].get("value", "")
                         elif "creator_institution" in dataset.nc_global:
                             props["accessInformation"] = dataset.nc_global["creator_institution"].get("value", "")
-                        elif "publisher_institution" in dataset.nc_global:
-                            props["accessInformation"] = dataset.nc_global["publisher_institution"].get("value", "")
+                        elif "institution" in dataset.nc_global:
+                            props["accessInformation"] = dataset.nc_global["institution"].get("value", "")
 
                         if "license" in dataset.nc_global:
                             props["licenseInfo"] = dataset.nc_global["license"].get("value", "")
@@ -131,7 +131,9 @@ class AgolWrangler:
                         props["title"] = dataset_title
 
                         server_name = dataset.server.split("/erddap/")[0].split("://")[-1]
+
                         summary = dataset.nc_global.get("summary", {}).get("value", "")
+                        
                         props["snippet"] = f"{summary}. {dataset_title} was generated with erddap2agol from the {server_name} ERDDAP."
 
                         createDescription(dataset, props)
@@ -154,7 +156,7 @@ class AgolWrangler:
                 filepath = dataset.data_filepath
                 if dataset.data_filepath:
                     print(f"\nConverting {filepath} to GeoJSON...")
-                    df = pd.read_csv(filepath)
+                    df = pd.read_csv(filepath, low_memory=False)
 
                     # Replace NaN with None in the entire DataFrame
                     df = df.replace({np.nan: None})
@@ -310,13 +312,13 @@ class AgolWrangler:
                             analyze_params = gis.content.analyze(item=subset_item.id)
                             append_success = feature_layer.append(
                                 item_id=subset_item.id,
-                                #Probably wont have to worry about geojson for large files, but just in case this is where youd change it
+                                #to incorporate subsetting geojson we need to change this
                                 upload_format='csv',
                                 source_info=analyze_params['publishParameters'],
                                 upsert=False
                             )
                             if append_success:
-                                subset_idx + 1
+                                subset_idx += 1
                                 print(f"Appended Subset {subset_idx} of {(len(paths))-1} to {published_item.title}")
                             else:
                                 print(f"\nFailed to append subset # {subset_idx} to {published_item.title}")

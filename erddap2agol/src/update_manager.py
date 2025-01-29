@@ -12,7 +12,8 @@ class UpdateManager:
 
     def __post_init__(self):
         self.connect()
-        self.searchContent()
+        # probably dont want to call search content  on init here
+        # self.searchContent()
 
     def connect(self) -> None:
         """Establish AGOL connection"""
