@@ -245,9 +245,11 @@ class DatasetWrangler:
 
         if not self.needs_Subset:
             # Single URL for datasets not requiring subsetting
+            start = self.start_time.strftime('%Y-%m-%dT%H:%M:%S')
+            end = self.end_time.strftime('%Y-%m-%dT%H:%M:%S')
             time_constraints = (
-                f"&time%3E%3D{self.start_time}Z"
-                f"&time%3C%3D{self.end_time}Z"
+                f"&time%3E%3D{start}Z"
+                f"&time%3C%3D{end}Z"
             )
             url = (
                 f"{self.server}{self.dataset_id}.{dataformat}?"
