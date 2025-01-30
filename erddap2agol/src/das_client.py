@@ -252,7 +252,7 @@ def getActualAttributes(data_Obj: Any) -> List[str]:
                 if ("_qc_" in var_name or 
                     "qartod_" in var_name or 
                     var_name.endswith("_qc") or
-                    var_name in {"latitude", "longitude", "time"}):
+                    var_name in {"latitude", "longitude"}):
                     continue
 
                 # Check coverage content type

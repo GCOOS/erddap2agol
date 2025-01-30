@@ -33,6 +33,7 @@ class DatasetWrangler:
     data_filepath:Optional[os.PathLike | list[os.PathLike]] = None
     url_s:Optional[str | list[str]] = None
     has_error: Optional[bool] = False
+    has_time: Optional[bool] = True
     
     
     def __post_init__(self):
@@ -73,6 +74,15 @@ class DatasetWrangler:
                 return None
             return func(self, *args, **kwargs)
         return wrapper
+    
+    def skipFromNoTime(func):
+        """General skip error decorator that will be applied to all dataset methods"""
+        def wrapper(self, *args, **kwargs):
+            if self.has_time == False:
+                print(f"Skipping {func.__name__} - due to processing error {self.dataset_id}")
+                return None
+            return func(self, *args, **kwargs)
+        return wrapper
 
     def getDas(self) -> None:
         """Fetch and parse DAS metadata.
@@ -107,7 +117,7 @@ class DatasetWrangler:
                 now_utc = datetime.now(timezone.utc)
 
             else:
-                self.has_error = True
+                self.has_time = False
                 pass
 
         except requests.RequestException as e:
@@ -118,7 +128,7 @@ class DatasetWrangler:
             print(f"\nError parsing DAS for {self.dataset_id}: {e}")
             self.DAS_response = False
 
-
+    @skipFromNoTime
     def getDatasetSizes(self, timeOut_time: int = 120) -> None:
         """Gets row count for dataset from ERDDAP ncHeader response, sets to attribute"""
         if not self.DAS_response:
@@ -160,6 +170,7 @@ class DatasetWrangler:
             
         return None
     
+    @skipFromNoTime
     def needsSubsetting(self, record_limit: int = 49999) -> bool:
         """Check if dataset needs to be split into chunks"""
         if self.row_count is not None:
@@ -170,6 +181,7 @@ class DatasetWrangler:
             else:
                 self.needs_Subset = False
     #This might be cutting off the last handful of records
+    @skipFromNoTime
     @skipFromError
     def calculateTimeSubset(self, chunk_size: int = 49999) -> dict:
         """Calculate time subsets based on row count.
@@ -227,7 +239,8 @@ class DatasetWrangler:
         if not self.subsets:
             self.subsets = {}
         self.subsets[subset_name] = {'start': start, 'end': end}
-
+    
+    @skipFromError
     def generateUrl(self, dataformat: str="csvp", nrt_update:bool = False) -> list[str]:
         """Builds request URLs for data, special approach for subsetting data"""
         urls = []
@@ -259,13 +272,21 @@ class DatasetWrangler:
                     f"&time%3E%3D{start}Z"
                     f"&time%3C%3D{end}Z"
                 )
-            url = (
-                f"{self.server}{self.dataset_id}.{dataformat}?"
-                # hard coded time here
-                f"time%2C{attrs_encoded}"
-                f"{time_constraints}"
-            )
-            urls.append(url)
+            if self.has_time:
+                url = (
+                    f"{self.server}{self.dataset_id}.{dataformat}?"
+                    # hard coded time here
+                    f"time%2C{attrs_encoded}"
+                    f"{time_constraints}"
+                )
+                urls.append(url)
+            else:
+                url = (
+                    f"{self.server}{self.dataset_id}.{dataformat}?"
+                    # remove time param and time_constraints
+                    f"{attrs_encoded}"
+                )
+                urls.append(url)
         else:
             # Multiple URLs for subsetted datasets
             for i, (subset_name, times) in enumerate(self.subsetDict.items()):
