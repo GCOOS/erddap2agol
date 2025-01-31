@@ -48,7 +48,7 @@ class AgolWrangler:
         try:
             self.gis = GIS("home")
             gis = self.gis
-            print("\nSuccesfully connected to " + gis.properties.portalName + " as " + gis.properties.portalName)
+            print("\nSuccesfully connected to " + gis.properties.portalName)
         except Exception as e:
             print(f"AGOL connection error: {e}")
 
@@ -409,44 +409,6 @@ class AgolWrangler:
         # Update the capabilities to disable editing
         flc.manager.update_definition({"capabilities": "Query"})
         print(f"Editing successfully disabled for item {item_id}")
-
-
-
-
-    #The below functions have no utility right now
-    # #-----------------------------------------------------------
-    # def appendTableToFeatureService(self, featureServiceID: str, tableID: str) -> str:
-    #     gis = self.gis
-    #     try:
-    #         featureServiceItem = gis.content.get(featureServiceID)
-    #         tableItem = gis.content.get(tableID)    
-    #         response = featureServiceItem.append(item_id= tableID, upload_format ='csv', source_table_name = tableItem.title)      
-            
-    #         if response['status'] == 'Completed':
-    #             print(f"Successfully appended data to Feature Service ID: {featureServiceItem.id}")
-    #         else:
-    #             print(f"Append operation completed with issues: {response}")
-            
-    #         return response
-    #     except Exception as e:
-    #         print(f"An error occurred appending the CSV data: {e}")
-
-    # def createFeatureService(self, item_prop: dict) -> str:
-    #     gis = self.gis
-    #     item_prop_mod = copy.deepcopy(item_prop)
-    #     item_prop_mod["title"] = item_prop_mod["title"] + "_AGOL"
-    #     isAvail = gis.content.is_service_name_available(item_prop_mod['title'], "Feature Service")
-    #     if isAvail == True:
-    #         try:
-    #             featureService = gis.content.create_service(item_prop_mod['title'], "Feature Service", has_static_data = False) 
-    #             featureService.update(item_properties = item_prop_mod)
-    #             print(f"Successfully created Feature Service {item_prop_mod['title']}")
-    #             return featureService.id
-            
-    #         except Exception as e:
-    #             print(f"An error occurred creating the Feature Service: {e}")
-    #     else:
-    #         print(f"Feature Service {item_prop_mod['title']} already exists, use OverwriteFS to Update")
 
 
 

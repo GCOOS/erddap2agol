@@ -262,7 +262,7 @@ class ERDDAPHandler:
         for dataset_id in dataset_ids:
             dataset = dw.DatasetWrangler(
                 dataset_id= dataset_id,
-                datasetTitle=(self.datasetTitles.get(dataset_id))[0],
+                datasetTitle=(self.datasetTitles.get(dataset_id)),
                 server= self.server,
                 is_nrt= self.is_nrt,
                 is_glider= gliderBool

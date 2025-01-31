@@ -170,9 +170,10 @@ def saveToJson(data, datasetid: str) -> str:
 
 
 
-def getTimeFromJson(datasetid) -> tuple:
+def getTimeFromJson(data_Obj) -> tuple:
+    datasetid = data_Obj.dataset_id
     """Gets time from JSON file, returns max and min time as a tuple"""
-    def convertFromUnix(time):
+    def convertFromUnix(time: tuple):
         """Convert from unix tuple to datetime tuple"""
         #Now this is programming 
         try:
@@ -196,8 +197,11 @@ def getTimeFromJson(datasetid) -> tuple:
         data = json.load(json_file)
     
     try:
-        time_str = data['time']['actual_range']['value']
-        start_time_str, end_time_str = time_str.split(', ')
+        time_ref = data.get(data_Obj.time_str, {}).get('actual_range', {}).get('value')
+        print(time_ref)
+   
+
+        start_time_str, end_time_str = time_ref.split(', ')
         start_time = (float(start_time_str))
         end_time = (float(end_time_str))
         time_tup = start_time, end_time
@@ -221,7 +225,7 @@ def displayAttributes(timeintv: int , attributes: list) -> None:
 def getActualAttributes(data_Obj: Any) -> List[str]:
     """Load DAS JSON file and extract relevant attributes while filtering out QC variables.
     datasetid (str): The dataset identifier
-        
+    sets self.has_time 
     Returns list[str]: List of valid attribute names or None if error
     """
     dataset_id = data_Obj.dataset_id
@@ -247,6 +251,12 @@ def getActualAttributes(data_Obj: Any) -> List[str]:
                     has_lat = True
                 elif var_name == "longitude":
                     has_lon = True
+                
+                # check if there is a time attribute by cat and if there is set it
+                ioos_cat_val = var_attrs.get("ioos_category", {}).get("value", "")
+                if ioos_cat_val == "Time":
+                    data_Obj.time_str = var_name
+                    data_Obj.has_time = True
 
                 # Skip QC and coordinate variables
                 if ("_qc_" in var_name or 
@@ -265,9 +275,11 @@ def getActualAttributes(data_Obj: Any) -> List[str]:
                 if 'actual_range' in var_attrs or len(var_attrs) == 1:
                     attributes_set.add(var_name)
             
+            # we will handle this differently later.
+            # if not lat and lon we will publish as a hosted table
             if not (has_lat and has_lon):
                 data_Obj.has_error = True
-
+    
             return list(attributes_set)
             
     except FileNotFoundError:

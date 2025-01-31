@@ -34,6 +34,7 @@ class DatasetWrangler:
     url_s:Optional[str | list[str]] = None
     has_error: Optional[bool] = False
     has_time: Optional[bool] = True
+    time_str: Optional[str] = None
     
     
     def __post_init__(self):
@@ -55,16 +56,6 @@ class DatasetWrangler:
             self.needsSubsetting()
             if self.needs_Subset == True:
                 self.subsetDict = self.calculateTimeSubset()
-
-    def requireTime(func):
-        """Require time decorator"""
-        def wrapper(self, *args, **kwargs):
-            if not self.start_time or self.end_time:
-                print(f"Skipping {func.__name__} - No time for {self.dataset_id}")
-                self.has_error = True
-                return None
-            return func(self, *args, **kwargs)
-        return wrapper
     
     def skipFromError(func):
         """General skip error decorator that will be applied to all dataset methods"""
@@ -79,7 +70,7 @@ class DatasetWrangler:
         """General skip error decorator that will be applied to all dataset methods"""
         def wrapper(self, *args, **kwargs):
             if self.has_time == False:
-                print(f"Skipping {func.__name__} - due to processing error {self.dataset_id}")
+                print(f"Skipping {func.__name__} - time not present for {self.dataset_id}")
                 return None
             return func(self, *args, **kwargs)
         return wrapper
@@ -94,7 +85,7 @@ class DatasetWrangler:
             response.raise_for_status()
             self.DAS_response = True
             
-            # Parse DAS response
+            # reduce this to one step
             DAS_Dict = dc.convertToDict(dc.parseDasResponse(response.text))
             self.DAS_filepath = dc.saveToJson(DAS_Dict, self.dataset_id)
             
@@ -105,20 +96,16 @@ class DatasetWrangler:
             # Get attributes and time range
             self.attribute_list = dc.getActualAttributes(self)
 
-            
-            time_range = dc.getTimeFromJson(self.dataset_id)
-            if time_range:
-                self.start_time, self.end_time = time_range
-                if self.start_time.tzinfo is None:
-                    self.start_time = self.start_time.replace(tzinfo=timezone.utc)
-                if self.end_time.tzinfo is None:
-                    self.end_time = self.end_time.replace(tzinfo=timezone.utc)
-                
-                now_utc = datetime.now(timezone.utc)
-
-            else:
-                self.has_time = False
-                pass
+            if self.has_time:
+                time_range = dc.getTimeFromJson(self)
+                if time_range:
+                    self.start_time, self.end_time = time_range
+                    if self.start_time.tzinfo is None:
+                        self.start_time = self.start_time.replace(tzinfo=timezone.utc)
+                    if self.end_time.tzinfo is None:
+                        self.end_time = self.end_time.replace(tzinfo=timezone.utc)
+                    
+                    now_utc = datetime.now(timezone.utc)
 
         except requests.RequestException as e:
             print(f"\nError fetching DAS for {self.dataset_id}: {e}")
@@ -258,25 +245,28 @@ class DatasetWrangler:
 
         if not self.needs_Subset:
             # Single URL for datasets not requiring subsetting
-            if nrt_update or self.is_nrt:
-                start = self.start_time
-                end = self.end_time
-                time_constraints = (
-                    f"&time%3E%3D{start}Z"
-                    f"&time%3C%3D{end}Z"
-                )
-            else:
-                start = self.start_time.strftime('%Y-%m-%dT%H:%M:%S')
-                end = self.end_time.strftime('%Y-%m-%dT%H:%M:%S')
-                time_constraints = (
-                    f"&time%3E%3D{start}Z"
-                    f"&time%3C%3D{end}Z"
-                )
             if self.has_time:
+                # nrt time set is returning a string instead of dt obj 
+                # time constraints
+                if nrt_update or self.is_nrt:
+                    start = self.start_time
+                    end = self.end_time
+                    time_constraints = (
+                        f"&{self.time_str}%3E%3D{start}Z"
+                        f"&{self.time_str}%3C%3D{end}Z"
+                    )
+                # other time constraints
+                else:
+                    start = self.start_time.strftime('%Y-%m-%dT%H:%M:%S')
+                    end = self.end_time.strftime('%Y-%m-%dT%H:%M:%S')
+                    time_constraints = (
+                        f"&{self.time_str}%3E%3D{start}Z"
+                        f"&{self.time_str}%3C%3D{end}Z"
+                    )
                 url = (
                     f"{self.server}{self.dataset_id}.{dataformat}?"
-                    # hard coded time here
-                    f"time%2C{attrs_encoded}"
+                    # hard coded time here- not anymore
+                    f"&{self.time_str}%2C{attrs_encoded}"
                     f"{time_constraints}"
                 )
                 urls.append(url)
@@ -293,21 +283,21 @@ class DatasetWrangler:
                 # not the final chunch, < for upper bound
                 if i < (len(self.subsetDict) -1):
                     time_constraints = (
-                        f"&time%3E%3D{times['start']}Z"
-                        f"&time%3C{times['end']}Z"
+                        f"&{self.time_str}%3E%3D{times['start']}Z"
+                        f"&{self.time_str}%3C{times['end']}Z"
                     # f"&time%3C%3D{times['end']}Z"
                     )
 
                 else:
                     # the final chunk, <=
                     time_constraints = (
-                        f"&time%3E%3D{times['start']}Z"
-                        f"&time%3C%3D{times['end']}Z"
+                        f"&{self.time_str}%3E%3D{times['start']}Z"
+                        f"&{self.time_str}%3C%3D{times['end']}Z"
                     )
 
                 url = (
                     f"{self.server}{self.dataset_id}.{dataformat}?"
-                    f"time%2C{attrs_encoded}"
+                    f"{self.time_str}%2C{attrs_encoded}"
                     f"{time_constraints}"
                 )
                 urls.append(url)
