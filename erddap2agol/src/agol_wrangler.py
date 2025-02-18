@@ -319,7 +319,7 @@ class AgolWrangler:
                             )
                             if append_success:
                                 subset_idx += 1
-                                print(f"Appended Subset {subset_idx} of {(len(paths))-1} to {published_item.title}")
+                                print(f"Appended Subset {subset_idx} of {(len(paths))} to {published_item.title}")
                             else:
                                 print(f"\nFailed to append subset # {subset_idx} to {published_item.title}")
                             subset_item.delete(permanent=True)

@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Optional, Dict, List
 from io import StringIO
-import datetime, requests, re, math, os, pandas as pd
+import datetime, requests, re, math, os, json, pandas as pd
 from datetime import timedelta, datetime
 
 #---------------------DatasetWrangler---------------------
@@ -33,6 +33,7 @@ class DatasetWrangler:
     data_filepath:Optional[os.PathLike | list[os.PathLike]] = None
     url_s:Optional[str | list[str]] = None
     has_error: Optional[bool] = False
+    ignore_error: Optional[bool] = False
     has_time: Optional[bool] = True
     time_str: Optional[str] = None
     
@@ -238,9 +239,9 @@ class DatasetWrangler:
         if additionalAttr and 'depth' in additionalAttr:
             additionalAttr.remove('depth')
             attrs.append('depth')
-        attrs.extend(["longitude", "latitude"])
         if additionalAttr:
             attrs.extend(additionalAttr)
+        attrs.remove(self.time_str)
         attrs_encoded = '%2C'.join(attrs)
 
         if not self.needs_Subset:
@@ -340,15 +341,15 @@ class DatasetWrangler:
                 return file_path
 
             except requests.exceptions.Timeout as e:
-                print(f"Timeout for URL: {url} | Error: {e}")
+                print(f"\nTimeout for URL: {url} | Error: {e}")
                 return None
             except requests.exceptions.RequestException as e:
+                print(f"\nRequest Exception | Error: {e}")
                 # This catches all other request errors (e.g., 4xx, 5xx).
-                print(f"Request exception for URL: {url} | Error: {e}")
                 return None
             except Exception as e:
                 # Catch any other unforeseen errors
-                print(f"Error processing URL | Exception: {e}")
+                print(f"\nError processing URL | Exception: {e}")
                 return None
 
         # ----------------------------------------------------
@@ -397,8 +398,8 @@ class DatasetWrangler:
                 attempt_num = attempts_dict[url]
                 
                 print(
-                    f"Downloading subset {subset_index}/{len(self.url_s)} "
-                    f"({self.url_s[subset_index-1]})"
+                    f"\nDownloading subset {subset_index}/{len(self.url_s)} "
+                    # f"({self.url_s[subset_index-1]})"
                     f"(Attempt: {attempt_num}/{connection_attempts}) "
                 )
                 
@@ -415,7 +416,7 @@ class DatasetWrangler:
                     else:
                         # Exceeded attempts
                         self.has_error = True
-                        print(f"Max retries exceeded for URL: {url}")
+                        print(f"\nMax retries exceeded for subset num {subset_index} URL: {url}")
                         # At this point, we can either:
                         # 1) Decide to continue processing other URLs
                         # 2) Break entirely

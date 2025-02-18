@@ -59,7 +59,8 @@ def erddapSelection(GliderServ = False, nrtAdd = False) -> ec.ERDDAPHandler:
                 run.cui()
         else:
             print("\nInput cannot be none")
-            return None
+            run.cui()
+            
         
 # if you want to change dispLength, do that here.
 def selectDatasetFromList(erddapObj, dispLength=50, interactive=True) -> list:
@@ -89,12 +90,12 @@ def selectDatasetFromList(erddapObj, dispLength=50, interactive=True) -> list:
                 search_url = (
                     f"{base_url}/search/advanced.json?"
                     f"searchFor={search_term}"
-                    f"&page=1&itemsPerPage=10000000&minTime=now-{erddapObj.moving_window_days}days&maxTime=&protocol=tabledap"
+                    f"&page=1&itemsPerPage=10000000&minTime=now-{erddapObj.moving_window_days}days&maxTime=&protocol={erddapObj.protocol}"
                 )
             else:
                 search_url = (
                     f"{base_url}/search/advanced.json?"
-                    f"page=1&itemsPerPage=10000000&minTime=now-{erddapObj.moving_window_days}days&maxTime=&protocol=tabledap"
+                    f"page=1&itemsPerPage=10000000&minTime=now-{erddapObj.moving_window_days}days&maxTime=&protocol={erddapObj.protocol}"
                 )
             erddapObj.serverInfo = search_url
             dataset_id_list = erddapObj.getDatasetIDList()
@@ -107,7 +108,7 @@ def selectDatasetFromList(erddapObj, dispLength=50, interactive=True) -> list:
             search_url = (
                 f"{base_url}/search/index.json?"
                 f"searchFor={search_term}"
-                f"&page=1&itemsPerPage=100000&protocol=tabledap"
+                f"&page=1&itemsPerPage=100000&protocol={erddapObj.protocol}"
             )
             erddapObj.serverInfo = search_url
             dataset_id_list = erddapObj.getDatasetIDList()
