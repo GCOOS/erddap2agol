@@ -196,21 +196,23 @@ def getTimeFromJson(data_Obj) -> tuple:
             print(f"Error converting from Unix: {e}")
             return None
     # main function body here
-    try:
-        das_conf_dir = getConfDir()
-        filepath = os.path.join(das_conf_dir, f'{datasetid}.json')
-        with open(filepath, 'r') as json_file:
-            data = json.load(json_file)
+    
+    das_conf_dir = getConfDir()
+    filepath = os.path.join(das_conf_dir, f'{datasetid}.json')
+    with open(filepath, 'r') as json_file:
+        data = json.load(json_file)
+        try:
             time_ref = data.get(data_Obj.time_str, {}).get('actual_range', {}).get('value')
             start_time_str, end_time_str = time_ref.split(', ')
             start_time = (float(start_time_str))
             end_time = (float(end_time_str))
             time_tup = start_time, end_time
             return convertFromUnix(time_tup)
-    except Exception as e:
-        print(f"Error getting time from JSON: {e}")
-        return None
-    
+        except Exception as e:
+            print(f"\nError getting actual range from JSON for {data_Obj.datasetTitle}, identified date time might be float")
+            data_Obj.has_error = True
+            pass
+
 
 def convertFromUnixDT(time_tuple):
     start_unix, end_unix = time_tuple
@@ -253,7 +255,7 @@ def getActualAttributes(data_Obj: Any) -> List[str]:
                 elif var_name == "longitude":
                     has_lon = True
                 
-                # prioritize time, then datecollec, then if ioos cat is time and units are unix time
+                # prioritize attributes that are likely to be the correct time val
                 # else no time
                 if var_name == "time":
                     data_Obj.has_time = True
@@ -261,7 +263,11 @@ def getActualAttributes(data_Obj: Any) -> List[str]:
                 elif data_Obj.time_str is None and var_name == "datecollec":
                     data_Obj.has_time = True
                     data_Obj.time_str = "datecollec"
-                
+                elif data_Obj.time_str is None and var_name == "date_gmt":
+                    data_Obj.has_time = True
+                    data_Obj.time_str = "date_gmt"
+
+                # if one of the three options above did not return any vars, we get the first attribute that has unix time                  
                 elif data_Obj.time_str is None:
                     ioos_cat_val = var_attrs.get("ioos_category", {}).get("value", "")
                     units = var_attrs.get("units", {}).get("value", "")

@@ -62,7 +62,7 @@ class DatasetWrangler:
         """General skip error decorator that will be applied to all dataset methods"""
         def wrapper(self, *args, **kwargs):
             if self.has_error == True:
-                print(f"Skipping {func.__name__} - due to processing error {self.dataset_id}")
+                print(f"\nSkipping {func.__name__} - due to processing error {self.dataset_id}")
                 return None
             return func(self, *args, **kwargs)
         return wrapper
@@ -236,12 +236,20 @@ class DatasetWrangler:
         
         # Prepare attributes
         attrs = []
+        # add z here
         if additionalAttr and 'depth' in additionalAttr:
             additionalAttr.remove('depth')
             attrs.append('depth')
         if additionalAttr:
             attrs.extend(additionalAttr)
-        attrs.remove(self.time_str)
+
+        # commenting this code out as we handle time differently now
+        if self.time_str in attrs:
+            attrs.remove(self.time_str)
+        #     print(f"\n debug dw.248: time removed")
+        
+        # print(f"{self.time_str}")
+        # print(f"{attrs}")
         attrs_encoded = '%2C'.join(attrs)
 
         if not self.needs_Subset:
@@ -267,7 +275,7 @@ class DatasetWrangler:
                 url = (
                     f"{self.server}{self.dataset_id}.{dataformat}?"
                     # hard coded time here- not anymore
-                    f"&{self.time_str}%2C{attrs_encoded}"
+                    f"{self.time_str}%2C{attrs_encoded}"
                     f"{time_constraints}"
                 )
                 urls.append(url)
@@ -408,11 +416,20 @@ class DatasetWrangler:
                 if filepath:
                     # Success: add to final filepaths
                     filepaths.append(filepath)
+                 # Failure or timeout
                 else:
-                    # Failure or timeout
+                                
                     if attempt_num < connection_attempts:
                         # Skip now, but come back later by pushing to end of queue
                         urls_queue.append((url, subset_index))
+                    
+                    # in this condition, we assume the dataset will continue to fail
+                    # the first element failed for a second time, and we assume all failed because the last element 
+                    # At this point in the loop the iterator should be 2 if the first element failed above  
+                    if attempts_dict[url][0] == 2 and attempts_dict[url][-1] == 1:
+                        self.has_error = True
+                        print(f"\nIt appears all subset download attempts failed, we will not try again: has_error = True")
+                    
                     else:
                         # Exceeded attempts
                         self.has_error = True
