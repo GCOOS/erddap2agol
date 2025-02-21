@@ -18,6 +18,7 @@ class DatasetWrangler:
     datasetTitle: dict
     server: str
     row_count: Optional[int] = None
+    chunk_size: Optional[int] = 49000
     attribute_list: Optional[List[str]] = field(default_factory=list)
     start_time: Optional[datetime] = None
     end_time: Optional[datetime] = None
@@ -159,36 +160,35 @@ class DatasetWrangler:
         return None
     
     @skipFromNoTime
-    def needsSubsetting(self, record_limit: int = 49999) -> bool:
+    def needsSubsetting(self) -> bool:
         """Check if dataset needs to be split into chunks"""
         if self.row_count is not None:
             #bypass for glider datasets
-            if self.row_count > record_limit and self.is_glider != True:
-                self.needs_Subset = True
+            if self.row_count > self.chunk_size and self.is_glider != True:
                 print(f"\nUh oh! {self.dataset_id} is too big ({self.row_count} records) and needs to be chunked!")
+                if self.row_count > 500000:
+                    # if the row count is greater than 500,000 change chunk size from 49999 to 100000
+                    self.chunk_size = 100000
+                    self.needs_Subset = True
+                else:
+                    self.needs_Subset = True
             else:
                 self.needs_Subset = False
-    #This might be cutting off the last handful of records
+    
+    
     @skipFromNoTime
     @skipFromError
-    def calculateTimeSubset(self, chunk_size: int = 49999) -> dict:
+    def calculateTimeSubset(self) -> dict:
         """Calculate time subsets based on row count.
             Method applies if self.needs_Subset is True """
+        chunk_size = self.chunk_size
         if not self.needs_Subset:
             return None
         
         try:
-            # Ensure datetime objects
-
+    
             start = self.start_time
             end = self.end_time
-            
-            
-            #end = self.end_time if isinstance(self.end_time, datetime) else datetime.fromisoformat(self.end_time)
-            # if self.end_time.tzinfo is None:
-            #     self.end_time = self.end_time.replace(tzinfo=timezone.utc)
-            #now_utc = datetime.now(timezone.utc)
-            #end = now_utc
 
             # Calculate exact chunks needed
             total_records = self.row_count
@@ -251,7 +251,8 @@ class DatasetWrangler:
         # print(f"{self.time_str}")
         # print(f"{attrs}")
         attrs_encoded = '%2C'.join(attrs)
-
+        
+        #----------- Single file URL build -----------
         if not self.needs_Subset:
             # Single URL for datasets not requiring subsetting
             if self.has_time:
@@ -279,6 +280,7 @@ class DatasetWrangler:
                     f"{time_constraints}"
                 )
                 urls.append(url)
+            #----------- Multiple file URL build -----------
             else:
                 url = (
                     f"{self.server}{self.dataset_id}.{dataformat}?"
@@ -297,12 +299,14 @@ class DatasetWrangler:
                     # f"&time%3C%3D{times['end']}Z"
                     )
 
-                else:
+                elif i == (len(self.subsetDict) -1):
                     # the final chunk, <=
                     time_constraints = (
                         f"&{self.time_str}%3E%3D{times['start']}Z"
                         f"&{self.time_str}%3C%3D{times['end']}Z"
                     )
+                else:
+                    time_constraints = (f"&{self.time_str}=NaN")
 
                 url = (
                     f"{self.server}{self.dataset_id}.{dataformat}?"
@@ -310,6 +314,15 @@ class DatasetWrangler:
                     f"{time_constraints}"
                 )
                 urls.append(url)
+            
+            time_constraints = (f"&{self.time_str}=NaN") 
+            url = (
+                    f"{self.server}{self.dataset_id}.{dataformat}?"
+                    f"{self.time_str}%2C{attrs_encoded}"
+                    f"{time_constraints}"
+                )
+            urls.append(url)
+            
         
         self.url_s = urls
         return urls
@@ -426,14 +439,22 @@ class DatasetWrangler:
                     # in this condition, we assume the dataset will continue to fail
                     # the first element failed for a second time, and we assume all failed because the last element 
                     # At this point in the loop the iterator should be 2 if the first element failed above  
-                    if attempts_dict[url][0] == 2 and attempts_dict[url][-1] == 1:
+                    # if attempts_dict[url][0] == 2 and attempts_dict[url][-1] == 1:
+                    if attempts_dict[self.url_s[0]] == 2 and attempts_dict[self.url_s[-1]] == 1:
                         self.has_error = True
                         print(f"\nIt appears all subset download attempts failed, we will not try again: has_error = True")
                     
-                    else:
-                        # Exceeded attempts
+                    elif attempt_num > connection_attempts:
                         self.has_error = True
                         print(f"\nMax retries exceeded for subset num {subset_index} URL: {url}")
+                        pass
+
+                    else:
+                        self.has_error = True
+                        print(f"Error in download queue")
+
+                        # Exceeded attempts
+                        
                         # At this point, we can either:
                         # 1) Decide to continue processing other URLs
                         # 2) Break entirely
