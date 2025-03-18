@@ -105,7 +105,7 @@ class AgolWrangler:
                     props = {
                         "type": "CSV",
                         "item_type": "Feature Service",
-                        "tags": ["erddap2agol", f"{dataset.dataset_id}"]
+                        "tags": ["erddap2agol", f"did_{dataset.dataset_id}"]
                     }
                     
                     if dataset.attribute_list:
