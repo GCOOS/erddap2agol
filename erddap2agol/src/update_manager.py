@@ -72,7 +72,7 @@ class UpdateManager:
                         "agol_id": item.id
                     }
                 else:
-                    print(f"Insufficent information gathered from existing item {dataset_id}, skipping")
+                    print(f"Insufficent information gathered from existing item {item.id}, skipping")
                     pass
 
             print(f"\nFound {len(self.datasets)} NRT datasets")
