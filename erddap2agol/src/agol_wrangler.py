@@ -129,7 +129,7 @@ class AgolWrangler:
                             props["licenseInfo"] = dataset.nc_global["license"].get("value", "")
                         
                         # swapped assignment of dataset_title from dataset id attribute to dataset title attribute
-                        dataset_title = dataset.datasetTitle
+                        dataset_title = dataset.dataset_title
                         props["title"] = dataset_title
 
                         server_name = dataset.server.split("/erddap/")[0].split("://")[-1]
@@ -295,7 +295,7 @@ class AgolWrangler:
                         break
 
                     # Publish
-                    print(f"\nPublishing item: {dataset.datasetTitle}...")
+                    print(f"\nPublishing item: {dataset.dataset_title}...")
 
                     # set worker to keep track of time for publish.
                     with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:

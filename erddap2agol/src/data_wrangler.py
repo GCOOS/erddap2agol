@@ -15,8 +15,9 @@ from datetime import timedelta, datetime
 @dataclass
 class DatasetWrangler:
     dataset_id: str
-    datasetTitle: dict
+    dataset_title: dict
     server: str
+    no_time_range: Optional[bool] = None
     row_count: Optional[int] = None
     chunk_size: Optional[int] = 49000
     attribute_list: Optional[List[str]] = field(default_factory=list)
@@ -76,6 +77,15 @@ class DatasetWrangler:
                 return None
             return func(self, *args, **kwargs)
         return wrapper
+    
+    def skipFromNoRange(func):
+        """General skip error decorator that will be applied to all dataset methods"""
+        def wrapper(self, *args, **kwargs):
+            if self.no_time_range == True:
+                print(f"Skipping {func.__name__} - no time range for {self.dataset_id}")
+                return None
+            return func(self, *args, **kwargs)
+        return wrapper
 
     def getDas(self) -> None:
         """Fetch and parse DAS metadata.
@@ -118,6 +128,7 @@ class DatasetWrangler:
             self.DAS_response = False
 
     @skipFromNoTime
+    @skipFromNoRange
     def getDatasetSizes(self, timeOut_time: int = 120) -> None:
         """Gets row count for dataset from ERDDAP ncHeader response, sets to attribute"""
         if not self.DAS_response:
@@ -160,12 +171,13 @@ class DatasetWrangler:
         return None
     
     @skipFromNoTime
+    @skipFromNoRange
     def needsSubsetting(self) -> bool:
         """Check if dataset needs to be split into chunks"""
         if self.row_count is not None:
             #bypass for glider datasets
             if self.row_count > self.chunk_size and self.is_glider != True:
-                print(f"\nUh oh! {self.dataset_id} is too big ({self.row_count} records) and needs to be chunked!")
+                print(f"\nUh oh! {self.dataset_title} is too big ({self.row_count} records) and needs to be chunked!")
                 if self.row_count > 500000:
                     # if the row count is greater than 500,000 change chunk size from 49999 to 100000
                     self.chunk_size = 100000
@@ -178,6 +190,7 @@ class DatasetWrangler:
     
     @skipFromNoTime
     @skipFromError
+    @skipFromNoRange
     def calculateTimeSubset(self) -> dict:
         """Calculate time subsets based on row count.
             Method applies if self.needs_Subset is True """
@@ -251,9 +264,15 @@ class DatasetWrangler:
         # print(f"{self.time_str}")
         # print(f"{attrs}")
         attrs_encoded = '%2C'.join(attrs)
+        if self.no_time_range:
+            url = (
+                    f"{self.server}{self.dataset_id}.{dataformat}?"
+                    # hard coded time here- not anymore
+                    f"{attrs_encoded}")
+            urls.append(url)
         
         #----------- Single file URL build -----------
-        if not self.needs_Subset:
+        if not self.needs_Subset and not self.no_time_range:
             # Single URL for datasets not requiring subsetting
             if self.has_time:
                 # nrt time set is returning a string instead of dt obj 
@@ -445,13 +464,16 @@ class DatasetWrangler:
                         print(f"\nIt appears all subset download attempts failed, we will not try again: has_error = True")
                     
                     elif attempt_num > connection_attempts:
-                        self.has_error = True
                         print(f"\nMax retries exceeded for subset num {subset_index} URL: {url}")
                         pass
 
                     else:
-                        self.has_error = True
-                        print(f"Error in download queue")
+                        if filepaths:
+                            print(f"\nSome downloads failed, posting partial data to AGOL for {self.dataset_id}")
+                        else:
+                            print(f"\nError in download queue, no filepaths detected")
+                            self.has_error = True
+                            
 
                         # Exceeded attempts
                         

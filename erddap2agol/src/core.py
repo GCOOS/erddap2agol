@@ -1,4 +1,5 @@
 import sys, os, concurrent.futures, time, math
+from tabulate import tabulate
 from . import erddap_wrangler as ec
 from . import agol_wrangler as aw
 from . import data_wrangler as dw
@@ -33,34 +34,42 @@ def inputToList(user_input) -> list:
  # Survives refactor
 def erddapSelection(GliderServ = False, nrtAdd = False) -> ec.ERDDAPHandler:
     if GliderServ == True:
-        erddapObj = ec.ERDDAPHandler.setErddap(15)
+        erddapObj = ec.ERDDAPHandler().setErddap(15)
         return erddapObj
     else:
         ec.getErddapList()
         ec.showErddapList()
         uc = input("\nSelect an ERDDAP server to use: ")
         if uc:
-            erddapObj = ec.ERDDAPHandler()
-            erddapObj =  erddapObj.setErddap(int(uc))
-           
-            # erddapObj = ec.ERDDAPHandler.setErddap(int(uc))
-            print(f"\nSelected server: {erddapObj.server}")
-            uc = input("Proceed with server selection? (y/n): ")
+            try:
+                erddapObj = ec.ERDDAPHandler()
+                erddapObj = erddapObj.setErddap(int(uc))
+                
+                # If setErddap returns None (invalid index), exit early
+                if erddapObj is None:
+                    print("Invalid server selection. Please try again.")
+                    return None
+                
+                print(f"\nSelected server: {erddapObj.server}")
+                uc = input("Proceed with server selection? (y/n): ")
 
-            if uc.lower() == "y":
-                print("\nContinuing with selected server...")
-                if nrtAdd is True:
-                    erddapObj.is_nrt = True
-                    return erddapObj
+                if uc.lower() == "y":
+                    print("\nContinuing with selected server...")
+                    if nrtAdd is True:
+                        erddapObj.is_nrt = True
+                        return erddapObj
+                    else:
+                        return erddapObj
                 else:
-                    return erddapObj
-            else:
-                print("\nReturning to main menu...")
-                run.cui()
+                    print("\nReturning to main menu...")
+                    return None
+            except ValueError:
+                print("Please enter a valid number.")
+                return None
         else:
             print("\nInput cannot be none")
-            run.cui()
-            
+            return None
+        
         
 # if you want to change dispLength, do that here.
 def selectDatasetFromList(erddapObj, dispLength=50, interactive=True) -> list:
@@ -326,7 +335,7 @@ def selectDatasetFromList(erddapObj, dispLength=50, interactive=True) -> list:
         #enumerate through current ds, idx used for selection
         for i, ds in enumerate(current_ds):
             #ref datasetTitles dict
-            titles = erddapObj.datasetTitles.get(ds,"")
+            titles = erddapObj.dataset_titles.get(ds,"")
             title_str = f"{start_idx + i + 1}. {titles}"
             # id_str = f"ID: {ds}"
             print(title_str) 
@@ -351,7 +360,10 @@ def selectDatasetFromList(erddapObj, dispLength=50, interactive=True) -> list:
             if finished:
                 clearScreen()
                 print("\nAdding the following datasets to the next step:")
-                print(mgr.selectedDatasets)
+                # Create a list of tuples for the table
+                #print(mgr.selectedDatasets)
+                table_data = [(ds_id, erddapObj.dataset_titles.get(ds_id, "No title")) for ds_id in mgr.selectedDatasets]
+                print(tabulate(table_data, headers=['Dataset ID', 'Dataset Title'], tablefmt='grid'))
                 return mgr.selectedDatasets
         else:
             # Possibly indices or ranges

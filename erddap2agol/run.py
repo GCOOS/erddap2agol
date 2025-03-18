@@ -40,7 +40,7 @@ def cui():
         print("2. Create Glider DAC Datasets")
         print("3. Create NRT Items")
         print("4. Find & Update NRT Items")
-        print("5. Exit")
+        print("5. Exit & Clean Temp")
 
         user_choice = input(": ")  
 

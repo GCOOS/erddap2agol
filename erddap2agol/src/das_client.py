@@ -8,6 +8,14 @@ from typing import Any, List
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
+def skipFromNoRange(func):
+        """General skip error decorator that will be applied to all dataset methods"""
+        def wrapper(self, *args, **kwargs):
+            if dw.DatasetWrangler.no_time_range == True:
+                print(f"\nSkipping {func.__name__} - for {self.dataset_id}")
+                return None
+            return func(self, *args, **kwargs)
+        return wrapper
 
 def parseDasResponse(response_text) -> OrderedDict:
     """
@@ -175,7 +183,6 @@ def getTimeFromJson(data_Obj) -> tuple:
     """Gets time from JSON file, returns max and min time as a tuple"""
     def convertFromUnix(time: tuple):
         """Convert from unix tuple to datetime tuple"""
-        
         try:
             d_time_now = datetime.now(tz=timezone.utc)
             epoch = datetime.fromtimestamp(0, tz=timezone.utc)
@@ -196,12 +203,11 @@ def getTimeFromJson(data_Obj) -> tuple:
             print(f"Error converting from Unix: {e}")
             return None
     # main function body here
-    
     das_conf_dir = getConfDir()
     filepath = os.path.join(das_conf_dir, f'{datasetid}.json')
     with open(filepath, 'r') as json_file:
         data = json.load(json_file)
-        try:
+        try:            
             time_ref = data.get(data_Obj.time_str, {}).get('actual_range', {}).get('value')
             start_time_str, end_time_str = time_ref.split(', ')
             start_time = (float(start_time_str))
@@ -209,9 +215,15 @@ def getTimeFromJson(data_Obj) -> tuple:
             time_tup = start_time, end_time
             return convertFromUnix(time_tup)
         except Exception as e:
-            print(f"\nError getting actual range from JSON for {data_Obj.datasetTitle}, identified date time might be float")
-            data_Obj.has_error = True
-            pass
+            if data_Obj.time_str and "actual_range" not in data.get(data_Obj.time_str, {}):
+                print(f"\nSpecial case: {data_Obj.time_str} has no actual_range field")
+                data_Obj.needs_Subset = False
+                data_Obj.no_time_range = True
+                return None
+            else:
+                print(f"\nError getting actual range from JSON for {data_Obj.dataset_title}, {e}")
+                data_Obj.has_error = True
+                return None
 
 
 def convertFromUnixDT(time_tuple):
@@ -274,7 +286,7 @@ def getActualAttributes(data_Obj: Any) -> List[str]:
                     if ioos_cat_val == "Time" and units == "seconds since 1970-01-01T00:00:00Z":
                         data_Obj.time_str = var_name
                         data_Obj.has_time = True
-                        print(f"\nThis dataset has time. Attribute Name: {data_Obj.time_str}")
+                        #print(f"\nThis dataset has time. Attribute Name: {data_Obj.time_str}")
                         # Skip QC and coordinate variables
                         if ("_qc_" in var_name or 
                             "qartod_" in var_name or 

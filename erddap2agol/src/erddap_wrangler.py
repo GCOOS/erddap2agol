@@ -105,7 +105,7 @@ class ERDDAPHandler:
         self.fileType = fileType
         self.geoParams = geoParams
         self.datasets = []
-        self.datasetTitles = {}
+        self.dataset_titles = {}
         self.is_nrt = False
         self.moving_window_days = 7
         self._availData = None
@@ -236,7 +236,7 @@ class ERDDAPHandler:
             title_idx = col_names.index("Title")
             proto_idx = col_names.index(f"{self.protocol}")                  
             dataset_id_list = []
-            self.datasetTitles = {}  # reset or build fresh each time
+            self.dataset_titles = {}  # reset or build fresh each time
 
             for row in rows:
                 # this should filter out tabledap vs griddap
@@ -255,7 +255,7 @@ class ERDDAPHandler:
                     dataset_title = row[title_idx]
 
                 dataset_id_list.append(data_id)
-                self.datasetTitles[data_id] = dataset_title
+                self.dataset_titles[data_id] = dataset_title
 
             return dataset_id_list
 
@@ -273,7 +273,7 @@ class ERDDAPHandler:
         for dataset_id in dataset_ids:
             dataset = dw.DatasetWrangler(
                 dataset_id= dataset_id,
-                datasetTitle=(self.datasetTitles.get(dataset_id)),
+                dataset_title=(self.dataset_titles.get(dataset_id)),
                 server= self.server,
                 is_nrt= self.is_nrt,
                 is_glider= gliderBool
