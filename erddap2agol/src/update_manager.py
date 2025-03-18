@@ -57,7 +57,7 @@ class UpdateManager:
 
                 # Check tags for one starting with https://
                 for tagz in item.tags:
-                    if tagz.lower().startswith("https://"):
+                    if tagz.lower().startswith("http"):
                         base_url = tagz
                 
                 # Store the info by dataset_id
