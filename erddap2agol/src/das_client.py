@@ -6,6 +6,11 @@ from . import erddap_wrangler as ec
 from . import data_wrangler as dw
 from typing import Any, List
 
+#------------------------------------------------
+# Make this module a child class of agol wrangler
+#------------------------------------------------
+
+
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 def skipFromNoRange(func):

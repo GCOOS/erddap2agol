@@ -241,6 +241,7 @@ class DatasetWrangler:
             self.subsets = {}
         self.subsets[subset_name] = {'start': start, 'end': end}
     
+    # this function is a nightmare to read
     @skipFromError
     def generateUrl(self, dataformat: str="csvp", nrt_update:bool = False) -> list[str]:
         """Builds request URLs for data, special approach for subsetting data"""

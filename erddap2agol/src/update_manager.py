@@ -63,6 +63,10 @@ class UpdateManager:
                         base_url = tagz
                     if tagz.lower().startswith("did_"):
                         dataset_id = tagz.split("did_")[1]
+
+                # preserve update functionality for datasets that have the did in the title
+                if dataset_id is None:
+                    dataset_id = item.title.split(" ")[0] if ' ' in item.title else item.title
                 
                 # Store the info by dataset_id
 
