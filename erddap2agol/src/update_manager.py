@@ -52,19 +52,28 @@ class UpdateManager:
             # Populate self.datasets dict from attributes of the content item
             for item in search_results:
                 # e2a items should always retain the data id, whatever comes after that can be customized
-                dataset_id = item.title.split(" ")[0] if ' ' in item.title else item.title
-                base_url = None
+                #dataset_id = item.title.split(" ")[0] if ' ' in item.title else item.title
+                #base_url = None
 
                 # Check tags for one starting with https://
+                dataset_id = None
+                base_url = None
                 for tagz in item.tags:
                     if tagz.lower().startswith("http"):
                         base_url = tagz
+                    if tagz.lower().startswith("did_"):
+                        dataset_id = tagz.split("did_")[1]
                 
                 # Store the info by dataset_id
-                self.datasets[dataset_id] = {
-                    "base_url": base_url,
-                    "agol_id": item.id
-                }
+
+                if dataset_id and base_url and item.id:
+                    self.datasets[dataset_id] = {
+                        "base_url": base_url,
+                        "agol_id": item.id
+                    }
+                else:
+                    print(f"Insufficent information gathered from existing item {item.id}, skipping")
+                    pass
 
             print(f"\nFound {len(self.datasets)} NRT datasets")
 

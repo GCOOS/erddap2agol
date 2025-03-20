@@ -8,6 +8,7 @@ import copy, os, sys, time, pandas as pd, numpy as np, json
 from dataclasses import dataclass, field
 from typing import Optional, List, Dict
 #from line_profiler import profile
+from collections import deque
 import concurrent.futures
 
 @dataclass
@@ -48,7 +49,7 @@ class AgolWrangler:
         try:
             self.gis = GIS("home")
             gis = self.gis
-            print("\nSuccesfully connected to " + gis.properties.portalName + " as " + gis.properties.portalName)
+            print("\nSuccesfully connected to " + gis.properties.portalName)
         except Exception as e:
             print(f"AGOL connection error: {e}")
 
@@ -56,7 +57,7 @@ class AgolWrangler:
         """General skip error decorator that will be applied to all dataset methods"""
         def wrapper(self, *args, **kwargs):
             if dw.DatasetWrangler.has_error == True:
-                print(f"Skipping {func.__name__} - due to processing error {self.dataset_id}")
+                print(f"\nSkipping {func.__name__} - due to processing error {self.dataset_id}")
                 return None
             return func(self, *args, **kwargs)
         return wrapper
@@ -104,7 +105,7 @@ class AgolWrangler:
                     props = {
                         "type": "CSV",
                         "item_type": "Feature Service",
-                        "tags": ["erddap2agol", f"{dataset.dataset_id}"]
+                        "tags": ["erddap2agol", f"did_{dataset.dataset_id}"]
                     }
                     
                     if dataset.attribute_list:
@@ -126,8 +127,9 @@ class AgolWrangler:
 
                         if "license" in dataset.nc_global:
                             props["licenseInfo"] = dataset.nc_global["license"].get("value", "")
-
-                        dataset_title = dataset.dataset_id
+                        
+                        # swapped assignment of dataset_title from dataset id attribute to dataset title attribute
+                        dataset_title = dataset.dataset_title
                         props["title"] = dataset_title
 
                         server_name = dataset.server.split("/erddap/")[0].split("://")[-1]
@@ -293,7 +295,7 @@ class AgolWrangler:
                         break
 
                     # Publish
-                    print(f"\nPublishing item for {dataset.dataset_id}...")
+                    print(f"\nPublishing item: {dataset.dataset_title}...")
 
                     # set worker to keep track of time for publish.
                     with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
@@ -303,23 +305,31 @@ class AgolWrangler:
                     adjustSharingAndCapabilities(published_item)
 
                     # -------------Append Subsets-------------
+                    # set up queue like dw download process
+                    subset_queue = deque(paths)
+                    subset_dict = {u: 1 for u in paths}
+                    subset_queue = deque([(paths, i+1) for i, paths in enumerate(paths)])
+                    
                     if published_item.layers:
                         feature_layer = published_item.layers[0]
                         subset_idx = 1
                         for subset_path in paths[1:]:
-                            subset_item_future = user_root.add(item_properties=self.mapItemProperties(dataset_id=dataset.dataset_id), file=subset_path)
-                            subset_item = subset_item_future.result()
-                            analyze_params = gis.content.analyze(item=subset_item.id)
-                            append_success = feature_layer.append(
-                                item_id=subset_item.id,
-                                #to incorporate subsetting geojson we need to change this
-                                upload_format='csv',
-                                source_info=analyze_params['publishParameters'],
-                                upsert=False
-                            )
+                            try:
+                                subset_item_future = user_root.add(item_properties=self.mapItemProperties(dataset_id=dataset.dataset_id), file=subset_path)
+                                subset_item = subset_item_future.result()
+                                analyze_params = gis.content.analyze(item=subset_item.id)
+                                append_success = feature_layer.append(
+                                    item_id=subset_item.id,
+                                    #to incorporate subsetting geojson we need to change this
+                                    upload_format='csv',
+                                    source_info=analyze_params['publishParameters'],
+                                    upsert=False
+                                )
+                            except Exception as e:
+                                print(f"\nFailed to append subset # {subset_idx}. Error | {e}")
                             if append_success:
                                 subset_idx += 1
-                                print(f"Appended Subset {subset_idx} of {(len(paths))-1} to {published_item.title}")
+                                print(f"\nAppended Subset {subset_idx} of {(len(paths))} to {published_item.title}")
                             else:
                                 print(f"\nFailed to append subset # {subset_idx} to {published_item.title}")
                             subset_item.delete(permanent=True)
@@ -334,7 +344,7 @@ class AgolWrangler:
                         item_future = user_root.add(item_properties=self.mapItemProperties(dataset_id=dataset.dataset_id), file=path)
                         item = item_future.result()
                     except Exception as e:
-                        print(f"Unfortunately adding the first subset failed: {e}")
+                        print(f"Unfortunately adding the file has failed: {e}")
                         dataset.has_error = True
                         pass
                     # Publish
@@ -409,44 +419,6 @@ class AgolWrangler:
         # Update the capabilities to disable editing
         flc.manager.update_definition({"capabilities": "Query"})
         print(f"Editing successfully disabled for item {item_id}")
-
-
-
-
-    #The below functions have no utility right now
-    # #-----------------------------------------------------------
-    # def appendTableToFeatureService(self, featureServiceID: str, tableID: str) -> str:
-    #     gis = self.gis
-    #     try:
-    #         featureServiceItem = gis.content.get(featureServiceID)
-    #         tableItem = gis.content.get(tableID)    
-    #         response = featureServiceItem.append(item_id= tableID, upload_format ='csv', source_table_name = tableItem.title)      
-            
-    #         if response['status'] == 'Completed':
-    #             print(f"Successfully appended data to Feature Service ID: {featureServiceItem.id}")
-    #         else:
-    #             print(f"Append operation completed with issues: {response}")
-            
-    #         return response
-    #     except Exception as e:
-    #         print(f"An error occurred appending the CSV data: {e}")
-
-    # def createFeatureService(self, item_prop: dict) -> str:
-    #     gis = self.gis
-    #     item_prop_mod = copy.deepcopy(item_prop)
-    #     item_prop_mod["title"] = item_prop_mod["title"] + "_AGOL"
-    #     isAvail = gis.content.is_service_name_available(item_prop_mod['title'], "Feature Service")
-    #     if isAvail == True:
-    #         try:
-    #             featureService = gis.content.create_service(item_prop_mod['title'], "Feature Service", has_static_data = False) 
-    #             featureService.update(item_properties = item_prop_mod)
-    #             print(f"Successfully created Feature Service {item_prop_mod['title']}")
-    #             return featureService.id
-            
-    #         except Exception as e:
-    #             print(f"An error occurred creating the Feature Service: {e}")
-    #     else:
-    #         print(f"Feature Service {item_prop_mod['title']} already exists, use OverwriteFS to Update")
 
 
 
