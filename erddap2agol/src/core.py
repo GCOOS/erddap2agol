@@ -466,7 +466,7 @@ def updateNRT(
         #-------------------------------------------
         for datasetid, info in items:
             serverurl = info.get('base_url')
-            datasetObj = dw.DatasetWrangler(dataset_id=datasetid, datasetTitle=None, server=serverurl, is_nrt=True)
+            datasetObj = dw.DatasetWrangler(dataset_id=datasetid, server=serverurl, is_nrt=True)
             datasetObj.generateUrl(nrt_update=True)  # sets datasetObj.url_s
 
             agol_id = info.get('agol_id')

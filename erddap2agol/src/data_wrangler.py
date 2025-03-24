@@ -325,8 +325,8 @@ class DatasetWrangler:
                         f"&{self.time_str}%3E%3D{times['start']}Z"
                         f"&{self.time_str}%3C%3D{times['end']}Z"
                     )
-                else:
-                    time_constraints = (f"&{self.time_str}=NaN")
+                # else:
+                #     time_constraints = (f"&{self.time_str}=NaN")
 
                 url = (
                     f"{self.server}{self.dataset_id}.{dataformat}?"
@@ -334,14 +334,15 @@ class DatasetWrangler:
                     f"{time_constraints}"
                 )
                 urls.append(url)
-            
-            time_constraints = (f"&{self.time_str}=NaN") 
-            url = (
-                    f"{self.server}{self.dataset_id}.{dataformat}?"
-                    f"{self.time_str}%2C{attrs_encoded}"
-                    f"{time_constraints}"
-                )
-            urls.append(url)
+                # We need a better way to identify if there are NaNs in the dataset
+                if self.no_time_range:
+                    time_constraints = (f"&{self.time_str}=NaN") 
+                    url = (
+                            f"{self.server}{self.dataset_id}.{dataformat}?"
+                            f"{self.time_str}%2C{attrs_encoded}"
+                            f"{time_constraints}"
+                        )
+                    urls.append(url)
             
         
         self.url_s = urls
@@ -393,7 +394,8 @@ class DatasetWrangler:
                 print(f"\nError processing URL | Exception: {e}")
                 return None
 
-        # ----------------------------------------------------
+# ----------------------------------------------------------------------------
+
         # Individual file download (no subsets)
         if not self.needs_Subset:
             #print(f"\nDownloading data for {self.dataset_id}")
@@ -419,7 +421,8 @@ class DatasetWrangler:
                 self.has_error = True
                 return None
 
-        # ----------------------------------------------------
+# ----------------------------------------------------------------------------
+
         # Subset (chunked) file download
         else:
             print(f"\nDownloading data for {self.dataset_id}")
@@ -451,7 +454,9 @@ class DatasetWrangler:
                     filepaths.append(filepath)
                  # Failure or timeout
                 else:
-                                
+                    is_nan_url = (url == self.url_s[-1])
+                    if is_nan_url:
+                        print(f"\n No NaN time values returned, continuing")
                     if attempt_num < connection_attempts:
                         # Skip now, but come back later by pushing to end of queue
                         urls_queue.append((url, subset_index))
@@ -470,7 +475,7 @@ class DatasetWrangler:
 
                     else:
                         if filepaths:
-                            print(f"\nSome downloads failed, posting partial data to AGOL for {self.dataset_id}")
+                            print(f"\nSome downloads failed for {self.dataset_id}")
                         else:
                             print(f"\nError in download queue, no filepaths detected")
                             self.has_error = True
