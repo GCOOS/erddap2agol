@@ -6,8 +6,21 @@ from . import erddap_wrangler as ec
 from . import data_wrangler as dw
 from typing import Any, List
 
+#------------------------------------------------
+# Make this module a child class of agol wrangler
+#------------------------------------------------
+
+
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
+def skipFromNoRange(func):
+        """General skip error decorator that will be applied to all dataset methods"""
+        def wrapper(self, *args, **kwargs):
+            if dw.DatasetWrangler.no_time_range == True:
+                print(f"\nSkipping {func.__name__} - for {self.dataset_id}")
+                return None
+            return func(self, *args, **kwargs)
+        return wrapper
 
 def parseDasResponse(response_text) -> OrderedDict:
     """
@@ -170,18 +183,23 @@ def saveToJson(data, datasetid: str) -> str:
 
 
 
-def getTimeFromJson(datasetid) -> tuple:
+def getTimeFromJson(data_Obj) -> tuple:
+    datasetid = data_Obj.dataset_id
     """Gets time from JSON file, returns max and min time as a tuple"""
-    def convertFromUnix(time):
+    def convertFromUnix(time: tuple):
         """Convert from unix tuple to datetime tuple"""
-        #Now this is programming 
         try:
+            d_time_now = datetime.now(tz=timezone.utc)
+            epoch = datetime.fromtimestamp(0, tz=timezone.utc)
+            now_float =  (d_time_now - epoch).total_seconds()
             if time[0] < 0:
                 start = datetime(1970, 1, 1) + timedelta(seconds=time[0])
             else:
                 start = datetime.fromtimestamp(time[0], tz=timezone.utc) 
             if time[1] < 0:
-                end = datetime(1970, 1, 1) + timedelta(seconds=time[0])
+                end = datetime(1970, 1, 1) + timedelta(seconds=time[1])
+            elif time[1] > now_float:
+                end = datetime.now(tz=timezone.utc)
             else:
                 end = datetime.fromtimestamp(time[1], tz=timezone.utc)
                             
@@ -189,23 +207,29 @@ def getTimeFromJson(datasetid) -> tuple:
         except Exception as e:
             print(f"Error converting from Unix: {e}")
             return None
-    
+    # main function body here
     das_conf_dir = getConfDir()
     filepath = os.path.join(das_conf_dir, f'{datasetid}.json')
     with open(filepath, 'r') as json_file:
         data = json.load(json_file)
-    
-    try:
-        time_str = data['time']['actual_range']['value']
-        start_time_str, end_time_str = time_str.split(', ')
-        start_time = (float(start_time_str))
-        end_time = (float(end_time_str))
-        time_tup = start_time, end_time
-        return convertFromUnix(time_tup)
-    except Exception as e:
-        print(f"Error getting time from JSON: {e}")
-        return None
-    
+        try:            
+            time_ref = data.get(data_Obj.time_str, {}).get('actual_range', {}).get('value')
+            start_time_str, end_time_str = time_ref.split(', ')
+            start_time = (float(start_time_str))
+            end_time = (float(end_time_str))
+            time_tup = start_time, end_time
+            return convertFromUnix(time_tup)
+        except Exception as e:
+            if data_Obj.time_str and "actual_range" not in data.get(data_Obj.time_str, {}):
+                print(f"\nSpecial case: {data_Obj.time_str} has no actual_range field")
+                data_Obj.needs_Subset = False
+                data_Obj.no_time_range = True
+                return None
+            else:
+                print(f"\nError getting actual range from JSON for {data_Obj.dataset_title}, {e}")
+                data_Obj.has_error = True
+                return None
+
 
 def convertFromUnixDT(time_tuple):
     start_unix, end_unix = time_tuple
@@ -221,7 +245,7 @@ def displayAttributes(timeintv: int , attributes: list) -> None:
 def getActualAttributes(data_Obj: Any) -> List[str]:
     """Load DAS JSON file and extract relevant attributes while filtering out QC variables.
     datasetid (str): The dataset identifier
-        
+    sets self.has_time 
     Returns list[str]: List of valid attribute names or None if error
     """
     dataset_id = data_Obj.dataset_id
@@ -247,27 +271,44 @@ def getActualAttributes(data_Obj: Any) -> List[str]:
                     has_lat = True
                 elif var_name == "longitude":
                     has_lon = True
+                
+                # prioritize attributes that are likely to be the correct time val
+                # else no time
+                if var_name == "time":
+                    data_Obj.has_time = True
+                    data_Obj.time_str = "time"
+                elif data_Obj.time_str is None and var_name == "datecollec":
+                    data_Obj.has_time = True
+                    data_Obj.time_str = "datecollec"
+                elif data_Obj.time_str is None and var_name == "date_gmt":
+                    data_Obj.has_time = True
+                    data_Obj.time_str = "date_gmt"
 
-                # Skip QC and coordinate variables
-                if ("_qc_" in var_name or 
-                    "qartod_" in var_name or 
-                    var_name.endswith("_qc") or
-                    var_name in {"latitude", "longitude", "time"}):
-                    continue
-
-                # Check coverage content type
-                coverage_content_type_entry = var_attrs.get('coverage_content_type', {})
-                coverage_content_type = coverage_content_type_entry.get('value', '')
-                if coverage_content_type in ('qualityInformation', 'other'):
-                    continue
+                # if one of the three options above did not return any vars, we get the first attribute that has unix time                  
+                elif data_Obj.time_str is None:
+                    ioos_cat_val = var_attrs.get("ioos_category", {}).get("value", "")
+                    units = var_attrs.get("units", {}).get("value", "")
+                    if ioos_cat_val == "Time" and units == "seconds since 1970-01-01T00:00:00Z":
+                        data_Obj.time_str = var_name
+                        data_Obj.has_time = True
+                        #print(f"\nThis dataset has time. Attribute Name: {data_Obj.time_str}")
+                        # Skip QC and coordinate variables
+                        if ("_qc_" in var_name or 
+                            "qartod_" in var_name or 
+                            var_name.endswith("_qc") or
+                            var_name in {"latitude", "longitude"}):
+                            continue
 
                 # Include variables with actual_range or single attribute
                 if 'actual_range' in var_attrs or len(var_attrs) == 1:
                     attributes_set.add(var_name)
             
+            # we will handle this differently later.
+            # if not lat and lon we will publish as a hosted table
             if not (has_lat and has_lon):
+                print(f"No longitude or latitude error: {data_Obj.dataset_id}")
                 data_Obj.has_error = True
-
+    
             return list(attributes_set)
             
     except FileNotFoundError:

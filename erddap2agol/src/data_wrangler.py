@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Optional, Dict, List
 from io import StringIO
-import datetime, requests, re, math, os, pandas as pd
+import datetime, requests, re, math, os, json, pandas as pd
 from datetime import timedelta, datetime
 
 #---------------------DatasetWrangler---------------------
@@ -15,9 +15,11 @@ from datetime import timedelta, datetime
 @dataclass
 class DatasetWrangler:
     dataset_id: str
-    datasetTitle: dict
+    dataset_title: dict
     server: str
+    no_time_range: Optional[bool] = None
     row_count: Optional[int] = None
+    chunk_size: Optional[int] = 49000
     attribute_list: Optional[List[str]] = field(default_factory=list)
     start_time: Optional[datetime] = None
     end_time: Optional[datetime] = None
@@ -33,6 +35,9 @@ class DatasetWrangler:
     data_filepath:Optional[os.PathLike | list[os.PathLike]] = None
     url_s:Optional[str | list[str]] = None
     has_error: Optional[bool] = False
+    ignore_error: Optional[bool] = False
+    has_time: Optional[bool] = True
+    time_str: Optional[str] = None
     
     
     def __post_init__(self):
@@ -54,22 +59,30 @@ class DatasetWrangler:
             self.needsSubsetting()
             if self.needs_Subset == True:
                 self.subsetDict = self.calculateTimeSubset()
-
-    def requireTime(func):
-        """Require time decorator"""
-        def wrapper(self, *args, **kwargs):
-            if not self.start_time or self.end_time:
-                print(f"Skipping {func.__name__} - No time for {self.dataset_id}")
-                self.has_error = True
-                return None
-            return func(self, *args, **kwargs)
-        return wrapper
     
     def skipFromError(func):
         """General skip error decorator that will be applied to all dataset methods"""
         def wrapper(self, *args, **kwargs):
             if self.has_error == True:
-                print(f"Skipping {func.__name__} - due to processing error {self.dataset_id}")
+                print(f"\nSkipping {func.__name__} - due to processing error {self.dataset_id}")
+                return None
+            return func(self, *args, **kwargs)
+        return wrapper
+    
+    def skipFromNoTime(func):
+        """General skip error decorator that will be applied to all dataset methods"""
+        def wrapper(self, *args, **kwargs):
+            if self.has_time == False:
+                print(f"Skipping {func.__name__} - time not present for {self.dataset_id}")
+                return None
+            return func(self, *args, **kwargs)
+        return wrapper
+    
+    def skipFromNoRange(func):
+        """General skip error decorator that will be applied to all dataset methods"""
+        def wrapper(self, *args, **kwargs):
+            if self.no_time_range == True:
+                print(f"Skipping {func.__name__} - no time range for {self.dataset_id}")
                 return None
             return func(self, *args, **kwargs)
         return wrapper
@@ -84,7 +97,7 @@ class DatasetWrangler:
             response.raise_for_status()
             self.DAS_response = True
             
-            # Parse DAS response
+            # reduce this to one step
             DAS_Dict = dc.convertToDict(dc.parseDasResponse(response.text))
             self.DAS_filepath = dc.saveToJson(DAS_Dict, self.dataset_id)
             
@@ -95,20 +108,16 @@ class DatasetWrangler:
             # Get attributes and time range
             self.attribute_list = dc.getActualAttributes(self)
 
-            
-            time_range = dc.getTimeFromJson(self.dataset_id)
-            if time_range:
-                self.start_time, self.end_time = time_range
-                if self.start_time.tzinfo is None:
-                    self.start_time = self.start_time.replace(tzinfo=timezone.utc)
-                if self.end_time.tzinfo is None:
-                    self.end_time = self.end_time.replace(tzinfo=timezone.utc)
-                
-                now_utc = datetime.now(timezone.utc)
-
-            else:
-                self.has_error = True
-                pass
+            if self.has_time:
+                time_range = dc.getTimeFromJson(self)
+                if time_range:
+                    self.start_time, self.end_time = time_range
+                    if self.start_time.tzinfo is None:
+                        self.start_time = self.start_time.replace(tzinfo=timezone.utc)
+                    if self.end_time.tzinfo is None:
+                        self.end_time = self.end_time.replace(tzinfo=timezone.utc)
+                    
+                    now_utc = datetime.now(timezone.utc)
 
         except requests.RequestException as e:
             print(f"\nError fetching DAS for {self.dataset_id}: {e}")
@@ -118,7 +127,8 @@ class DatasetWrangler:
             print(f"\nError parsing DAS for {self.dataset_id}: {e}")
             self.DAS_response = False
 
-
+    @skipFromNoTime
+    @skipFromNoRange
     def getDatasetSizes(self, timeOut_time: int = 120) -> None:
         """Gets row count for dataset from ERDDAP ncHeader response, sets to attribute"""
         if not self.DAS_response:
@@ -160,35 +170,38 @@ class DatasetWrangler:
             
         return None
     
-    def needsSubsetting(self, record_limit: int = 49999) -> bool:
+    @skipFromNoTime
+    @skipFromNoRange
+    def needsSubsetting(self) -> bool:
         """Check if dataset needs to be split into chunks"""
         if self.row_count is not None:
             #bypass for glider datasets
-            if self.row_count > record_limit and self.is_glider != True:
-                self.needs_Subset = True
-                print(f"\nUh oh! {self.dataset_id} is too big ({self.row_count} records) and needs to be chunked!")
+            if self.row_count > self.chunk_size and self.is_glider != True:
+                print(f"\nUh oh! {self.dataset_title} is too big ({self.row_count} records) and needs to be chunked!")
+                if self.row_count > 500000:
+                    # if the row count is greater than 500,000 change chunk size from 49999 to 100000
+                    self.chunk_size = 100000
+                    self.needs_Subset = True
+                else:
+                    self.needs_Subset = True
             else:
                 self.needs_Subset = False
-    #This might be cutting off the last handful of records
+    
+    
+    @skipFromNoTime
     @skipFromError
-    def calculateTimeSubset(self, chunk_size: int = 49999) -> dict:
+    @skipFromNoRange
+    def calculateTimeSubset(self) -> dict:
         """Calculate time subsets based on row count.
             Method applies if self.needs_Subset is True """
+        chunk_size = self.chunk_size
         if not self.needs_Subset:
             return None
         
         try:
-            # Ensure datetime objects
-
+    
             start = self.start_time
             end = self.end_time
-            
-            
-            #end = self.end_time if isinstance(self.end_time, datetime) else datetime.fromisoformat(self.end_time)
-            # if self.end_time.tzinfo is None:
-            #     self.end_time = self.end_time.replace(tzinfo=timezone.utc)
-            #now_utc = datetime.now(timezone.utc)
-            #end = now_utc
 
             # Calculate exact chunks needed
             total_records = self.row_count
@@ -227,7 +240,9 @@ class DatasetWrangler:
         if not self.subsets:
             self.subsets = {}
         self.subsets[subset_name] = {'start': start, 'end': end}
-
+    
+    # this function is a nightmare to read
+    @skipFromError
     def generateUrl(self, dataformat: str="csvp", nrt_update:bool = False) -> list[str]:
         """Builds request URLs for data, special approach for subsetting data"""
         urls = []
@@ -235,61 +250,100 @@ class DatasetWrangler:
         
         # Prepare attributes
         attrs = []
+        # add z here
         if additionalAttr and 'depth' in additionalAttr:
             additionalAttr.remove('depth')
             attrs.append('depth')
-        attrs.extend(["longitude", "latitude"])
         if additionalAttr:
             attrs.extend(additionalAttr)
-        attrs_encoded = '%2C'.join(attrs)
 
-        if not self.needs_Subset:
-            # Single URL for datasets not requiring subsetting
-            if nrt_update or self.is_nrt:
-                start = self.start_time
-                end = self.end_time
-                time_constraints = (
-                    f"&time%3E%3D{start}Z"
-                    f"&time%3C%3D{end}Z"
-                )
-            else:
-                start = self.start_time.strftime('%Y-%m-%dT%H:%M:%S')
-                end = self.end_time.strftime('%Y-%m-%dT%H:%M:%S')
-                time_constraints = (
-                    f"&time%3E%3D{start}Z"
-                    f"&time%3C%3D{end}Z"
-                )
+        # commenting this code out as we handle time differently now
+        if self.time_str in attrs:
+            attrs.remove(self.time_str)
+        #     print(f"\n debug dw.248: time removed")
+        
+        # print(f"{self.time_str}")
+        # print(f"{attrs}")
+        attrs_encoded = '%2C'.join(attrs)
+        if self.no_time_range:
             url = (
-                f"{self.server}{self.dataset_id}.{dataformat}?"
-                # hard coded time here
-                f"time%2C{attrs_encoded}"
-                f"{time_constraints}"
-            )
+                    f"{self.server}{self.dataset_id}.{dataformat}?"
+                    # hard coded time here- not anymore
+                    f"{attrs_encoded}")
             urls.append(url)
+        
+        #----------- Single file URL build -----------
+        if not self.needs_Subset and not self.no_time_range:
+            # Single URL for datasets not requiring subsetting
+            if self.has_time:
+                # nrt time set is returning a string instead of dt obj 
+                # time constraints
+                if nrt_update or self.is_nrt:
+                    start = self.start_time
+                    end = self.end_time
+                    time_constraints = (
+                        f"&{self.time_str}%3E%3D{start}Z"
+                        f"&{self.time_str}%3C%3D{end}Z"
+                    )
+                # other time constraints
+                else:
+                    start = self.start_time.strftime('%Y-%m-%dT%H:%M:%S')
+                    end = self.end_time.strftime('%Y-%m-%dT%H:%M:%S')
+                    time_constraints = (
+                        f"&{self.time_str}%3E%3D{start}Z"
+                        f"&{self.time_str}%3C%3D{end}Z"
+                    )
+                url = (
+                    f"{self.server}{self.dataset_id}.{dataformat}?"
+                    # hard coded time here- not anymore
+                    f"{self.time_str}%2C{attrs_encoded}"
+                    f"{time_constraints}"
+                )
+                urls.append(url)
+            #----------- Multiple file URL build -----------
+            else:
+                url = (
+                    f"{self.server}{self.dataset_id}.{dataformat}?"
+                    # remove time param and time_constraints
+                    f"{attrs_encoded}"
+                )
+                urls.append(url)
         else:
             # Multiple URLs for subsetted datasets
             for i, (subset_name, times) in enumerate(self.subsetDict.items()):
                 # not the final chunch, < for upper bound
                 if i < (len(self.subsetDict) -1):
                     time_constraints = (
-                        f"&time%3E%3D{times['start']}Z"
-                        f"&time%3C{times['end']}Z"
+                        f"&{self.time_str}%3E%3D{times['start']}Z"
+                        f"&{self.time_str}%3C{times['end']}Z"
                     # f"&time%3C%3D{times['end']}Z"
                     )
 
-                else:
+                elif i == (len(self.subsetDict) -1):
                     # the final chunk, <=
                     time_constraints = (
-                        f"&time%3E%3D{times['start']}Z"
-                        f"&time%3C%3D{times['end']}Z"
+                        f"&{self.time_str}%3E%3D{times['start']}Z"
+                        f"&{self.time_str}%3C%3D{times['end']}Z"
                     )
+                # else:
+                #     time_constraints = (f"&{self.time_str}=NaN")
 
                 url = (
                     f"{self.server}{self.dataset_id}.{dataformat}?"
-                    f"time%2C{attrs_encoded}"
+                    f"{self.time_str}%2C{attrs_encoded}"
                     f"{time_constraints}"
                 )
                 urls.append(url)
+                # We need a better way to identify if there are NaNs in the dataset
+                if self.no_time_range:
+                    time_constraints = (f"&{self.time_str}=NaN") 
+                    url = (
+                            f"{self.server}{self.dataset_id}.{dataformat}?"
+                            f"{self.time_str}%2C{attrs_encoded}"
+                            f"{time_constraints}"
+                        )
+                    urls.append(url)
+            
         
         self.url_s = urls
         return urls
@@ -329,18 +383,19 @@ class DatasetWrangler:
                 return file_path
 
             except requests.exceptions.Timeout as e:
-                print(f"Timeout for URL: {url} | Error: {e}")
+                print(f"\nTimeout for URL: {url} | Error: {e}")
                 return None
             except requests.exceptions.RequestException as e:
+                print(f"\nRequest Exception | Error: {e}")
                 # This catches all other request errors (e.g., 4xx, 5xx).
-                print(f"Request exception for URL: {url} | Error: {e}")
                 return None
             except Exception as e:
                 # Catch any other unforeseen errors
-                print(f"Error processing URL | Exception: {e}")
+                print(f"\nError processing URL | Exception: {e}")
                 return None
 
-        # ----------------------------------------------------
+# ----------------------------------------------------------------------------
+
         # Individual file download (no subsets)
         if not self.needs_Subset:
             #print(f"\nDownloading data for {self.dataset_id}")
@@ -366,7 +421,8 @@ class DatasetWrangler:
                 self.has_error = True
                 return None
 
-        # ----------------------------------------------------
+# ----------------------------------------------------------------------------
+
         # Subset (chunked) file download
         else:
             print(f"\nDownloading data for {self.dataset_id}")
@@ -386,8 +442,8 @@ class DatasetWrangler:
                 attempt_num = attempts_dict[url]
                 
                 print(
-                    f"Downloading subset {subset_index}/{len(self.url_s)} "
-                    f"({self.url_s[subset_index-1]})"
+                    f"\nDownloading subset {subset_index}/{len(self.url_s)} "
+                    # f"({self.url_s[subset_index-1]})"
                     f"(Attempt: {attempt_num}/{connection_attempts}) "
                 )
                 
@@ -396,15 +452,37 @@ class DatasetWrangler:
                 if filepath:
                     # Success: add to final filepaths
                     filepaths.append(filepath)
+                 # Failure or timeout
                 else:
-                    # Failure or timeout
+                    is_nan_url = (url == self.url_s[-1])
+                    if is_nan_url:
+                        print(f"\n No NaN time values returned, continuing")
                     if attempt_num < connection_attempts:
                         # Skip now, but come back later by pushing to end of queue
                         urls_queue.append((url, subset_index))
-                    else:
-                        # Exceeded attempts
+                    
+                    # in this condition, we assume the dataset will continue to fail
+                    # the first element failed for a second time, and we assume all failed because the last element 
+                    # At this point in the loop the iterator should be 2 if the first element failed above  
+                    # if attempts_dict[url][0] == 2 and attempts_dict[url][-1] == 1:
+                    if attempts_dict[self.url_s[0]] == 2 and attempts_dict[self.url_s[-1]] == 1:
                         self.has_error = True
-                        print(f"Max retries exceeded for URL: {url}")
+                        print(f"\nIt appears all subset download attempts failed, we will not try again: has_error = True")
+                    
+                    elif attempt_num > connection_attempts:
+                        print(f"\nMax retries exceeded for subset num {subset_index} URL: {url}")
+                        pass
+
+                    else:
+                        if filepaths:
+                            print(f"\nSome downloads failed for {self.dataset_id}")
+                        else:
+                            print(f"\nError in download queue, no filepaths detected")
+                            self.has_error = True
+                            
+
+                        # Exceeded attempts
+                        
                         # At this point, we can either:
                         # 1) Decide to continue processing other URLs
                         # 2) Break entirely

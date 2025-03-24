@@ -1,10 +1,9 @@
-# ERDDAP2AGOL v.0.7.0.x
+# ERDDAP2AGOL v.0.7.2.1
 
-The purpose of this project is to develop a robust tool for reliably transferring datasets between ERDDAPTM services and ArcGIS Online (AGOL). Erddap2agol is a "hands-off" Python package designed to operate seamlessly within the AGOL environment. Its core functionalities include creating, managing, and updating ERDDAPTM datasets at various levels of granularity. Developed by the Gulf of Mexico Ocean Observing System (GCOOS), erddap2agol is available for use by data providers leveraging ERDDAPTM services, as well as individuals and organizations aiming to analyze and visualize ERDDAPTM data on a GIS platform.
+The purpose of this project is to develop a robust tool for reliably transferring datasets between ERDDAPTM services and ArcGIS Online (AGOL). Erddap2agol is a "hands-off" Python package designed to operate seamlessly within the AGOL environment. Its core functionalities include creating, managing, and updating ERDDAPTM datasets at various levels of granularity. Developed by the Gulf of America Ocean Observing System (GCOOS), erddap2agol is available for use by data providers leveraging ERDDAPTM services, as well as individuals and organizations aiming to analyze and visualize ERDDAPTM data on a GIS platform.
 
-**Subscribe to the GCOOS newsletter for updates.** <br />
-
-**For questions or issues, please contact jerad.king@gcoos.org** <br />
+**Note, this program is currently limited to tabledap. griddap functionality is currently WIP** <br />
+**For questions or issues, please submit to an issue or contact jerad.king@gcoos.org** <br />
 
 ## Who is this for?
 This tool was principally designed for data managers who wish to expand the utility and accessibility of their ERDDAP services. To use the data maintenance capabilities (NRT or Weekly updates), you must be an administrator of your ArcGIS Online organization. That said, anyone can run this tool to create ERDDAP data on their ArcGIS Online account! With an easy to use command line user interface and a ready made ArcGIS Online notebook, virtually no programming experience is necessary! <br />       
@@ -15,7 +14,7 @@ This tool was principally designed for data managers who wish to expand the util
 ## Major Features
 - Manage your ERDDAP data on ArcGIS Online at a variety of time-scales or data types!
 - Explore data on 63 ERDDAP services with search features  
-- Create ERDDAP data in batch.          
+- Create ERDDAP datasets in batch. (Available now!)          
 - NRT: 7 day moving window, Level 1. (Available now!)
 - Glider DAC Line Segments: Create multiline HFLs from the Glider DAC ERDDAP (Available now!)  
 - Historical: Updated weekly, contains all data, Level 2. (Coming Soon!)

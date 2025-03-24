@@ -87,7 +87,8 @@ class ERDDAPHandler:
     def __init__(
             self, 
             server: str = None,
-            serverInfo: str = None, 
+            serverInfo: str = None,
+            protocol: str = None, 
             datasetid= None, 
             fileType: str = None, 
             geoParams={
@@ -100,10 +101,11 @@ class ERDDAPHandler:
         self.server = server
         self.serverInfo = serverInfo
         self.datasetid = datasetid
+        self.protocol = protocol
         self.fileType = fileType
         self.geoParams = geoParams
         self.datasets = []
-        self.datasetTitles = {}
+        self.dataset_titles = {}
         self.is_nrt = False
         self.moving_window_days = 7
         self._availData = None
@@ -118,6 +120,8 @@ class ERDDAPHandler:
         
         Returns ERDDAPHandler obj.
         """
+        # hardcoding protocol here
+        protocol = "tabledap"
         filepath = getErddapList()
         with open(filepath, 'r') as f:
             data = json.load(f)
@@ -140,16 +144,18 @@ class ERDDAPHandler:
                 serv_check = requests.get(baseurl)
                 serv_check.raise_for_status()
 
-                server_url = f"{baseurl}/tabledap/"
-                # setattr(server_obj, 'server', server_url)
+                server_url = f"{baseurl}/{protocol}/"
+              
 
                 # Set server info URL 
+                # https://www.ncei.noaa.gov/erddap/tabledap/allDatasets.json
                 server_info_url = f"{baseurl}/info/index.json?itemsPerPage=100000"
-                # setattr(server_obj, 'serverInfo', server_info_url)
+                
 
                 return cls(
                     server= server_url,
                     serverInfo= server_info_url,
+                    protocol= protocol,
                     datasetid=None,
                     fileType = None,
                     geoParams = {
@@ -206,9 +212,9 @@ class ERDDAPHandler:
         """Fetches a list of dataset IDs and titles from the ERDDAP server.
            spits out list of dataset IDs and {datasetid, title} dictionary"""
         
-        # serverInfo requests a json
-        url = f"{self.serverInfo}"
+        url = self.serverInfo
         try:
+            # print(url)
             response = requests.get(url)
             response.raise_for_status()
             data = response.json()
@@ -228,23 +234,28 @@ class ERDDAPHandler:
                 return []
 
             title_idx = col_names.index("Title")
-                  
+            proto_idx = col_names.index(f"{self.protocol}")                  
             dataset_id_list = []
-            self.datasetTitles = {}  # reset or build fresh each time
+            self.dataset_titles = {}  # reset or build fresh each time
 
             for row in rows:
+                # this should filter out tabledap vs griddap
+                proto_val = row[proto_idx]
+                if proto_val == '':
+                    continue                  
+
                 data_id = row[datasetid_idx]
                 # Skip the special "allDatasets" row if present
                 if data_id == "allDatasets":
                     continue
-
+                
                 # If there's a valid title column, retrieve it; otherwise None
                 dataset_title = None
                 if title_idx is not None:
                     dataset_title = row[title_idx]
 
                 dataset_id_list.append(data_id)
-                self.datasetTitles[data_id] = dataset_title
+                self.dataset_titles[data_id] = dataset_title
 
             return dataset_id_list
 
@@ -262,7 +273,7 @@ class ERDDAPHandler:
         for dataset_id in dataset_ids:
             dataset = dw.DatasetWrangler(
                 dataset_id= dataset_id,
-                datasetTitle=(self.datasetTitles.get(dataset_id))[0],
+                dataset_title=(self.dataset_titles.get(dataset_id)),
                 server= self.server,
                 is_nrt= self.is_nrt,
                 is_glider= gliderBool
