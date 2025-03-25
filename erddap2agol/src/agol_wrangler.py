@@ -292,15 +292,20 @@ class AgolWrangler:
                     except Exception as e:
                         print(f"Unfortunately adding the first subset failed: {e}")
                         dataset.has_error = True
-                        break
+                        pass
 
                     # Publish
                     print(f"\nPublishing item: {dataset.dataset_title}...")
 
                     # set worker to keep track of time for publish.
                     with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-                        future = executor.submit(item.publish, publish_parameters=geom_params, file_type=inputDataType)
-                        published_item = future.result(timeout=timeoutTime)
+                        try:
+                            future = executor.submit(item.publish, publish_parameters=geom_params, file_type=inputDataType)
+                            published_item = future.result(timeout=timeoutTime)
+                        except Exception as e:
+                            print(e)
+                            print(f"Adjusting title \n{e}")
+
                     
                     adjustSharingAndCapabilities(published_item)
 
