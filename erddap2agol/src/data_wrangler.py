@@ -19,7 +19,7 @@ class DatasetWrangler:
     server: str
     no_time_range: Optional[bool] = None
     row_count: Optional[int] = None
-    chunk_size: Optional[int] = 49000
+    chunk_size: Optional[int] = 200000
     attribute_list: Optional[List[str]] = field(default_factory=list)
     start_time: Optional[datetime] = None
     end_time: Optional[datetime] = None

@@ -19,12 +19,11 @@ class AgolWrangler:
     item_properties: Dict[str, Dict] = field(default_factory=dict)
     erddap_obj: Optional['ec.ERDDAPHandler'] = None 
     geoParams: dict = field(default_factory=lambda: {
-    "locationType": "coordinates",
-    "latitudeFieldName": "latitude__degrees_north_",
-    "longitudeFieldName": "longitude__degrees_east_",
-    "timeFieldName": "time__UTC_",
+        "locationType": "coordinates",
+        "latitudeFieldName": "latitude__degrees_north_",
+        "longitudeFieldName": "longitude__degrees_east_",
+        "timeFieldName": "time__UTC_",
     })
-
 
     def __post_init__(self):
         """Initialize AGOL connection and inherit dataset attributes"""
@@ -239,7 +238,7 @@ class AgolWrangler:
         for dataset in self.datasets:
             
             if dataset.is_glider is True:
-                 inputDataType="GeoJson"
+                inputDataType = "GeoJson"
 
             dataset_start_time = time.time()  # Track start time for this dataset
 
@@ -257,109 +256,157 @@ class AgolWrangler:
             if 'name' not in geom_params or not geom_params['name']:
                 geom_params['name'] = item_prop['title']
 
+            gis = self.gis
+            # Get the user root folder
+            user_root = gis.content.folders.get()
+
+            # ----------------- Helper Functions -----------------
+            def addOrRetry(dataset, file, max_attempts=10):
+                """
+                Attempt to add an item using the provided file and item properties.
+                If a conflict error (409) is encountered (i.e., filename exists),
+                modify the title by appending _1, _2, etc. and try again.
+                """
+                # Get a copy of the original properties to modify locally.
+                props = self.item_properties.get(dataset.dataset_id).copy()
+                base_title = props.get("title", "")
+                attempt = 0
+                while attempt < max_attempts:
+                    try:
+                        print(f"Attempt {attempt+1}: Trying to add item with title: {props.get('title')}")
+                        item_future = user_root.add(item_properties=props, file=file)
+                        item = item_future.result()
+                        return item
+                    except Exception as e:
+                        error_str = str(e)
+                        if "409" in error_str and "already exists" in error_str:
+                            attempt += 1
+                            new_title = base_title + f"_{attempt}"
+                            print(f"Filename conflict encountered. Changing title to {new_title} and retrying...")
+                            props["title"] = new_title
+                        else:
+                            raise e
+                raise Exception("Max attempts reached for adding item with retry.")
+            
+            def publishOrRetry(item, publish_parameters, file_type, timeout=300, max_attempts=10):
+                """
+                Attempt to publish an item with the provided publish parameters and file type.
+                If a conflict error (409) is encountered (i.e., an item with this title already exists),
+                update the item's title by appending _1, _2, etc. and retry publishing.
+                """
+                attempt = 0
+                base_title = item.title
+                while attempt < max_attempts:
+                    try:
+                        print(f"Attempt {attempt+1}: Publishing item with title: {item.title}")
+                        # Wrap the publish call in a ThreadPoolExecutor to allow timeout handling.
+                        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                            future = executor.submit(item.publish, publish_parameters=publish_parameters, file_type=file_type)
+                            published_item = future.result(timeout=timeout)
+                        return published_item
+                    except Exception as e:
+                        error_str = str(e)
+                        if "409" in error_str and "already exists" in error_str:
+                            attempt += 1
+                            new_title = base_title + f"_{attempt}"
+                            print(f"Publish conflict encountered. Changing title to {new_title} and retrying...")
+                            # Update the item's title before retrying
+                            item.update(item_properties={"title": new_title})
+                            # Pause briefly to allow the system to process the update
+                            time.sleep(1)
+                        else:
+                            raise e
+                raise Exception("Max attempts reached for publishing item with retry.")
+            # ----------------- End Helper Functions -----------------
+
             def adjustSharingAndCapabilities(published_item):
                 # Get fresh item
-                #time.sleep(3)  # brief pause
-                refreshed_item = self.gis.content.get(published_item.id)
+                try:
+                    refreshed_item = self.gis.content.get(published_item.id)
+                except Exception as e:
+                    print(f"Error retrieving refreshed item: {e}")
+                    return
 
-                # Update capabilities using FeatureLayerCollection (like stable code)
+                # Update capabilities using FeatureLayerCollection
                 try:
                     item_flc = FeatureLayerCollection.fromitem(refreshed_item)
                     update_definition_dict = {"capabilities": "Query,Extract"}
                     item_flc.manager.update_definition(update_definition_dict)
-                    #print(f"Successfully updated capabilities for {refreshed_item.title}")
                 except Exception as e:
                     print(f"Error adjusting capabilities: {e}")
 
                 try:
                     item_sharing_mgr = refreshed_item.sharing
                     item_sharing_mgr.sharing_level = SharingLevel.EVERYONE
-                    #print(f"Successfully updated sharing for {refreshed_item.title} to EVERYONE")
                 except Exception as e:
                     print(f"Error adjusting sharing level: {e}")
 
             try:
-                gis = self.gis
-                user_root = gis.content.folders.get()
                 if dataset.needs_Subset:
-                # -------------Subset file scenario-------------
-                # -------------First file-------------
+                    # -------------Subset file scenario-------------
+                    # -------------First file-------------
                     first_path = paths[0]
                     print(f"\nAdding first subset item for {dataset.dataset_id} to AGOL...")
                     try:
-                        item_future = user_root.add(item_properties=self.mapItemProperties(dataset_id=dataset.dataset_id), file=first_path)
-                        item = item_future.result()
+                        item = addOrRetry(dataset, first_path)
                     except Exception as e:
                         print(f"Unfortunately adding the first subset failed: {e}")
                         dataset.has_error = True
-                        pass
+                        continue
 
                     # Publish
-                    print(f"\nPublishing item: {dataset.dataset_title}...")
-
-                    # set worker to keep track of time for publish.
-                    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-                        try:
-                            future = executor.submit(item.publish, publish_parameters=geom_params, file_type=inputDataType)
-                            published_item = future.result(timeout=timeoutTime)
-                        except Exception as e:
-                            print(e)
-                            print(f"Adjusting title \n{e}")
-
-                    
-                    adjustSharingAndCapabilities(published_item)
+                    print(f"\nPublishing item for {dataset.dataset_title}...")
+                    try:
+                        published_item = publishOrRetry(item, publish_parameters=geom_params, file_type=inputDataType, timeout=timeoutTime)
+                        adjustSharingAndCapabilities(published_item)
+                    except Exception as e:
+                        print(f"Unfortunately publishing the file has failed: {e}")
+                        dataset.has_error = True
+                        continue
 
                     # -------------Append Subsets-------------
-                    # set up queue like dw download process
-                    subset_queue = deque(paths)
-                    subset_dict = {u: 1 for u in paths}
-                    subset_queue = deque([(paths, i+1) for i, paths in enumerate(paths)])
-                    
                     if published_item.layers:
                         feature_layer = published_item.layers[0]
                         subset_idx = 1
                         for subset_path in paths[1:]:
                             try:
-                                subset_item_future = user_root.add(item_properties=self.mapItemProperties(dataset_id=dataset.dataset_id), file=subset_path)
-                                subset_item = subset_item_future.result()
+                                subset_item = addOrRetry(dataset, subset_path)
                                 analyze_params = gis.content.analyze(item=subset_item.id)
                                 append_success = feature_layer.append(
                                     item_id=subset_item.id,
-                                    #to incorporate subsetting geojson we need to change this
                                     upload_format='csv',
                                     source_info=analyze_params['publishParameters'],
                                     upsert=False
                                 )
                             except Exception as e:
                                 print(f"\nFailed to append subset # {subset_idx}. Error | {e}")
+                                append_success = False
                             if append_success:
                                 subset_idx += 1
-                                print(f"\nAppended Subset {subset_idx} of {(len(paths))} to {published_item.title}")
+                                print(f"\nAppended Subset {subset_idx} of {len(paths)} to {published_item.title}")
                             else:
                                 print(f"\nFailed to append subset # {subset_idx} to {published_item.title}")
+                            # Clean up the subset item
                             subset_item.delete(permanent=True)
-                # -------------End Subset file scenario-------------
-
                 else:
                     #--------Single file scenario--------------
-                    #path = paths if isinstance(paths, str) else paths[0]
                     path = dataset.data_filepath
                     print(f"\nAdding item for {dataset.dataset_id} to AGOL...")
                     try:
-                        item_future = user_root.add(item_properties=self.mapItemProperties(dataset_id=dataset.dataset_id), file=path)
-                        item = item_future.result()
+                        item = addOrRetry(dataset, path)
                     except Exception as e:
                         print(f"Unfortunately adding the file has failed: {e}")
                         dataset.has_error = True
-                        pass
+                        continue
                     # Publish
-
                     print(f"\nPublishing item for {dataset.dataset_id}...")
-                    # set worker to keep track of time for publish.
-                    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-                        future = executor.submit(item.publish, publish_parameters=geom_params, file_type=inputDataType)
-                        published_item = future.result(timeout=timeoutTime)
-                    adjustSharingAndCapabilities(published_item)
+                    try:
+                        published_item = publishOrRetry(item, publish_parameters=geom_params, file_type=inputDataType, timeout=timeoutTime)
+                        adjustSharingAndCapabilities(published_item)
+                    except Exception as e:
+                        print(f"Unfortunately publishing the file has failed: {e}")
+                        dataset.has_error = True
+                        continue
                     #--------Single file scenario--------------
 
                 # End of dataset processing - print time
@@ -370,7 +417,7 @@ class AgolWrangler:
 
             except concurrent.futures.TimeoutError:
                 print(f"Publishing took longer than 3 minutes for {dataset.dataset_id}. Cancelling operation.")
-                future.cancel()
+                continue
             except Exception as e:
                 print(f"An error occurred adding the item for {dataset.dataset_id}: {e}")
                 continue
@@ -384,8 +431,6 @@ class AgolWrangler:
             print("\nAll done!")
             print(f"Processing completed for {processed_count} datasets")
             print(f"Total processing time: {total_time:.2f} seconds")
-        
-
 
 
     def searchContentByTag(self, tag: str) -> list:
@@ -424,7 +469,5 @@ class AgolWrangler:
         # Update the capabilities to disable editing
         flc.manager.update_definition({"capabilities": "Query"})
         print(f"Editing successfully disabled for item {item_id}")
-
-
 
 
