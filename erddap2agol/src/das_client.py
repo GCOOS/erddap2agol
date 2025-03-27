@@ -274,13 +274,20 @@ def getActualAttributes(data_Obj: Any) -> List[str]:
 
                 #attribute filter
                 # where we get attributes from
+                # if qc enabled:
                 if ("_qc_" in var_name or 
                     "qartod_" in var_name or 
                     var_name.endswith("_qc") or
                     var_name.endswith("_clm") or
                     var_name.endswith("_loc") or
                     var_name.endswith("_flt") or
-                    var_name in {"latitude", "longitude"}):
+                    var_name.endswith("_rct") or
+                    var_name.endswith("_agg") or
+                    var_name.endswith("_rng") or
+                    var_name.endswith("_agg") or
+                    var_name.endswith("_gap") or
+                    var_name.endswith("_spk")): 
+                    #var_name in {"latitude", "longitude"}):
                     continue
 
                 # include variables with actual_range or single attribute
