@@ -19,7 +19,7 @@ class DatasetWrangler:
     server: str
     no_time_range: Optional[bool] = None
     row_count: Optional[int] = None
-    chunk_size: Optional[int] = 200000
+    chunk_size: Optional[int] = 100000
     attribute_list: Optional[List[str]] = field(default_factory=list)
     start_time: Optional[datetime] = None
     end_time: Optional[datetime] = None
@@ -275,11 +275,11 @@ class DatasetWrangler:
         :param timeout_time: Seconds before requests time out.
         """
         if not self.needs_Subset:
-            return self.writeData_idv(connection_attempts, timeout_time)
+            return self._writeData_idv(connection_attempts, timeout_time)
         else:
-            return self.writeData_sub(connection_attempts, timeout_time)
+            return self._writeData_sub(connection_attempts, timeout_time)
     
-    def downloadUrl(self, url: str, timeout_time: int, subset_num: Optional[int] = None) -> Optional[str]:
+    def _downloadUrl(self, url: str, timeout_time: int, subset_num: Optional[int] = None) -> Optional[str]:
         """
         Download data from a given URL and write to a CSV file.
         Returns the file path on success, or None on failure.
@@ -307,7 +307,7 @@ class DatasetWrangler:
             print(f"\nError processing URL | Exception: {e}")
             return None
     
-    def writeData_idv(self, connection_attempts: int, timeout_time: int) -> Optional[str]:
+    def _writeData_idv(self, connection_attempts: int, timeout_time: int) -> Optional[str]:
         """
         Download data from a single URL (non-subset case).
         Returns the file path on success, or None on failure.
@@ -317,8 +317,8 @@ class DatasetWrangler:
         filepath = None
         while attempts < connection_attempts and not filepath:
             attempts += 1
-            print(f"\nDownloading data from {url} (Attempt: {attempts}/{connection_attempts})")
-            filepath = self.downloadUrl(url, timeout_time)
+            print(f"\nDownloading data data for {self.dataset_title} (Attempt: {attempts}/{connection_attempts})")
+            filepath = self._downloadUrl(url, timeout_time)
         if filepath:
             self.data_filepath = filepath
             return filepath
@@ -326,7 +326,7 @@ class DatasetWrangler:
             self.has_error = True
             return None
     
-    def writeData_sub(self, connection_attempts: int, timeout_time: int) -> Optional[List[str]]:
+    def _writeData_sub(self, connection_attempts: int, timeout_time: int) -> Optional[List[str]]:
         """
         Download data in subsets (chunked case).
         Returns a list of file paths on success, or None on failure.
@@ -344,7 +344,7 @@ class DatasetWrangler:
                 f"\nDownloading subset {subset_index}/{len(self.url_s)} "
                 f"(Attempt: {attempt_num}/{connection_attempts})"
             )
-            filepath = self.downloadUrl(url, timeout_time, subset_index)
+            filepath = self._downloadUrl(url, timeout_time, subset_index)
             if filepath:
                 filepaths.append(filepath)
             else:
