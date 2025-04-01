@@ -155,7 +155,7 @@ class DatasetWrangler:
         if self.row_count is not None:
             if self.row_count > self.chunk_size and not self.is_glider:
                 print(f"\nUh oh! {self.dataset_title} is too big ({self.row_count} records) and needs to be chunked!")
-                print("\n")
+                print("Calculating subsets...")
                 if self.row_count > 500000:
                     self.chunk_size = 100000
                     self.needs_Subset = True

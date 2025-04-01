@@ -62,7 +62,8 @@ def erddapSelection(GliderServ = False, nrtAdd = False) -> ec.ERDDAPHandler:
                         return erddapObj
                 else:
                     print("\nReturning to main menu...")
-                    return None
+                    erddapObj.reset()
+                    run.cui()
             except ValueError:
                 print("Please enter a valid number.")
                 return None

@@ -70,6 +70,7 @@ class AgolWrangler:
         else:
             print("The provided erddap_obj does not have a 'datasets' attribute.")
 
+
     @skipFromError
     def makeItemProperties(self) -> None:
         """Creates item properties using dataset attributes"""
@@ -234,9 +235,23 @@ class AgolWrangler:
         total_start_time = time.time()
         processed_count = 0
 
+        # Helper function to try renaming a file with retries
+        def _tryRename(old_path, new_path, max_attempts=5, delay=1):
+            for attempt in range(max_attempts):
+                try:
+                    os.rename(old_path, new_path)
+                    print(f"Renamed file from {old_path} to {new_path}")
+                    return new_path
+                except Exception as ex:
+                    print(f"Rename attempt {attempt+1} failed: {ex}")
+                    time.sleep(delay)
+            raise Exception(f"Failed to rename file {old_path} after {max_attempts} attempts.")
+
         # Start iterating through datasets 
         for dataset in self.datasets:
-            
+            # Dictionary to store renamed file paths for this dataset.
+            renamed_files = {}
+
             if dataset.is_glider is True:
                 inputDataType = "GeoJson"
 
@@ -265,15 +280,19 @@ class AgolWrangler:
                 """
                 Attempt to add an item using the provided file and item properties.
                 If a conflict error (409) is encountered (i.e., filename exists),
-                modify the title by appending _1, _2, etc. and try again.
+                modify the title by appending _1, _2, etc. and rename the file in place.
+                The new name is stored so subsequent calls use it.
                 """
-                # Get a copy of the original properties to modify locally.
+                # If this file has been renamed previously, use the new name.
+                if file in renamed_files:
+                    file = renamed_files[file]
+                original_file = file
                 props = self.item_properties.get(dataset.dataset_id).copy()
                 base_title = props.get("title", "")
                 attempt = 0
                 while attempt < max_attempts:
                     try:
-                        print(f"Attempt {attempt+1}: Trying to add item with title: {props.get('title')}")
+                        print(f"Attempt {attempt+1}: Trying to add item with title: {props.get('title')} and file: {os.path.basename(file)}")
                         item_future = user_root.add(item_properties=props, file=file)
                         item = item_future.result()
                         return item
@@ -282,8 +301,19 @@ class AgolWrangler:
                         if "409" in error_str and "already exists" in error_str:
                             attempt += 1
                             new_title = base_title + f"_{attempt}"
-                            print(f"Filename conflict encountered. Changing title to {new_title} and retrying...")
+                            print(f"Filename conflict encountered. Changing title to {new_title} and renaming file, then retrying...")
                             props["title"] = new_title
+                            dirname, basename = os.path.split(original_file)
+                            name, ext = os.path.splitext(basename)
+                            new_basename = name + f"_{attempt}" + ext
+                            new_file = os.path.join(dirname, new_basename)
+                            # Try renaming the file, waiting if it's locked.
+                            try:
+                                _tryRename(file, new_file)
+                            except Exception as rename_error:
+                                raise Exception(f"Unable to rename file: {rename_error}")
+                            file = new_file
+                            renamed_files[original_file] = new_file
                         else:
                             raise e
                 raise Exception("Max attempts reached for adding item with retry.")
@@ -299,7 +329,6 @@ class AgolWrangler:
                 while attempt < max_attempts:
                     try:
                         print(f"Attempt {attempt+1}: Publishing item with title: {item.title}")
-                        # Wrap the publish call in a ThreadPoolExecutor to allow timeout handling.
                         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
                             future = executor.submit(item.publish, publish_parameters=publish_parameters, file_type=file_type)
                             published_item = future.result(timeout=timeout)
@@ -310,9 +339,7 @@ class AgolWrangler:
                             attempt += 1
                             new_title = base_title + f"_{attempt}"
                             print(f"Publish conflict encountered. Changing title to {new_title} and retrying...")
-                            # Update the item's title before retrying
                             item.update(item_properties={"title": new_title})
-                            # Pause briefly to allow the system to process the update
                             time.sleep(1)
                         else:
                             raise e
@@ -320,14 +347,12 @@ class AgolWrangler:
             # ----------------- End Helper Functions -----------------
 
             def adjustSharingAndCapabilities(published_item):
-                # Get fresh item
                 try:
                     refreshed_item = self.gis.content.get(published_item.id)
                 except Exception as e:
                     print(f"Error retrieving refreshed item: {e}")
                     return
 
-                # Update capabilities using FeatureLayerCollection
                 try:
                     item_flc = FeatureLayerCollection.fromitem(refreshed_item)
                     update_definition_dict = {"capabilities": "Query,Extract"}
@@ -386,7 +411,6 @@ class AgolWrangler:
                                 print(f"\nAppended Subset {subset_idx} of {len(paths)} to {published_item.title}")
                             else:
                                 print(f"\nFailed to append subset # {subset_idx} to {published_item.title}")
-                            # Clean up the subset item
                             subset_item.delete(permanent=True)
                 else:
                     #--------Single file scenario--------------
@@ -409,7 +433,6 @@ class AgolWrangler:
                         continue
                     #--------Single file scenario--------------
 
-                # End of dataset processing - print time
                 dataset_end_time = time.time()
                 dataset_processing_time = dataset_end_time - dataset_start_time
                 processed_count += 1
@@ -422,7 +445,6 @@ class AgolWrangler:
                 print(f"An error occurred adding the item for {dataset.dataset_id}: {e}")
                 continue
 
-        # After all datasets processed, print total time
         total_end_time = time.time()
         total_time = total_end_time - total_start_time
         if processed_count == 0:
@@ -431,6 +453,7 @@ class AgolWrangler:
             print("\nAll done!")
             print(f"Processing completed for {processed_count} datasets")
             print(f"Total processing time: {total_time:.2f} seconds")
+
 
 
     def searchContentByTag(self, tag: str) -> list:
