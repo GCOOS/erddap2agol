@@ -10,6 +10,10 @@ from typing import Optional, List, Dict
 #from line_profiler import profile
 from collections import deque
 import concurrent.futures
+# sharing levels
+# PRIVATE
+# ORGANIZATION
+# EVERYONE
 
 @dataclass
 class AgolWrangler:
@@ -70,12 +74,21 @@ class AgolWrangler:
         else:
             print("The provided erddap_obj does not have a 'datasets' attribute.")
 
+    def _flattenTags(self, attrs):
+        flat = []
+        for attr in attrs:
+            if isinstance(attr, list):
+                # Recursively flatten if needed.
+                flat.extend(self._flattenTags(attr))
+            else:
+                flat.append(attr)
+        return flat
 
     @skipFromError
     def makeItemProperties(self) -> None:
         """Creates item properties using dataset attributes"""
         
-        def createDescription(dataset, props):
+        def _createDescription(dataset, props):
             """
             Incorporate nc_global metadata into AGOL item description if available.
             """
@@ -138,7 +151,7 @@ class AgolWrangler:
                         
                         props["snippet"] = f"{summary}. {dataset_title} was generated with erddap2agol from the {server_name} ERDDAP."
 
-                        createDescription(dataset, props)
+                        _createDescription(dataset, props)
 
                     if dataset.is_glider:
                         props["tags"].append("Glider DAC")
@@ -211,9 +224,7 @@ class AgolWrangler:
                     sys.exit()
 
     def mapItemProperties(self, dataset_id) -> ItemProperties:
-        """
-        Maps the self.item_properties dict to an arcgis.gis.ItemProperties instance. 
-        """
+        """Map metadata to an item properties attribute of the item class"""
         props = self.item_properties.get(dataset_id, {})
         return ItemProperties(
             title=props.get("title", ""),
@@ -293,7 +304,7 @@ class AgolWrangler:
                 while attempt < max_attempts:
                     try:
                         print(f"Attempt {attempt+1}: Trying to add item with title: {props.get('title')} and file: {os.path.basename(file)}")
-                        item_future = user_root.add(item_properties=props, file=file)
+                        item_future = user_root.add(item_properties=self.mapItemProperties(dataset_id=dataset.dataset_id), file=file)
                         item = item_future.result()
                         return item
                     except Exception as e:
@@ -328,7 +339,7 @@ class AgolWrangler:
                 base_title = item.title
                 while attempt < max_attempts:
                     try:
-                        print(f"Attempt {attempt+1}: Publishing item with title: {item.title}")
+                        #print(f"Attempt {attempt+1}: Publishing item with title: {item.title}")
                         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
                             future = executor.submit(item.publish, publish_parameters=publish_parameters, file_type=file_type)
                             published_item = future.result(timeout=timeout)
@@ -362,7 +373,7 @@ class AgolWrangler:
 
                 try:
                     item_sharing_mgr = refreshed_item.sharing
-                    item_sharing_mgr.sharing_level = SharingLevel.EVERYONE
+                    item_sharing_mgr.sharing_level = SharingLevel.ORGANIZATION
                 except Exception as e:
                     print(f"Error adjusting sharing level: {e}")
 
