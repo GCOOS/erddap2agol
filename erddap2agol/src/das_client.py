@@ -271,6 +271,29 @@ def getActualAttributes(data_Obj: Any) -> List[str]:
                     has_lat = True
                 elif var_name == "longitude":
                     has_lon = True
+
+                #attribute filter
+                # where we get attributes from
+                # if qc enabled:
+                if ("_qc_" in var_name or 
+                    "qartod_" in var_name or 
+                    var_name.endswith("_qc") or
+                    var_name.endswith("_clm") or
+                    var_name.endswith("_loc") or
+                    var_name.endswith("_flt") or
+                    var_name.endswith("_rct") or
+                    var_name.endswith("_agg") or
+                    var_name.endswith("_rng") or
+                    var_name.endswith("_agg") or
+                    var_name.endswith("_gap") or
+                    var_name.endswith("_spk")): 
+                    #var_name in {"latitude", "longitude"}):
+                    continue
+
+                # include variables with actual_range or single attribute
+                #if 'actual_range' not in var_attrs and var_attrs.get("")
+                if 'actual_range' in var_attrs or len(var_attrs) == 1:
+                    attributes_set.add(var_name)
                 
                 # prioritize attributes that are likely to be the correct time val
                 # else no time
@@ -293,15 +316,6 @@ def getActualAttributes(data_Obj: Any) -> List[str]:
                         data_Obj.has_time = True
                         #print(f"\nThis dataset has time. Attribute Name: {data_Obj.time_str}")
                         # Skip QC and coordinate variables
-                        if ("_qc_" in var_name or 
-                            "qartod_" in var_name or 
-                            var_name.endswith("_qc") or
-                            var_name in {"latitude", "longitude"}):
-                            continue
-
-                # Include variables with actual_range or single attribute
-                if 'actual_range' in var_attrs or len(var_attrs) == 1:
-                    attributes_set.add(var_name)
             
             # we will handle this differently later.
             # if not lat and lon we will publish as a hosted table
