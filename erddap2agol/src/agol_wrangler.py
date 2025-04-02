@@ -373,7 +373,7 @@ class AgolWrangler:
 
                 try:
                     item_sharing_mgr = refreshed_item.sharing
-                    item_sharing_mgr.sharing_level = SharingLevel.ORGANIZATION
+                    item_sharing_mgr.sharing_level = SharingLevel.ORG
                 except Exception as e:
                     print(f"Error adjusting sharing level: {e}")
 
