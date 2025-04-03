@@ -8,6 +8,9 @@ from erddap2agol import run
 from src.utils import OverwriteFS
 from IPython.display import clear_output
 from arcgis.gis import GIS
+from typing import Optional, Dict, List, Union
+from dataclasses import dataclass, field
+
 
 
 ###################################
@@ -374,6 +377,92 @@ def selectDatasetFromList(erddapObj, dispLength=50, interactive=True) -> list:
 
 # programmatic example of accessing a dataset id list 
 # mgr = selectDatasetFromList(erddapObj, dispLength=75, interactive=False) 
+
+@dataclass
+class OptionsMenu:
+    custom_title: bool = False  
+    sharing_options: List[str] = field(default_factory=lambda: ["PRIVATE", "ORG", "EVERYONE"])
+    sharing_level: str = None
+    enable_tags_bool: bool = True
+    chunk_size: int = None
+
+    def customTitleMenu(self, dataset): 
+        uc = input(f"\nInput the custom title for dataset {dataset.dataset_title}")
+        print(f"Type 1 to use the existing title ({dataset.dataset_title})")
+        if uc == "1":
+            print(f"Using default title...")
+            pass
+        elif isinstance(uc, str):
+            print(f"Using title {uc} for dataset {dataset.dataset_title}")
+            dataset.dataset_title = uc
+        else:
+            print(f"Invalid input for the dataset, continuing with default title")
+            pass
+
+# Global variable to hold the options.
+user_options = OptionsMenu()
+
+
+def options_menu():
+    def clearScreen():
+            os.system('cls' if os.name == 'nt' else 'clear')
+            clear_output()
+    global user_options  # So changes persist across modules.
+    while True:
+        clearScreen()
+        print("\nOptions Menu:")
+        print("1. Toggle Custom Title (currently: {})".format(user_options.custom_title))
+        if user_options.sharing_level:
+            print("2. Select Sharing Level (currently: {})".format(user_options.sharing_level))
+        else:
+            print("2. Select Sharing Level (currently: ORG)")
+
+        print("3. Toggle Enable Tags (currently: {})".format(user_options.enable_tags_bool))
+        print("4. Change Download Batch Size (default 100,000)")
+        print("5. Exit Options Menu and Return to Main Menu")
+        
+        choice = input("Select an option: ").strip()
+        
+        if choice == "1":
+            # Toggle the boolean flag for custom title.
+            user_options.custom_title = not user_options.custom_title
+            print("Custom Title toggled to: {}".format(user_options.custom_title))
+
+        elif choice == "2":
+            # Print current sharing level options and allow selection.
+            print("\nAvailable Sharing Levels:")
+            for idx, level in enumerate(user_options.sharing_options, start=1):
+                print("{}. {}".format(idx, level))
+            sel = input("Select a sharing level by number: ").strip()
+            try:
+                sel_idx = int(sel)
+                if 1 <= sel_idx <= len(user_options.sharing_options):
+                    user_options.sharing_level = str(user_options.sharing_options[sel_idx - 1])
+                    print("Selected sharing level: {}".format(user_options.sharing_level))
+                else:
+                    print("Invalid selection. Please choose a valid number.")
+            except ValueError:
+                print("Invalid input. Please enter a number.")
+
+        elif choice == "3":
+            # Toggle the enable_tags_bool option.
+            user_options.enable_tags_bool = not user_options.enable_tags_bool
+            print("Enable Tags toggled to: {}".format(user_options.enable_tags_bool))
+            
+        elif choice == "4":
+            # Exit the options menu and return to the main CUI.
+            uc = input(f"Input the desired batch size: ")
+            try:
+                int(uc)
+                user_options.batch_size = uc
+            except Exception as e:
+                print(f"Invalid input {e}")
+        elif choice == "5":
+            print("Exiting Options Menu. Returning to Main Menu...")
+            break
+        else:
+            print("Invalid option. Please select again.")
+    
 
 
 

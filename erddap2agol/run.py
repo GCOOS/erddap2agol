@@ -33,6 +33,7 @@ def _gliderWorkflow(search_term: str = None) -> None:
 #-----------------ERDDAP2AGOL CUI-----------------
 
 def cui():
+    ec.cleanTemp()
     while True:
         print("\nWelcome to ERDDAP2AGOL.")
         print("GCOOS GIS, 2025.")
@@ -40,7 +41,8 @@ def cui():
         print("2. Create Glider DAC Datasets")
         print("3. Create NRT Items")
         print("4. Find & Update NRT Items")
-        print("5. Exit & Clean Temp")
+        print("5. Options Menu")
+        print("6. Exit & Clean Temp")
 
         user_choice = input(": ")  
 
@@ -53,6 +55,8 @@ def cui():
         elif user_choice == "4":
             _updateNRT()
         elif user_choice == "5":
+            core.options_menu()
+        elif user_choice == "6":
             print("Goodbye!")
             ec.cleanTemp()
             sys.exit()
