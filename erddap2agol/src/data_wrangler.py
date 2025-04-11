@@ -1,5 +1,6 @@
 from . import erddap_wrangler as ec
 from . import das_client as dc
+from . import core
 from src.utils import OverwriteFS
 from arcgis.gis import GIS
 from collections import deque
@@ -54,6 +55,9 @@ class DatasetWrangler:
             self.nrtTimeSet()
         else:
             self.getDas()
+            # check if the user set a chunk size and adjust accordingly
+            if core.user_options.chunk_size:
+                self.chunk_size = core.user_options.chunk_size
             self.getDatasetSizes()
             self.needsSubsetting()
             if self.needs_Subset:

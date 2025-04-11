@@ -4,6 +4,7 @@ from arcgis.gis._impl._content_manager import SharingLevel
 from . import data_wrangler as dw
 from . import erddap_wrangler as ec
 from . import das_client as dc
+from . import core 
 import copy, os, sys, time, pandas as pd, numpy as np, json
 from dataclasses import dataclass, field
 from typing import Optional, List, Dict
@@ -83,6 +84,8 @@ class AgolWrangler:
             else:
                 flat.append(attr)
         return flat
+                           
+
 
     @skipFromError
     def makeItemProperties(self) -> None:
@@ -142,6 +145,8 @@ class AgolWrangler:
                             props["licenseInfo"] = dataset.nc_global["license"].get("value", "")
                         
                         # swapped assignment of dataset_title from dataset id attribute to dataset title attribute
+                        if core.user_options.custom_title == True:
+                            core.user_options.customTitleMenu(dataset)
                         dataset_title = dataset.dataset_title
                         props["title"] = dataset_title
 
@@ -160,7 +165,7 @@ class AgolWrangler:
                     self.item_properties[dataset.dataset_id] = props
 
                 except Exception as e:
-                    print(f"Error creating item properties for {dataset.dataset_id}: {e}")
+                    print(f"Error creating item properties for {dataset.dataset_title}: {e}")
 
     @skipFromError
     #@profile
@@ -226,6 +231,9 @@ class AgolWrangler:
     def mapItemProperties(self, dataset_id) -> ItemProperties:
         """Map metadata to an item properties attribute of the item class"""
         props = self.item_properties.get(dataset_id, {})
+        # check if user disabled tags an adjust accordingly
+        if core.user_options.enable_tags_bool == False:
+            props["tags"] = []
         return ItemProperties(
             title=props.get("title", ""),
             item_type=props.get("type", ""),
@@ -270,12 +278,12 @@ class AgolWrangler:
 
             item_prop = self.item_properties.get(dataset.dataset_id)
             if not item_prop:
-                print(f"No item properties found for {dataset.dataset_id}. Skipping.")
+                print(f"No item properties found for {dataset.dataset_title}. Skipping.")
                 continue
 
             paths = dataset.data_filepath
             if not paths:
-                print(f"No data file path found for {dataset.dataset_id}. Skipping.")
+                print(f"No data file path found for {dataset.dataset_title}. Skipping.")
                 continue
 
             # Set a service name if not already present
@@ -373,7 +381,14 @@ class AgolWrangler:
 
                 try:
                     item_sharing_mgr = refreshed_item.sharing
-                    item_sharing_mgr.sharing_level = SharingLevel.ORG
+                    if core.user_options.sharing_level == "EVERYONE":
+                        item_sharing_mgr.sharing_level = SharingLevel.EVERYONE
+                    elif core.user_options.sharing_level == "ORG":
+                        item_sharing_mgr.sharing_level = SharingLevel.ORG
+                    elif core.user_options.sharing_level == "PRIVATE":
+                        item_sharing_mgr.sharing_level = SharingLevel.PRIVATE
+                    else:
+                        item_sharing_mgr.sharing_level = SharingLevel.ORG
                 except Exception as e:
                     print(f"Error adjusting sharing level: {e}")
 
@@ -426,7 +441,7 @@ class AgolWrangler:
                 else:
                     #--------Single file scenario--------------
                     path = dataset.data_filepath
-                    print(f"\nAdding item for {dataset.dataset_id} to AGOL...")
+                    print(f"\nAdding item for {dataset.dataset_title} to AGOL...")
                     try:
                         item = addOrRetry(dataset, path)
                     except Exception as e:
@@ -434,7 +449,7 @@ class AgolWrangler:
                         dataset.has_error = True
                         continue
                     # Publish
-                    print(f"\nPublishing item for {dataset.dataset_id}...")
+                    print(f"\nPublishing item for {dataset.dataset_title}...")
                     try:
                         published_item = publishOrRetry(item, publish_parameters=geom_params, file_type=inputDataType, timeout=timeoutTime)
                         adjustSharingAndCapabilities(published_item)
@@ -447,13 +462,13 @@ class AgolWrangler:
                 dataset_end_time = time.time()
                 dataset_processing_time = dataset_end_time - dataset_start_time
                 processed_count += 1
-                print(f"Finished processing dataset {dataset.dataset_id} in {dataset_processing_time:.2f} seconds")
+                print(f"Finished processing dataset {dataset.dataset_title} in {dataset_processing_time:.2f} seconds")
 
             except concurrent.futures.TimeoutError:
-                print(f"Publishing took longer than 3 minutes for {dataset.dataset_id}. Cancelling operation.")
+                print(f"Publishing took longer than 3 minutes for {dataset.dataset_title}. Cancelling operation.")
                 continue
             except Exception as e:
-                print(f"An error occurred adding the item for {dataset.dataset_id}: {e}")
+                print(f"An error occurred adding the item for {dataset.dataset_title}: {e}")
                 continue
 
         total_end_time = time.time()
@@ -503,5 +518,3 @@ class AgolWrangler:
         # Update the capabilities to disable editing
         flc.manager.update_definition({"capabilities": "Query"})
         print(f"Editing successfully disabled for item {item_id}")
-
-

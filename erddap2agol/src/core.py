@@ -8,6 +8,9 @@ from erddap2agol import run
 from src.utils import OverwriteFS
 from IPython.display import clear_output
 from arcgis.gis import GIS
+from typing import Optional, Dict, List, Union
+from dataclasses import dataclass, field
+
 
 
 ###################################
@@ -84,7 +87,9 @@ def selectDatasetFromList(erddapObj, dispLength=50, interactive=True) -> list:
     
     Returns a list of selected datasets (the user's "cart").
     """
-
+    # lazy place to put this
+    if user_options.disp_length:
+        dispLength = user_options.disp_length 
     # ---------------------- Helper Functions ----------------------
     def _updateDatasetList(erddapObj, search_term=None):
         """
@@ -139,6 +144,9 @@ def selectDatasetFromList(erddapObj, dispLength=50, interactive=True) -> list:
             
             self._allDatasetIds = _updateDatasetList(erddapObj)
             total_datasets = len(self._allDatasetIds)
+
+            if user_options.disp_length:
+                self._dispLength = user_options.disp_length
 
             if total_datasets < self._dispLength:
                 self._dispLength = total_datasets
@@ -374,6 +382,107 @@ def selectDatasetFromList(erddapObj, dispLength=50, interactive=True) -> list:
 
 # programmatic example of accessing a dataset id list 
 # mgr = selectDatasetFromList(erddapObj, dispLength=75, interactive=False) 
+
+@dataclass
+class OptionsMenu:
+    custom_title: bool = False  
+    sharing_options: List[str] = field(default_factory=lambda: ["PRIVATE", "ORG", "EVERYONE"])
+    sharing_level: str = None
+    enable_tags_bool: bool = True
+    chunk_size: int = None
+    disp_length: int = None
+
+    def customTitleMenu(self, dataset): 
+        print("Custom Title Option")
+        print(f"Type 1 to use the existing title.")
+        uc = input(f"\nInput the custom title for {dataset.dataset_title}: ")
+        if uc == "1":
+            print(f"Using default title...")
+            pass
+        elif isinstance(uc, str):
+            print(f"Using title {uc} for dataset {dataset.dataset_title}")
+            dataset.dataset_title = uc
+        else:
+            print(f"Invalid input for the dataset, continuing with default title")
+            pass
+
+# Global variable to hold the options.
+user_options = OptionsMenu()
+
+
+def options_menu():
+    def clearScreen():
+            os.system('cls' if os.name == 'nt' else 'clear')
+            clear_output()
+    global user_options  # So changes persist across modules.
+    while True:
+        clearScreen()
+        print("\nOptions Menu:")
+        print("1. Toggle Custom Title (currently: {})".format(user_options.custom_title))
+        if user_options.sharing_level:
+            print("2. Select Sharing Level (currently: {})".format(user_options.sharing_level))
+        else:
+            print("2. Select Sharing Level (currently: ORG)")
+
+        print("3. Toggle Enable Tags (currently: {})".format(user_options.enable_tags_bool))
+        print("4. Change Download Batch Size (default 100,000)")
+        print("5. Change the number of datasets displayed")
+        print("6. Save options and return to main menu")
+        
+        choice = input("Select an option: ").strip()
+        
+        if choice == "1":
+            # Toggle the boolean flag for custom title.
+            user_options.custom_title = not user_options.custom_title
+            print("Custom Title toggled to: {}".format(user_options.custom_title))
+
+        elif choice == "2":
+            # Print current sharing level options and allow selection.
+            print("\nAvailable Sharing Levels:")
+            for idx, level in enumerate(user_options.sharing_options, start=1):
+                print("{}. {}".format(idx, level))
+            sel = input("Select a sharing level by number: ").strip()
+            try:
+                sel_idx = int(sel)
+                if 1 <= sel_idx <= len(user_options.sharing_options):
+                    user_options.sharing_level = str(user_options.sharing_options[sel_idx - 1])
+                    print("Selected sharing level: {}".format(user_options.sharing_level))
+                else:
+                    print("Invalid selection. Please choose a valid number.")
+            except ValueError:
+                print("Invalid input. Please enter a number.")
+
+        elif choice == "3":
+            # Toggle the enable_tags_bool option.
+            user_options.enable_tags_bool = not user_options.enable_tags_bool
+            print("Enable Tags toggled to: {}".format(user_options.enable_tags_bool))
+            
+        elif choice == "4":
+            uc = input(f"Input the desired batch size: ")
+            try:
+                int(uc)
+                user_options.batch_size = uc
+            except Exception as e:
+                print(f"Invalid input {e}")
+        elif choice == '5':
+            uc = input(f"Select the number of datasets to display on a single page (1-100): ")
+            try:
+                disp_int = int(uc)
+                if disp_int > 100 or disp_int < 1:
+                    print(f"Invalid display length selected ({disp_int}). Please choose a number between 1 and 100") 
+                    pass
+                else:
+                    user_options.disp_length = disp_int
+            except Exception as e:
+                print(f"\nAn error occured while adjusting display len ({e}) ")
+        elif choice == "6":
+            print("\nOptions saved. Returning to Main Menu...")
+            time.sleep(0.5)
+            clearScreen()
+            break
+        else:
+            print("Invalid option. Please select again.")
+    
 
 
 
