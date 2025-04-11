@@ -143,6 +143,9 @@ def selectDatasetFromList(erddapObj, dispLength=50, interactive=True) -> list:
             self._allDatasetIds = _updateDatasetList(erddapObj)
             total_datasets = len(self._allDatasetIds)
 
+            if options_menu.disp_lenth:
+                self._dispLength = options_menu.disp_lenth
+
             if total_datasets < self._dispLength:
                 self._dispLength = total_datasets
 
@@ -385,6 +388,7 @@ class OptionsMenu:
     sharing_level: str = None
     enable_tags_bool: bool = True
     chunk_size: int = None
+    disp_length: int = None
 
     def customTitleMenu(self, dataset): 
         print("Custom Title Option")
@@ -420,6 +424,7 @@ def options_menu():
 
         print("3. Toggle Enable Tags (currently: {})".format(user_options.enable_tags_bool))
         print("4. Change Download Batch Size (default 100,000)")
+        print(f"5. Change the number of datasets displayed")
         print("5. Exit Options Menu and Return to Main Menu")
         
         choice = input("Select an option: ").strip()
@@ -451,14 +456,24 @@ def options_menu():
             print("Enable Tags toggled to: {}".format(user_options.enable_tags_bool))
             
         elif choice == "4":
-            # Exit the options menu and return to the main CUI.
             uc = input(f"Input the desired batch size: ")
             try:
                 int(uc)
                 user_options.batch_size = uc
             except Exception as e:
                 print(f"Invalid input {e}")
-        elif choice == "5":
+        elif choice == '5':
+            uc = input(f"Input the desired batch size: ")
+            try:
+                disp_int = int(uc)
+                if disp_int > 100 or disp_int < 1:
+                    print(f"Invalid display length selected ({disp_int}). Please choose a number between 1 and 100") 
+                    pass
+                else:
+                    options_menu.disp_length = disp_int
+            except Exception as e:
+                print(f"\nAn error occured while adjusting display len ({e}) ")
+        elif choice == "6":
             print("\nOptions saved. Returning to Main Menu...")
             time.sleep(0.5)
             clearScreen()
