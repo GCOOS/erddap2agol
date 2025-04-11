@@ -387,8 +387,9 @@ class OptionsMenu:
     chunk_size: int = None
 
     def customTitleMenu(self, dataset): 
-        uc = input(f"\nInput the custom title for dataset {dataset.dataset_title}")
-        print(f"Type 1 to use the existing title ({dataset.dataset_title})")
+        print("Custom Title Option")
+        print(f"Type 1 to use the existing title.")
+        uc = input(f"\nInput the custom title for {dataset.dataset_title}: ")
         if uc == "1":
             print(f"Using default title...")
             pass
@@ -458,7 +459,9 @@ def options_menu():
             except Exception as e:
                 print(f"Invalid input {e}")
         elif choice == "5":
-            print("Exiting Options Menu. Returning to Main Menu...")
+            print("\nOptions saved. Returning to Main Menu...")
+            time.sleep(0.5)
+            clearScreen()
             break
         else:
             print("Invalid option. Please select again.")
