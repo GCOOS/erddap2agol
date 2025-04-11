@@ -87,7 +87,9 @@ def selectDatasetFromList(erddapObj, dispLength=50, interactive=True) -> list:
     
     Returns a list of selected datasets (the user's "cart").
     """
-
+    # lazy place to put this
+    if user_options.disp_length:
+        dispLength = user_options.disp_length 
     # ---------------------- Helper Functions ----------------------
     def _updateDatasetList(erddapObj, search_term=None):
         """
@@ -143,8 +145,8 @@ def selectDatasetFromList(erddapObj, dispLength=50, interactive=True) -> list:
             self._allDatasetIds = _updateDatasetList(erddapObj)
             total_datasets = len(self._allDatasetIds)
 
-            if options_menu.disp_lenth:
-                self._dispLength = options_menu.disp_lenth
+            if user_options.disp_length:
+                self._dispLength = user_options.disp_length
 
             if total_datasets < self._dispLength:
                 self._dispLength = total_datasets
@@ -424,8 +426,8 @@ def options_menu():
 
         print("3. Toggle Enable Tags (currently: {})".format(user_options.enable_tags_bool))
         print("4. Change Download Batch Size (default 100,000)")
-        print(f"5. Change the number of datasets displayed")
-        print("5. Exit Options Menu and Return to Main Menu")
+        print("5. Change the number of datasets displayed")
+        print("6. Save options and return to main menu")
         
         choice = input("Select an option: ").strip()
         
@@ -463,14 +465,14 @@ def options_menu():
             except Exception as e:
                 print(f"Invalid input {e}")
         elif choice == '5':
-            uc = input(f"Input the desired batch size: ")
+            uc = input(f"Select the number of datasets to display on a single page (1-100): ")
             try:
                 disp_int = int(uc)
                 if disp_int > 100 or disp_int < 1:
                     print(f"Invalid display length selected ({disp_int}). Please choose a number between 1 and 100") 
                     pass
                 else:
-                    options_menu.disp_length = disp_int
+                    user_options.disp_length = disp_int
             except Exception as e:
                 print(f"\nAn error occured while adjusting display len ({e}) ")
         elif choice == "6":
