@@ -65,6 +65,7 @@ class AgolWrangler:
                 self.geoParams = self.geoParams_online
             elif gis.properties.portalName == "ArcGIS Enterprise":
                 self.geoParams = self.geoParams_enterprise
+                self.enterprise_bool = True
             else:
                 self.geoParams = self.geoParams_online
             print("\nSuccesfully connected to " + gis.properties.portalName)
@@ -434,24 +435,36 @@ class AgolWrangler:
                         feature_layer = published_item.layers[0]
                         subset_idx = 1
                         for subset_path in paths[1:]:
+                            
                             try:
                                 subset_item = addOrRetry(dataset, subset_path)
-                                analyze_params = gis.content.analyze(item=subset_item.id)
+                            except Exception as e:
+                                print(f"\nAdding the subset item failed (addOrRetry method):\nError Message- {e}")
+                            try:
+                                analyze_params = gis.content.analyze(item=subset_item.id, file_type='csv')
+                            except Exception as e:
+                                print(f"\nAnalyzing the subset item failed (gis.content.analyze method):\nError Message- {e}")
+                            try:
                                 append_success = feature_layer.append(
                                     item_id=subset_item.id,
                                     upload_format='csv',
                                     source_info=analyze_params['publishParameters'],
-                                    upsert=False
+                                    upsert=False,
+                                    return_messages=True
                                 )
                             except Exception as e:
-                                print(f"\nFailed to append subset # {subset_idx}. Error | {e}")
+                                print(f"\nAppending the item failed (feature_layer.append):\nError Message- {e}")
+                                                   
                                 append_success = False
                             if append_success:
                                 subset_idx += 1
                                 print(f"\nAppended Subset {subset_idx} of {len(paths)} to {published_item.title}")
                             else:
                                 print(f"\nFailed to append subset # {subset_idx} to {published_item.title}")
-                            subset_item.delete(permanent=True)
+                            if self.enterprise_bool:
+                                subset_item.delete()
+                            else:
+                                subset_item.delete(permanent= True)
                 else:
                     #--------Single file scenario--------------
                     path = dataset.data_filepath
