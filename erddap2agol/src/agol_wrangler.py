@@ -22,16 +22,24 @@ class AgolWrangler:
     sharing_pref: str = "EVERYONE"
     datasets: List['dw.DatasetWrangler'] = field(default_factory=list)
     item_properties: Dict[str, Dict] = field(default_factory=dict)
-    erddap_obj: Optional['ec.ERDDAPHandler'] = None 
-    geoParams: dict = field(default_factory=lambda: {
+    erddap_obj: Optional['ec.ERDDAPHandler'] = None
+    enterprise_bool: Optional[bool] = None
+    geoParams = None 
+    geoParams_online: dict = field(default_factory=lambda: {
         "locationType": "coordinates",
         "latitudeFieldName": "latitude__degrees_north_",
         "longitudeFieldName": "longitude__degrees_east_",
         "timeFieldName": "time__UTC_",
     })
+    geoParams_enterprise: dict = field(default_factory=lambda: {
+        "locationType": "coordinates",
+        "latitudeFieldName": "latitude (degrees_north)",
+        "longitudeFieldName": "longitude (degrees_east)",
+        "timeFieldName": "time__UTC_",
+    })
 
     def __post_init__(self):
-        """Initialize AGOL connection and inherit dataset attributes"""
+        """Initialize ArcGIS connection and inherit dataset attributes"""
         self.connect()
         if self.erddap_obj and hasattr(self.erddap_obj, 'datasets'):
             self.shareDatasetObjAttrs
@@ -53,9 +61,15 @@ class AgolWrangler:
         try:
             self.gis = GIS("home")
             gis = self.gis
+            if gis.properties.portalName == "ArcGIS Online":
+                self.geoParams = self.geoParams_online
+            elif gis.properties.portalName == "ArcGIS Enterprise":
+                self.geoParams = self.geoParams_enterprise
+            else:
+                self.geoParams = self.geoParams_online
             print("\nSuccesfully connected to " + gis.properties.portalName)
         except Exception as e:
-            print(f"AGOL connection error: {e}")
+            print(f"{gis.properties.portalName} connection error: {e}")
 
     def skipFromError(func):
         """General skip error decorator that will be applied to all dataset methods"""
@@ -246,7 +260,7 @@ class AgolWrangler:
 
     @skipFromError
     def postAndPublish(self, inputDataType="csv", timeoutTime=300) -> None:
-        """Publishes all datasets in self.datasets to AGOL, handling subsets if needed."""
+        """Publishes all datasets in self.datasets to ArcGIS, handling subsets if needed."""
         geom_params = self.geoParams.copy()
         geom_params.pop('hasStaticData', None)  # Remove if exists, as done in stable code
 
@@ -397,7 +411,7 @@ class AgolWrangler:
                     # -------------Subset file scenario-------------
                     # -------------First file-------------
                     first_path = paths[0]
-                    print(f"\nAdding first subset item for {dataset.dataset_id} to AGOL...")
+                    print(f"\nAdding first subset item for {dataset.dataset_id} to ArcGIS...")
                     try:
                         item = addOrRetry(dataset, first_path)
                     except Exception as e:
@@ -441,7 +455,7 @@ class AgolWrangler:
                 else:
                     #--------Single file scenario--------------
                     path = dataset.data_filepath
-                    print(f"\nAdding item for {dataset.dataset_title} to AGOL...")
+                    print(f"\nAdding item for {dataset.dataset_title} to {gis.properties.portalName}...")
                     try:
                         item = addOrRetry(dataset, path)
                     except Exception as e:
