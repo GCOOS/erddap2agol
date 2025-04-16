@@ -391,6 +391,7 @@ class OptionsMenu:
     enable_tags_bool: bool = True
     chunk_size: int = None
     disp_length: int = None
+    bypass_chunking_bool: bool = False
 
     def customTitleMenu(self, dataset): 
         print("Custom Title Option")
@@ -418,16 +419,24 @@ def options_menu():
     while True:
         clearScreen()
         print("\nOptions Menu:")
+        
         print("1. Toggle Custom Title (currently: {})".format(user_options.custom_title))
+        
         if user_options.sharing_level:
             print("2. Select Sharing Level (currently: {})".format(user_options.sharing_level))
         else:
             print("2. Select Sharing Level (currently: ORG)")
 
         print("3. Toggle Enable Tags (currently: {})".format(user_options.enable_tags_bool))
-        print("4. Change Download Batch Size (default 100,000)")
+        
+        if user_options.chunk_size:
+            print("4. Change Download Batch Size (currently: {})".format(user_options.custom_title))
+        else:
+            print("4. Change Download Batch Size (default 100,000)")
+        
         print("5. Change the number of datasets displayed")
-        print("6. Save options and return to main menu")
+        print("6. Toggle Bypass Chunking (currently: {})".format(user_options.bypass_chunking_bool))
+        print("7. Save options and return to main menu")
         
         choice = input("Select an option: ").strip()
         
@@ -461,9 +470,10 @@ def options_menu():
             uc = input(f"Input the desired batch size: ")
             try:
                 int(uc)
-                user_options.batch_size = uc
+                user_options.chunk_size = uc
             except Exception as e:
                 print(f"Invalid input {e}")
+        
         elif choice == '5':
             uc = input(f"Select the number of datasets to display on a single page (1-100): ")
             try:
@@ -475,7 +485,12 @@ def options_menu():
                     user_options.disp_length = disp_int
             except Exception as e:
                 print(f"\nAn error occured while adjusting display len ({e}) ")
+        
         elif choice == "6":
+            user_options.bypass_chunking_bool = not user_options.bypass_chunking_bool
+            print("Bypass chunking toggled to: {}".format(user_options.bypass_chunking_bool))
+        
+        elif choice == "7":
             print("\nOptions saved. Returning to Main Menu...")
             time.sleep(0.5)
             clearScreen()

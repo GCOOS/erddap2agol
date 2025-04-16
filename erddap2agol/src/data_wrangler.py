@@ -20,7 +20,7 @@ class DatasetWrangler:
     server: str
     no_time_range: Optional[bool] = None
     row_count: Optional[int] = None
-    chunk_size: Optional[int] = 100000
+    chunk_size: Optional[int] = None
     attribute_list: Optional[List[str]] = field(default_factory=list)
     start_time: Optional[datetime] = None
     end_time: Optional[datetime] = None
@@ -44,6 +44,18 @@ class DatasetWrangler:
     
     def __post_init__(self):
         """Building the dataset objects"""
+        # first check user options
+        if core.user_options.chunk_size:
+            # print(f"\n DEBUG 48 {core.user_options.chunk_size}")
+            self.chunk_size = int(core.user_options.chunk_size)
+        else:
+            # print(f"\n DEBUG 51 {core.user_options.chunk_size}")
+            self.chunk_size = 100000
+        
+        if core.user_options.bypass_chunking_bool:
+            self.needs_Subset = False
+
+        #Infer the case from here
         if self.is_glider:
             self.getDas()
             # improved glider optimizations will go here
@@ -53,11 +65,9 @@ class DatasetWrangler:
             self.needs_Subset = False
             self.getDas()
             self.nrtTimeSet()
+        
         else:
             self.getDas()
-            # check if the user set a chunk size and adjust accordingly
-            if core.user_options.chunk_size:
-                self.chunk_size = core.user_options.chunk_size
             self.getDatasetSizes()
             self.needsSubsetting()
             if self.needs_Subset:
@@ -160,11 +170,7 @@ class DatasetWrangler:
             if self.row_count > self.chunk_size and not self.is_glider:
                 print(f"\nUh oh! {self.dataset_title} is too big ({self.row_count} records) and needs to be chunked!")
                 print("Calculating subsets...")
-                if self.row_count > 500000:
-                    self.chunk_size = 100000
-                    self.needs_Subset = True
-                else:
-                    self.needs_Subset = True
+                self.needs_Subset = True
             else:
                 self.needs_Subset = False
 
