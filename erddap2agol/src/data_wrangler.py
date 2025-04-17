@@ -28,7 +28,7 @@ class DatasetWrangler:
     DAS_response: Optional[bool] = None
     is_glider: bool = False
     subsetDict: Optional[Dict] = field(default_factory=dict)
-    is_processed: bool = False
+    # is_processed: bool = False
     is_nrt: bool = None
     moving_window_days: int = 7
     nc_global: Dict = field(default_factory=dict)
@@ -43,35 +43,36 @@ class DatasetWrangler:
     
     
     def __post_init__(self):
-        """Building the dataset objects"""
-        # first check user options
-        if core.user_options.chunk_size:
-            # print(f"\n DEBUG 48 {core.user_options.chunk_size}")
-            self.chunk_size = int(core.user_options.chunk_size)
-        else:
-            # print(f"\n DEBUG 51 {core.user_options.chunk_size}")
-            self.chunk_size = 100000
-        
-        if core.user_options.bypass_chunking_bool:
-            self.needs_Subset = False
+        # always figure out your chunk_size
+        self.chunk_size = int(core.user_options.chunk_size) \
+            if core.user_options.chunk_size else 100_000
 
-        #Infer the case from here
+        # now a single exclusive branch:
         if self.is_glider:
             self.getDas()
-            # improved glider optimizations will go here
-            
-        # For NRT we bypass the dataset size step
-        if self.is_nrt:
+            return
+
+        elif self.is_nrt:
             self.needs_Subset = False
             self.getDas()
             self.nrtTimeSet()
-        
+            return
+
+        elif core.user_options.bypass_chunking_bool:
+            # bypass chunking entirely
+            self.needs_Subset = False
+            self.getDas()
+            return
+
         else:
+            # the real “default” chunking path
             self.getDas()
             self.getDatasetSizes()
             self.needsSubsetting()
             if self.needs_Subset:
                 self.subsetDict = self.calculateTimeSubset()
+            return
+
     
     def skipFromError(func):
         """General skip error decorator that will be applied to all dataset methods"""
@@ -112,7 +113,11 @@ class DatasetWrangler:
             self.DAS_filepath = dc.saveToJson(DAS_Dict, self.dataset_id)
             if "NC_GLOBAL" in DAS_Dict:
                 self.nc_global = DAS_Dict["NC_GLOBAL"]
-            self.attribute_list = dc.getActualAttributes(self)
+            
+            if core.user_options.all_attributes_bool:
+                self.attribute_list = dc.getActualAttributes(self, return_all=True)
+            else:
+                self.attribute_list = dc.getActualAttributes(self)
             if self.has_time:
                 time_range = dc.getTimeFromJson(self)
                 if time_range:
@@ -249,21 +254,26 @@ class DatasetWrangler:
     def generateUrl_idv(self, dataformat: str, nrt_update: bool, attrs_encoded: str) -> List[str]:
         """Generate URL for datasets not requiring subsetting."""
         urls = []
-        if self.has_time:
-            if nrt_update or self.is_nrt:
-                start = self.start_time
-                end = self.end_time
+        try:
+            if self.has_time and self.start_time:
+                if nrt_update or self.is_nrt:
+                    start = self.start_time
+                    end = self.end_time
+                else:
+                    start = self.start_time.strftime('%Y-%m-%dT%H:%M:%S')
+                    end = self.end_time.strftime('%Y-%m-%dT%H:%M:%S')
+                time_constraints = f"&{self.time_str}%3E%3D{start}Z&{self.time_str}%3C%3D{end}Z"
+                url = f"{self.server}{self.dataset_id}.{dataformat}?{self.time_str}%2C{attrs_encoded}{time_constraints}"
+                urls.append(url)
             else:
-                start = self.start_time.strftime('%Y-%m-%dT%H:%M:%S')
-                end = self.end_time.strftime('%Y-%m-%dT%H:%M:%S')
-            time_constraints = f"&{self.time_str}%3E%3D{start}Z&{self.time_str}%3C%3D{end}Z"
-            url = f"{self.server}{self.dataset_id}.{dataformat}?{self.time_str}%2C{attrs_encoded}{time_constraints}"
-            urls.append(url)
-        else:
-            url = f"{self.server}{self.dataset_id}.{dataformat}?{attrs_encoded}"
-            urls.append(url)
-        return urls
-    
+                url = f"{self.server}{self.dataset_id}.{dataformat}?{attrs_encoded}"
+                urls.append(url)
+            return urls
+        except Exception as e:
+            print(f"\nThere was an error generating the URL for the dataset: {self.dataset_title}")
+            self.has_error == True
+            pass
+
     def generateUrl_sub(self, dataformat: str, attrs_encoded: str) -> List[str]:
         """Generate URLs for chunked (subset) datasets."""
         urls = []

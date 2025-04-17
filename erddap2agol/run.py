@@ -94,6 +94,7 @@ def add_menu(menu_title:str, glider: bool = False, nrt: bool = False):
     agolObj.postAndPublish()
     print("\nReturning to main menu...")
     erddapObj.reset()
+    ec.cleanTemp()
     cui()
 
 

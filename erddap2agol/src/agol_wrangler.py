@@ -64,6 +64,7 @@ class AgolWrangler:
             if gis.properties.portalName == "ArcGIS Online":
                 self.geoParams = self.geoParams_online
             elif gis.properties.portalName == "ArcGIS Enterprise":
+                # self.geoParams = self.geoParams_online
                 self.geoParams = self.geoParams_enterprise
                 self.enterprise_bool = True
             else:
@@ -249,15 +250,25 @@ class AgolWrangler:
         # check if user disabled tags an adjust accordingly
         if core.user_options.enable_tags_bool == False:
             props["tags"] = []
-        return ItemProperties(
-            title=props.get("title", ""),
-            item_type=props.get("type", ""),
-            snippet=props.get("snippet", ""),
-            description=props.get("description", ""),
-            tags=props.get("tags", []),
-            access_information=props.get("accessInformation", ""),
-            license_info=props.get("licenseInfo", "")
-        )
+            return ItemProperties(
+                title=props.get("title", ""),
+                item_type=props.get("type", ""),
+                snippet=props.get("snippet", ""),
+                description=props.get("description", ""),
+                tags=props.get("tags", []),
+                access_information=props.get("accessInformation", ""),
+                license_info=props.get("licenseInfo", "")
+            )
+        else:
+            return ItemProperties(
+                title=props.get("title", ""),
+                item_type=props.get("type", ""),
+                snippet=props.get("snippet", ""),
+                description=props.get("description", ""),
+                tags=props.get("tags", []),
+                access_information=props.get("accessInformation", ""),
+                license_info=props.get("licenseInfo", "")
+            )
 
     @skipFromError
     def postAndPublish(self, inputDataType="csv", timeoutTime=300) -> None:

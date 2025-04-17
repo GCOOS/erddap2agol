@@ -392,6 +392,7 @@ class OptionsMenu:
     chunk_size: int = None
     disp_length: int = None
     bypass_chunking_bool: bool = False
+    all_attributes_bool: bool = False
 
     def customTitleMenu(self, dataset): 
         print("Custom Title Option")
@@ -436,7 +437,8 @@ def options_menu():
         
         print("5. Change the number of datasets displayed")
         print("6. Toggle Bypass Chunking (currently: {})".format(user_options.bypass_chunking_bool))
-        print("7. Save options and return to main menu")
+        print("7. Get all attributes (currently: {})".format(user_options.all_attributes_bool))
+        print("8. Save options and return to main menu")
         
         choice = input("Select an option: ").strip()
         
@@ -491,6 +493,10 @@ def options_menu():
             print("Bypass chunking toggled to: {}".format(user_options.bypass_chunking_bool))
         
         elif choice == "7":
+            user_options.all_attributes_bool = not user_options.all_attributes_bool
+            print("Bypass chunking toggled to: {}".format(user_options.all_attributes_bool))
+
+        elif choice == "8":
             print("\nOptions saved. Returning to Main Menu...")
             time.sleep(0.5)
             clearScreen()

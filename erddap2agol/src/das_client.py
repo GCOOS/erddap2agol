@@ -242,11 +242,13 @@ def displayAttributes(timeintv: int , attributes: list) -> None:
     print(f"\nThere are {timeintv} days worth of records")
     #print(f"\nAttributes: {attributes}")
 
-def getActualAttributes(data_Obj: Any) -> List[str]:
-    """Load DAS JSON file and extract relevant attributes while filtering out QC variables.
-    datasetid (str): The dataset identifier
-    sets self.has_time 
-    Returns list[str]: List of valid attribute names or None if error
+
+def getActualAttributes(data_Obj: Any, return_all: bool = False) -> List[str]:
+    """
+    Load DAS JSON file and extract relevant attributes while filtering out QC variables.
+    If return_all is True, only time/lat/lon flags are set but no attributes are filtered out
+    (apart from single-char names and the global NC_Global key).
+    Returns list[str] or None on error.
     """
     dataset_id = data_Obj.dataset_id
     has_lat = False
@@ -258,79 +260,181 @@ def getActualAttributes(data_Obj: Any) -> List[str]:
     try:
         with open(filepath, 'r') as json_file:
             data = json.load(json_file)
-            if "error" in data and data["error"]["Found"] is not None:
+            if "error" in data and data["error"].get("Found") is not None:
                 print(f"File {filepath} does not contain data.")
                 return None
-                
+
             attributes_set = set()
+            data_Obj.has_time = False
+            data_Obj.time_str = None
+
+            qc_suffixes = (
+                "_qc_", "qartod_",
+                "_qc", "_clm", "_loc", "_flt", "_rct",
+                "_agg", "_rng", "_gap", "_spk"
+            )
+
             for var_name, var_attrs in data.items():
                 if not isinstance(var_attrs, dict):
                     continue
-
+                
+                # latitude / longitude flags
                 if var_name == "latitude":
                     has_lat = True
+                    attributes_set.add(var_name)
                 elif var_name == "longitude":
                     has_lon = True
-
-                #attribute filter
-                # where we get attributes from
-                # if qc enabled:
-                if ("_qc_" in var_name or 
-                    "qartod_" in var_name or 
-                    var_name.endswith("_qc") or
-                    var_name.endswith("_clm") or
-                    var_name.endswith("_loc") or
-                    var_name.endswith("_flt") or
-                    var_name.endswith("_rct") or
-                    var_name.endswith("_agg") or
-                    var_name.endswith("_rng") or
-                    var_name.endswith("_agg") or
-                    var_name.endswith("_gap") or
-                    var_name.endswith("_spk")): 
-                    #var_name in {"latitude", "longitude"}):
-                    continue
-
-                # include variables with actual_range or single attribute
-                #if 'actual_range' not in var_attrs and var_attrs.get("")
-                if 'actual_range' in var_attrs or len(var_attrs) == 1:
                     attributes_set.add(var_name)
                 
-                # prioritize attributes that are likely to be the correct time val
-                # else no time
+                # time‐string detection (always run)
                 if var_name == "time":
                     data_Obj.has_time = True
                     data_Obj.time_str = "time"
-                elif data_Obj.time_str is None and var_name == "datecollec":
+                elif not data_Obj.time_str and var_name == "datecollec":
                     data_Obj.has_time = True
                     data_Obj.time_str = "datecollec"
-                elif data_Obj.time_str is None and var_name == "date_gmt":
+                elif not data_Obj.time_str and var_name == "date_gmt":
                     data_Obj.has_time = True
                     data_Obj.time_str = "date_gmt"
-
-                # if one of the three options above did not return any vars, we get the first attribute that has unix time                  
-                elif data_Obj.time_str is None:
-                    ioos_cat_val = var_attrs.get("ioos_category", {}).get("value", "")
-                    units = var_attrs.get("units", {}).get("value", "")
-                    if ioos_cat_val == "Time" and units == "seconds since 1970-01-01T00:00:00Z":
-                        data_Obj.time_str = var_name
+                elif not data_Obj.time_str:
+                    ioos_cat = var_attrs.get("ioos_category", {}).get("value", "")
+                    units   = var_attrs.get("units", {}).get("value", "")
+                    if ioos_cat == "Time" and units == "seconds since 1970-01-01T00:00:00Z":
                         data_Obj.has_time = True
-                        #print(f"\nThis dataset has time. Attribute Name: {data_Obj.time_str}")
-                        # Skip QC and coordinate variables
-            
-            # we will handle this differently later.
-            # if not lat and lon we will publish as a hosted table
+                        data_Obj.time_str = var_name
+
+                # ── only for return_all == False ──
+                if not return_all:
+                    # 1) skip QC/coordinate suffixed names
+                    if any(var_name.endswith(suf) for suf in qc_suffixes) or \
+                       any(sub in var_name for sub in ("_qc_", "qartod_")):
+                        continue
+
+                    # 2) skip single‐character keys (e.g. "s")
+                    if len(var_name) == 1:
+                        continue
+
+                    # 3) skip the global metadata key NC_Global
+                    if var_name.lower() == "nc_global":
+                        continue
+
+                    # now only include if actual_range exists or exactly one attr
+                    if 'actual_range' in var_attrs or len(var_attrs) == 1:
+                        attributes_set.add(var_name)
+
+                else:
+                    # return_all == True: skip only single‐char & NC_Global (but keep time/lat/lon flags)
+                    if len(var_name) == 1 or var_name.lower() == "nc_global":
+                        continue
+                    attributes_set.add(var_name)
+
+            # If we didn’t see both coords, mark error
             if not (has_lat and has_lon):
-                print(f"No longitude or latitude error: {data_Obj.dataset_id}")
+                print(f"No longitude or latitude error: {dataset_id}")
                 data_Obj.has_error = True
-    
+
             return list(attributes_set)
-            
+
     except FileNotFoundError:
         print(f"File {filepath} not found.")
         return None
     except json.JSONDecodeError:
         print(f"Error decoding JSON from {filepath}")
         return None
+
+
+
+# def getActualAttributes(data_Obj: Any, return_all: bool = False) -> List[str]:
+#     """Load DAS JSON file and extract relevant attributes while filtering out QC variables.
+#     datasetid (str): The dataset identifier
+#     sets self.has_time 
+#     Returns list[str]: List of valid attribute names or None if error
+#     """
+#     dataset_id = data_Obj.dataset_id
+#     has_lat = False
+#     has_lon = False
+
+#     das_conf_dir = getConfDir()
+#     filepath = os.path.join(das_conf_dir, f'{dataset_id}.json')
+    
+#     try:
+#         with open(filepath, 'r') as json_file:
+#             data = json.load(json_file)
+#             if "error" in data and data["error"]["Found"] is not None:
+#                 print(f"File {filepath} does not contain data.")
+#                 return None
+                
+#             attributes_set = set()
+#             for var_name, var_attrs in data.items():
+#                 if not isinstance(var_attrs, dict):
+#                     continue
+
+#                 if var_name == "latitude":
+#                     has_lat = True
+#                 elif var_name == "longitude":
+#                     has_lon = True
+
+#                 #attribute filter
+#                 # where we get attributes from
+#                 # if qc enabled:
+#                 if not return_all:
+#                     if ("_qc_" in var_name or 
+#                         "qartod_" in var_name or 
+#                         var_name.endswith("_qc") or
+#                         var_name.endswith("_clm") or
+#                         var_name.endswith("_loc") or
+#                         var_name.endswith("_flt") or
+#                         var_name.endswith("_rct") or
+#                         var_name.endswith("_agg") or
+#                         var_name.endswith("_rng") or
+#                         var_name.endswith("_agg") or
+#                         var_name.endswith("_gap") or
+#                         var_name.endswith("_spk")): 
+#                         #var_name in {"latitude", "longitude"}):
+#                         continue
+#                 else:
+#                     pass
+#                 # include variables with actual_range or single attribute
+#                 #if 'actual_range' not in var_attrs and var_attrs.get("")
+#                 if 'actual_range' in var_attrs or len(var_attrs) == 1:
+#                     attributes_set.add(var_name)
+                
+#                 # prioritize attributes that are likely to be the correct time val
+#                 # else no time
+#                 if var_name == "time":
+#                     data_Obj.has_time = True
+#                     data_Obj.time_str = "time"
+#                 elif data_Obj.time_str is None and var_name == "datecollec":
+#                     data_Obj.has_time = True
+#                     data_Obj.time_str = "datecollec"
+#                 elif data_Obj.time_str is None and var_name == "date_gmt":
+#                     data_Obj.has_time = True
+#                     data_Obj.time_str = "date_gmt"
+
+#                 # if one of the three options above did not return any vars, we get the first attribute that has unix time                  
+#                 elif data_Obj.time_str is None:
+#                     ioos_cat_val = var_attrs.get("ioos_category", {}).get("value", "")
+#                     units = var_attrs.get("units", {}).get("value", "")
+#                     if ioos_cat_val == "Time" and units == "seconds since 1970-01-01T00:00:00Z":
+#                         data_Obj.time_str = var_name
+#                         data_Obj.has_time = True
+#                         #print(f"\nThis dataset has time. Attribute Name: {data_Obj.time_str}")
+#                         # Skip QC and coordinate variables
+            
+#             # we will handle this differently later.
+#             # if not lat and lon we will publish as a hosted table
+#             if not (has_lat and has_lon):
+#                 print(f"No longitude or latitude error: {data_Obj.dataset_id}")
+#                 data_Obj.has_error = True
+    
+#             return list(attributes_set)
+            
+#     except FileNotFoundError:
+#         print(f"File {filepath} not found.")
+#         return None
+#     except json.JSONDecodeError:
+#         print(f"Error decoding JSON from {filepath}")
+#         return None
     
 # This function doesn't go anywhere yet
 # should be used to check for core attributes (lat lon time) in the dataset
