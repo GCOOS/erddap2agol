@@ -47,7 +47,16 @@ def cui():
         user_choice = input(": ")  
 
         if user_choice == "1":
-            add_menu("Create static ERDDAP Item")
+            print(f"Select Protocol: "
+                "\n1.) tabledap"
+                "\n2.) griddap ")
+            
+            proto_choice = input(": ")
+            if proto_choice == "1":
+                proto = "tabledap"
+            elif proto_choice == "2":
+                proto = "griddap"
+            add_menu("Create static ERDDAP Item", protocol= proto)
         elif user_choice == "2":
             add_menu("Create Glider DAC Tracks", glider=True)
         elif user_choice == "3":
@@ -63,7 +72,7 @@ def cui():
         else:
             print("\nInvalid input. Please try again.")
 
-def add_menu(menu_title:str, glider: bool = False, nrt: bool = False):
+def add_menu(menu_title:str, glider: bool = False, nrt: bool = False, protocol: str = None):
     print(f"\nWelcome to {menu_title}")
 
     # pass user params to erddapSelection

@@ -35,7 +35,7 @@ def inputToList(user_input) -> list:
 
  # Show erddap menu and define gcload with selection
  # Survives refactor
-def erddapSelection(GliderServ = False, nrtAdd = False) -> ec.ERDDAPHandler:
+def erddapSelection(GliderServ = False, nrtAdd = False, protocol: str = None) -> ec.ERDDAPHandler:
     if GliderServ == True:
         erddapObj = ec.ERDDAPHandler().setErddap(15)
         return erddapObj
@@ -60,8 +60,10 @@ def erddapSelection(GliderServ = False, nrtAdd = False) -> ec.ERDDAPHandler:
                     print("\nContinuing with selected server...")
                     if nrtAdd is True:
                         erddapObj.is_nrt = True
+                        erddapObj.protocol = protocol
                         return erddapObj
                     else:
+                        erddapObj.protocol = protocol
                         return erddapObj
                 else:
                     print("\nReturning to main menu...")

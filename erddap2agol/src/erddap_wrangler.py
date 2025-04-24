@@ -89,7 +89,7 @@ class ERDDAPHandler:
             server: str = None,
             serverInfo: str = None,
             protocol: str = None, 
-            datasetid= None, 
+            datasetid: str= None, 
             fileType: str = None, 
             geoParams={
             "locationType": "coordinates",
