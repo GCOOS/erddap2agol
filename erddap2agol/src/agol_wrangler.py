@@ -5,7 +5,7 @@ from . import data_wrangler as dw
 from . import erddap_wrangler as ec
 from . import das_client as dc
 from . import core 
-import copy, os, sys, time, pandas as pd, numpy as np, json
+import os, sys, time, pandas as pd, numpy as np, json
 from dataclasses import dataclass, field
 from typing import Optional, List, Dict
 #from line_profiler import profile

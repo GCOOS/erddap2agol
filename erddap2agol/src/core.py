@@ -1,4 +1,4 @@
-import sys, os, concurrent.futures, time, math
+import sys, os, concurrent.futures, time, math, shlex, argparse
 from tabulate import tabulate
 from . import erddap_wrangler as ec
 from . import agol_wrangler as aw
@@ -10,7 +10,7 @@ from IPython.display import clear_output
 from arcgis.gis import GIS
 from typing import Optional, Dict, List, Union
 from dataclasses import dataclass, field
-
+from datetime import datetime
 
 
 ###################################
@@ -165,6 +165,12 @@ def selectDatasetFromList(erddapObj, dispLength=50, interactive=True) -> list:
 
              # list of selectedDatasets (the cart)
             self.selectedDatasets = []
+            
+            self.protocol = erddapObj.protocol
+            self.dataset_kwargs = {}
+            self.current_start = None
+            self.current_end =  None
+            
 
         @property
         def totalDatasets(self):
@@ -177,6 +183,10 @@ def selectDatasetFromList(erddapObj, dispLength=50, interactive=True) -> list:
             start_index = (self.currentPage - 1) * self._dispLength
             end_index = min(start_index + self._dispLength, self.totalDatasets)
             return self._allDatasetIds[start_index:end_index]
+        
+        def setDateRange(self, sd, ed):
+            self.current_start = sd
+            self.current_end = ed
 
         def goNextPage(self):
             if self.currentPage < self.numPages:
@@ -272,11 +282,36 @@ def selectDatasetFromList(erddapObj, dispLength=50, interactive=True) -> list:
                 selected_dataset = self._allDatasetIds[idx_int - 1]
                 if selected_dataset not in self.selectedDatasets:
                     self.selectedDatasets.append(selected_dataset)
+
+                    if self.protocol == "griddap":
+                        self.dataset_kwargs[selected_dataset] = {
+                            'start_time': self.current_start,
+                            'end_time': self.current_end
+                        }
+                        print(f"Added {selected_dataset} to the cart.")
+
                     print(f"Added {selected_dataset} to the cart.")
                 else:
                     print(f"{selected_dataset} is already in the cart.")
             else:
                 print(f"Invalid index {idx_int} for this page.")
+
+        def _parseInput(user_input: str = None):
+            if user_input in command_map:
+                finished = command_map[user_input](mgr, None)
+                if finished:
+                    clearScreen()
+                    print("\nAdding the following datasets to the next step:")
+                    # Create a list of tuples for the table
+                    #print(mgr.selectedDatasets)
+                    table_data = [(ds_id, erddapObj.dataset_titles.get(ds_id, "No title")) for ds_id in mgr.selectedDatasets]
+                    print(tabulate(table_data, headers=['Dataset ID', 'Dataset Title'], tablefmt='grid'))
+                    return mgr.selectedDatasets
+            else:
+                # Possibly indices or ranges
+                mgr.addByIndices(user_input)
+                # here is where we will put a check for flags
+                input("Press Enter to continue...")
 
     # ---------------------- CUI Cmd Map ----------------------
     def cmdNext(manager: DatasetListManager, _arg):
@@ -352,35 +387,65 @@ def selectDatasetFromList(erddapObj, dispLength=50, interactive=True) -> list:
             print(title_str) 
             # print(f"{start_idx + i + 1}. {titles}\tID: {ds}")
             
+        if mgr.protocol == "griddap":
+            print("\nCommands:")
+            print("'next', 'back', 'addAll', 'addPage', 'done', 'mainMenu', 'exit'")
+            print(" type 'search:keyword1+keyword2' to search datasets.")
+            print(" enter comma-separated indices (e.g. '10,12:15') for single or range selection.")
+            print("Specify date range with --start-date dd/mm/yyyy --end-date dd/mm/yyyy")
 
-        print("\nCommands:")
-        print("'next', 'back', 'addAll', 'addPage', 'done', 'mainMenu', 'exit'")
-        print(" type 'search:keyword1+keyword2' to search datasets.")
-        print(" enter comma-separated indices (e.g. '10,12:15') for single or range selection.")
-        user_input = input(": ")
+            raw_input = input(": ")
 
-        # Check search syntax
-        if user_input.startswith('search:'):
-            term = user_input.split(':', 1)[1]
-            mgr.searchDatasets(term)
-            continue
+            tokens = shlex.split(raw_input)
 
-        # Check if it matches one of our known commands
-        if user_input in command_map:
-            finished = command_map[user_input](mgr, None)
-            if finished:
-                clearScreen()
-                print("\nAdding the following datasets to the next step:")
-                # Create a list of tuples for the table
-                #print(mgr.selectedDatasets)
-                table_data = [(ds_id, erddapObj.dataset_titles.get(ds_id, "No title")) for ds_id in mgr.selectedDatasets]
-                print(tabulate(table_data, headers=['Dataset ID', 'Dataset Title'], tablefmt='grid'))
-                return mgr.selectedDatasets
+            parser = argparse.ArgumentParser(add_help=False)
+            parser.add_argument('-sd', '--start-date', dest='sd', type=str)
+            parser.add_argument('-ed', '--end-date',   dest='ed', type=str)
+            
+            args, rem = parser.parse_known_args(tokens)
+
+            sd_dt = datetime.strptime(args.sd, '%d/%m/%Y') if args.sd else None
+            ed_dt = datetime.strptime(args.sd, '%d/%m/%Y') if args.sd else None
+
+            mgr.setDateRange(sd_dt, ed_dt)
+
+            selection_str = " ".join(rem)
+
+            mgr._parseInput(selection_str)
+
+
         else:
-            # Possibly indices or ranges
-            mgr.addByIndices(user_input)
-            # here is where we will put a check for flags
-            input("Press Enter to continue...")
+            print("\nCommands:")
+            print("'next', 'back', 'addAll', 'addPage', 'done', 'mainMenu', 'exit'")
+            print(" type 'search:keyword1+keyword2' to search datasets.")
+            print(" enter comma-separated indices (e.g. '10,12:15') for single or range selection.")
+            user_input = input(": ")
+
+            # Check search syntax
+            if user_input.startswith('search:'):
+                term = user_input.split(':', 1)[1]
+                mgr.searchDatasets(term)
+                continue
+            
+            mgr._parseInput(user_input)
+            # Check if it matches one of our known commands
+
+            # this is now wrapped in the _parseInput() function
+            # if user_input in command_map:
+            #     finished = command_map[user_input](mgr, None)
+            #     if finished:
+            #         clearScreen()
+            #         print("\nAdding the following datasets to the next step:")
+            #         # Create a list of tuples for the table
+            #         #print(mgr.selectedDatasets)
+            #         table_data = [(ds_id, erddapObj.dataset_titles.get(ds_id, "No title")) for ds_id in mgr.selectedDatasets]
+            #         print(tabulate(table_data, headers=['Dataset ID', 'Dataset Title'], tablefmt='grid'))
+            #         return mgr.selectedDatasets
+            # else:
+            #     # Possibly indices or ranges
+            #     mgr.addByIndices(user_input)
+            #     # here is where we will put a check for flags
+            #     input("Press Enter to continue...")
 
 # programmatic example of accessing a dataset id list 
 # mgr = selectDatasetFromList(erddapObj, dispLength=75, interactive=False) 
