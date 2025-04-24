@@ -272,6 +272,7 @@ class ERDDAPHandler:
             
         for dataset_id in dataset_ids:
             dataset = dw.DatasetWrangler(
+                protocol= self.protocol,
                 dataset_id= dataset_id,
                 dataset_title=(self.dataset_titles.get(dataset_id)),
                 server= self.server,

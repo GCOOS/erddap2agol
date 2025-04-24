@@ -15,6 +15,7 @@ from datetime import timedelta, datetime
 
 @dataclass
 class DatasetWrangler:
+    protocol: str
     dataset_id: str
     dataset_title: dict
     server: str
@@ -43,35 +44,38 @@ class DatasetWrangler:
     
     
     def __post_init__(self):
-        # always figure out your chunk_size
-        self.chunk_size = int(core.user_options.chunk_size) \
-            if core.user_options.chunk_size else 100_000
+        if self.protocol == "tabledap":
+            # always figure out your chunk_size
+            self.chunk_size = int(core.user_options.chunk_size) \
+                if core.user_options.chunk_size else 100_000
 
-        # now a single exclusive branch:
-        if self.is_glider:
-            self.getDas()
-            return
+            # now a single exclusive branch:
+            if self.is_glider:
+                self.getDas()
+                return
 
-        elif self.is_nrt:
-            self.needs_Subset = False
-            self.getDas()
-            self.nrtTimeSet()
-            return
+            elif self.is_nrt:
+                self.needs_Subset = False
+                self.getDas()
+                self.nrtTimeSet()
+                return
 
-        elif core.user_options.bypass_chunking_bool:
-            # bypass chunking entirely
-            self.needs_Subset = False
-            self.getDas()
-            return
+            elif core.user_options.bypass_chunking_bool:
+                # bypass chunking entirely
+                self.needs_Subset = False
+                self.getDas()
+                return
 
-        else:
-            # the real “default” chunking path
-            self.getDas()
-            self.getDatasetSizes()
-            self.needsSubsetting()
-            if self.needs_Subset:
-                self.subsetDict = self.calculateTimeSubset()
-            return
+            else:
+                # the real “default” chunking path
+                self.getDas()
+                self.getDatasetSizes()
+                self.needsSubsetting()
+                if self.needs_Subset:
+                    self.subsetDict = self.calculateTimeSubset()
+                return
+        elif self.protocol == "griddap":
+            print("griddap stuff")
 
     
     def skipFromError(func):
@@ -114,7 +118,7 @@ class DatasetWrangler:
             if "NC_GLOBAL" in DAS_Dict:
                 self.nc_global = DAS_Dict["NC_GLOBAL"]
             
-            if core.user_options.all_attributes_bool:
+            if core.user_options.all_attributes_bool or self.protocol == "griddap":
                 self.attribute_list = dc.getActualAttributes(self, return_all=True)
             else:
                 self.attribute_list = dc.getActualAttributes(self)

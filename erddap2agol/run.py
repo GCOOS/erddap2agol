@@ -57,6 +57,7 @@ def cui():
             elif proto_choice == "2":
                 proto = "griddap"
             add_menu("Create static ERDDAP Item", protocol= proto)
+
         elif user_choice == "2":
             add_menu("Create Glider DAC Tracks", glider=True)
         elif user_choice == "3":
@@ -78,7 +79,8 @@ def add_menu(menu_title:str, glider: bool = False, nrt: bool = False, protocol: 
     # pass user params to erddapSelection
     erddapObj = core.erddapSelection(
         GliderServ=glider,
-        nrtAdd=nrt
+        nrtAdd=nrt,
+        protocol= protocol
     )
 
     # create list of dataset_id str and add to erddapObj
