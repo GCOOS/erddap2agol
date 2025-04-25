@@ -306,6 +306,10 @@ def selectDatasetFromList(erddapObj, dispLength=50, interactive=True) -> list:
                     #print(mgr.selectedDatasets)
                     table_data = [(ds_id, erddapObj.dataset_titles.get(ds_id, "No title")) for ds_id in mgr.selectedDatasets]
                     print(tabulate(table_data, headers=['Dataset ID', 'Dataset Title'], tablefmt='grid'))
+
+                    if mgr.protocol == "griddap":
+                        return mgr.selectedDatasets, mgr.dataset_kwargs
+
                     return mgr.selectedDatasets
             else:
                 # Possibly indices or ranges
@@ -399,13 +403,14 @@ def selectDatasetFromList(erddapObj, dispLength=50, interactive=True) -> list:
             tokens = shlex.split(raw_input)
 
             parser = argparse.ArgumentParser(add_help=False)
+            parser.add_argument('-latest', '--latest',   dest='latest', type=str)
             parser.add_argument('-sd', '--start-date', dest='sd', type=str)
             parser.add_argument('-ed', '--end-date',   dest='ed', type=str)
             
             args, rem = parser.parse_known_args(tokens)
 
             sd_dt = datetime.strptime(args.sd, '%d/%m/%Y') if args.sd else None
-            ed_dt = datetime.strptime(args.sd, '%d/%m/%Y') if args.sd else None
+            ed_dt = datetime.strptime(args.ed, '%d/%m/%Y') if args.ed else None
 
             mgr.setDateRange(sd_dt, ed_dt)
 

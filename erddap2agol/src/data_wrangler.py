@@ -297,6 +297,7 @@ class DatasetWrangler:
             url = f"{self.server}{self.dataset_id}.{dataformat}?{self.time_str}%2C{attrs_encoded}{time_constraints}"
             urls.append(url)
         return urls
+    
 
     #---------------------Data Download---------------------
     @skipFromError
