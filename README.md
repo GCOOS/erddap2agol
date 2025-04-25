@@ -1,4 +1,4 @@
-# ERDDAP2AGOL v.0.7.3.2
+# ERDDAP2AGOL v.0.7.8.5
 ## Latest Feature: Options Menu!
 ## Verified compatibility with ArcGIS Enterprise 
 The purpose of this project is to develop a robust tool for reliably transferring datasets between ERDDAP services and ArcGIS Online (AGOL). Erddap2agol is a "hands-off" Python package designed to operate seamlessly within the AGOL environment. Its core functionalities include creating, managing, and updating ERDDAP datasets at various levels of granularity. Developed by the Gulf of America Ocean Observing System (GCOOS), erddap2agol is available for use by data providers leveraging ERDDAP services, as well as individuals and organizations aiming to analyze and visualize ERDDAP data on a GIS platform.

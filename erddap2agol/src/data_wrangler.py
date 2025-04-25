@@ -15,10 +15,10 @@ from datetime import timedelta, datetime
 
 @dataclass
 class DatasetWrangler:
-    protocol: str
     dataset_id: str
     dataset_title: dict
     server: str
+    griddap: bool = False
     no_time_range: Optional[bool] = None
     row_count: Optional[int] = None
     chunk_size: Optional[int] = None
@@ -44,7 +44,7 @@ class DatasetWrangler:
     
     
     def __post_init__(self):
-        if self.protocol == "tabledap":
+        if not self.griddap:
             # always figure out your chunk_size
             self.chunk_size = int(core.user_options.chunk_size) \
                 if core.user_options.chunk_size else 100_000
@@ -74,8 +74,9 @@ class DatasetWrangler:
                 if self.needs_Subset:
                     self.subsetDict = self.calculateTimeSubset()
                 return
-        elif self.protocol == "griddap":
+        else:
             print("griddap stuff")
+            self.getDas()
 
     
     def skipFromError(func):
@@ -115,21 +116,28 @@ class DatasetWrangler:
             self.DAS_response = True
             DAS_Dict = dc.convertToDict(dc.parseDasResponse(response.text))
             self.DAS_filepath = dc.saveToJson(DAS_Dict, self.dataset_id)
+            
+            #check for NC_Global and add to the nc_global attribute
             if "NC_GLOBAL" in DAS_Dict:
                 self.nc_global = DAS_Dict["NC_GLOBAL"]
             
-            if core.user_options.all_attributes_bool or self.protocol == "griddap":
-                self.attribute_list = dc.getActualAttributes(self, return_all=True)
+            if self.griddap:
+                self.attribute_list = dc.getGriddapDimensions
+
             else:
-                self.attribute_list = dc.getActualAttributes(self)
-            if self.has_time:
-                time_range = dc.getTimeFromJson(self)
-                if time_range:
-                    self.start_time, self.end_time = time_range
-                    if self.start_time.tzinfo is None:
-                        self.start_time = self.start_time.replace(tzinfo=timezone.utc)
-                    if self.end_time.tzinfo is None:
-                        self.end_time = self.end_time.replace(tzinfo=timezone.utc)
+                if core.user_options.all_attributes_bool:
+                    self.attribute_list = dc.getActualAttributes(self, return_all=True)
+                else:
+                    self.attribute_list = dc.getActualAttributes(self)
+                
+                if self.has_time:
+                    time_range = dc.getTimeFromJson(self)
+                    if time_range:
+                        self.start_time, self.end_time = time_range
+                        if self.start_time.tzinfo is None:
+                            self.start_time = self.start_time.replace(tzinfo=timezone.utc)
+                        if self.end_time.tzinfo is None:
+                            self.end_time = self.end_time.replace(tzinfo=timezone.utc)
         except requests.RequestException as e:
             print(f"\nError fetching DAS for {self.dataset_id}: {e}")
             self.has_error = True

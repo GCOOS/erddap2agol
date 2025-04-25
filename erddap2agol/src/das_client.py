@@ -242,6 +242,39 @@ def displayAttributes(timeintv: int , attributes: list) -> None:
     print(f"\nThere are {timeintv} days worth of records")
     #print(f"\nAttributes: {attributes}")
 
+def getGriddapDimensions(data_Obj: Any) -> List[str]:
+    """
+    Simplified version of the getActualAttributes function for determining the dimensions of a griddap dataset
+
+    Returns list of dimension names, used to define the dimensions of an ArcGIS image collection image service 
+    """
+    dataset_id = data_Obj.dataset_id
+    das_conf_dir = getConfDir()
+    filepath = os.path.join(das_conf_dir, f'{dataset_id}.json')
+
+    try:
+        with open(filepath, 'r') as json_file:
+            data = json.load(json_file)
+            if "error" in data and data["error"].get("Found") is not None:
+                print(f"File {filepath} does not contain data.")
+                return None
+        
+        attributes_set = set()
+
+        common_vars = ["time", "altitude", "latitiude", "longitude"]
+
+        for var_name, var_attrs in data.items():
+            if var_name in common_vars:
+                pass
+            else:
+                attributes_set.add(var_name)
+
+        return attributes_set
+
+    except Exception as e:
+        print(f"\nThere was an error while getting the dimensions of the raster from the DAS: {e}")
+        return None
+
 
 def getActualAttributes(data_Obj: Any, return_all: bool = False) -> List[str]:
     """
