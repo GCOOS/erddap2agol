@@ -11,7 +11,7 @@ from erddap2agol.src import data_wrangler as lm
 from erddap2agol.src import das_client as dc
 from erddap2agol.src import agol_wrangler as aw
 from erddap2agol.src import core
-from erddap2agol.src import update_manager as um
+from erddap2agol.src import update_manager as um5
 
 
 def main():
