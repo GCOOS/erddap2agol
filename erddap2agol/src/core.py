@@ -465,6 +465,7 @@ class OptionsMenu:
     disp_length: int = None
     bypass_chunking_bool: bool = False
     all_attributes_bool: bool = False
+    additional_tags: List[str] = None
 
     def customTitleMenu(self, dataset): 
         print("Custom Title Option")
@@ -510,7 +511,8 @@ def options_menu():
         print("5. Change the number of datasets displayed")
         print("6. Toggle Bypass Chunking (currently: {})".format(user_options.bypass_chunking_bool))
         print("7. Get all attributes (currently: {})".format(user_options.all_attributes_bool))
-        print("8. Save options and return to main menu")
+        print("8. Add tags to next batch")
+        print("9. Save options and return to main menu")
         
         choice = input("Select an option: ").strip()
         
@@ -569,12 +571,47 @@ def options_menu():
             print("Bypass chunking toggled to: {}".format(user_options.all_attributes_bool))
 
         elif choice == "8":
+            print(f"\nCurrent Additional Tags: {user_options.additional_tags}")            
+            print("\n1. Add tags to next batch")
+            print("2. Remove additional tags")
+            print("3. Return")
+            choice_tags = input("Selection: ")
+            if choice_tags == "1":
+                # init empty list for additional tag attributes
+                user_options.additional_tags = []
+                user_tags = input("Add additional tag(s) seperated by a space: ")
+                # iterate through the str and detect the presence of a space
+                mult_tag_bool = False
+                for chars in user_tags:
+                    if chars == " ":
+                        mult_tag_bool = True
+                    # else:
+                    #     mult_tag_bool = False               
+                if mult_tag_bool:
+                    tag_list = user_tags.split(" ")
+                    for tag in tag_list:
+                        user_options.additional_tags.append(tag)
+
+                else:
+                    user_options.additional_tags.append(user_tags)
+
+            if choice_tags == "2":
+                user_options.additional_tags = None
+
+            if choice_tags == "3":
+                return None
+
+
+
+        elif choice == "9":
             print("\nOptions saved. Returning to Main Menu...")
             time.sleep(0.5)
             clearScreen()
             break
         else:
             print("Invalid option. Please select again.")
+    
+
     
 
 

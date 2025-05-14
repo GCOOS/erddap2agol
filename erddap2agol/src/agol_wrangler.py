@@ -246,30 +246,31 @@ class AgolWrangler:
 
     def mapItemProperties(self, dataset_id) -> ItemProperties:
         """Map metadata to an item properties attribute of the item class"""
+        new_tags = []
         props = self.item_properties.get(dataset_id, {})
         # check if user disabled tags an adjust accordingly
         if core.user_options.enable_tags_bool == False:
-            props["tags"] = []
-            return ItemProperties(
-                title=props.get("title", ""),
-                item_type=props.get("type", ""),
-                snippet=props.get("snippet", ""),
-                description=props.get("description", ""),
-                tags=props.get("tags", []),
-                access_information=props.get("accessInformation", ""),
-                license_info=props.get("licenseInfo", "")
-            )
+            if core.user_options.additional_tags:
+                for tag in core.user_options.additional_tags:
+                    new_tags.append(tag)
+            else:
+                new_tags= []
         else:
-            return ItemProperties(
-                title=props.get("title", ""),
-                item_type=props.get("type", ""),
-                snippet=props.get("snippet", ""),
-                description=props.get("description", ""),
-                tags=props.get("tags", []),
-                access_information=props.get("accessInformation", ""),
-                license_info=props.get("licenseInfo", "")
-            )
+            new_tags = props.get("tags", [])
+            if core.user_options.additional_tags:
+                for tag in core.user_options.additional_tags:
+                    new_tags.append(tag)
 
+        return ItemProperties(
+            title=props.get("title", ""),
+            item_type=props.get("type", ""),
+            snippet=props.get("snippet", ""),
+            description=props.get("description", ""),
+            tags=new_tags,
+            access_information=props.get("accessInformation", ""),
+            license_info=props.get("licenseInfo", "")
+        )
+        
     @skipFromError
     def postAndPublish(self, inputDataType="csv", timeoutTime=300) -> None:
         """Publishes all datasets in self.datasets to ArcGIS, handling subsets if needed."""
