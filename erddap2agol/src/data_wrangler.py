@@ -20,12 +20,23 @@ class DatasetWrangler:
     server: str
     griddap: bool = False
     mult_dim: bool = False
+    griddap_args: dict = None
     no_time_range: Optional[bool] = None
     row_count: Optional[int] = None
     chunk_size: Optional[int] = None
     attribute_list: Optional[List[str]] = field(default_factory=list)
-    start_time: Optional[datetime] = None
-    end_time: Optional[datetime] = None
+    
+    # date time attributes
+    # added user and req (request) start time to reconcile any differences between 
+    # what the user requested and what is available within the data
+    # This applies to griddap only, tabledap simply uses data start time
+    data_start_time: Optional[datetime] = None
+    data_end_time: Optional[datetime] = None
+    user_start_time: Optional[datetime] = None
+    user_end_time: Optional[datetime] = None
+    req_start_time: Optional[datetime] = None
+    req_end_time: Optional[datetime] = None
+    
     needs_Subset: Optional[bool] = None
     DAS_response: Optional[bool] = None
     is_glider: bool = False
@@ -125,22 +136,24 @@ class DatasetWrangler:
             
             if self.griddap:
                 self.attribute_list = dc.getGriddapDimensions
-            
+                
+
             # following logic does not apply to griddap
             else:
                 if core.user_options.all_attributes_bool:
                     self.attribute_list = dc.getActualAttributes(self, return_all=True)
                 else:
                     self.attribute_list = dc.getActualAttributes(self)
-                
-                if self.has_time:
-                    time_range = dc.getTimeFromJson(self)
-                    if time_range:
-                        self.start_time, self.end_time = time_range
-                        if self.start_time.tzinfo is None:
-                            self.start_time = self.start_time.replace(tzinfo=timezone.utc)
-                        if self.end_time.tzinfo is None:
-                            self.end_time = self.end_time.replace(tzinfo=timezone.utc)
+
+            # but this does, we still need to get time    
+            if self.has_time:
+                time_range = dc.getTimeFromJson(self)
+                if time_range:
+                    self.data_start_time, self.data_end_time = time_range
+                    if self.data_start_time.tzinfo is None:
+                        self.data_start_time = self.data_start_time.replace(tzinfo=timezone.utc)
+                    if self.data_end_time.tzinfo is None:
+                        self.data_end_time = self.data_end_time.replace(tzinfo=timezone.utc)
         except requests.RequestException as e:
             print(f"\nError fetching DAS for {self.dataset_id}: {e}")
             self.has_error = True
@@ -148,6 +161,19 @@ class DatasetWrangler:
         except Exception as e:
             print(f"\nError parsing DAS for {self.dataset_id}: {e}")
             self.DAS_response = False
+
+    # def setGriddapTimes(self):
+    #     # user
+    #     # data
+    #     # req
+    #     if self.griddap_args["latest_bool"] == True:
+    #         self.user_start_time, self.user_end_time = None, None
+    #         self.req_start_time
+    #         self.req_end_time = self.data_end_time
+
+    #     elif self.griddap_args["user_data_end_time"] > self.data_end_time:
+    #         print(f"\nThe requested end time {self.griddap_args["user_data_end_time"]} exceeds the datasets end time")
+
 
     @skipFromNoTime
     @skipFromNoRange
@@ -203,8 +229,8 @@ class DatasetWrangler:
         if not self.needs_Subset:
             return None
         try:
-            start = self.start_time
-            end = self.end_time
+            start = self.data_start_time
+            end = self.data_end_time
             total_records = self.row_count
             records_per_chunk = chunk_size
             chunks_needed = math.ceil(total_records / records_per_chunk)
@@ -270,13 +296,13 @@ class DatasetWrangler:
         """Generate URL for datasets not requiring subsetting."""
         urls = []
         try:
-            if self.has_time and self.start_time:
+            if self.has_time and self.data_start_time:
                 if nrt_update or self.is_nrt:
-                    start = self.start_time
-                    end = self.end_time
+                    start = self.data_start_time
+                    end = self.data_end_time
                 else:
-                    start = self.start_time.strftime('%Y-%m-%dT%H:%M:%S')
-                    end = self.end_time.strftime('%Y-%m-%dT%H:%M:%S')
+                    start = self.data_start_time.strftime('%Y-%m-%dT%H:%M:%S')
+                    end = self.data_end_time.strftime('%Y-%m-%dT%H:%M:%S')
                 time_constraints = f"&{self.time_str}%3E%3D{start}Z&{self.time_str}%3C%3D{end}Z"
                 url = f"{self.server}{self.dataset_id}.{dataformat}?{self.time_str}%2C{attrs_encoded}{time_constraints}"
                 urls.append(url)
@@ -398,8 +424,8 @@ class DatasetWrangler:
         return None
 
     def calculateTimeRange(self, intervalType=None) -> int:
-        start = datetime.fromisoformat(self.start_time)
-        end = datetime.fromisoformat(self.end_time)
+        start = datetime.fromisoformat(self.data_start_time)
+        end = datetime.fromisoformat(self.data_end_time)
         if intervalType is None:
             return (end - start).days
         elif intervalType == "months":
@@ -411,11 +437,11 @@ class DatasetWrangler:
             raise ValueError("Invalid interval type.")
 
     def nrtTimeSet(self):
-        """Sets start_time/end_time in ISO format (e.g., 2023-09-29T14:05:12)"""
+        """Sets data_start_time/data_end_time in ISO format (e.g., 2023-09-29T14:05:12)"""
         now_utc = datetime.now(timezone.utc)
         seven_days_ago = now_utc - timedelta(days=self.moving_window_days)
-        self.start_time = seven_days_ago.strftime('%Y-%m-%dT%H:%M:%S')
-        self.end_time = now_utc.strftime('%Y-%m-%dT%H:%M:%S')
+        self.data_start_time = seven_days_ago.strftime('%Y-%m-%dT%H:%M:%S')
+        self.data_end_time = now_utc.strftime('%Y-%m-%dT%H:%M:%S')
 
 
 
@@ -423,8 +449,8 @@ class DatasetWrangler:
 #This function checks if the dataset has data within the last 7 days
     # def checkDataRange(datasetid) -> bool:
     #     def movingWindow(self):        
-    #         self.start_time = datetime.now() - timedelta(days=self.moving_window_days)
-    #         self.end_time = datetime.now()
+    #         self.data_start_time = datetime.now() - timedelta(days=self.moving_window_days)
+    #         self.data_end_time = datetime.now()
     #     startDas, endDas = dc.convertFromUnixDT(dc.getTimeFromJson(datasetid))
     #     window_start, window_end = movingWindow(isStr=False)
     #     if startDas <= window_end and endDas >= window_start:

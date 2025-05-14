@@ -288,8 +288,8 @@ def selectDatasetFromList(erddapObj, dispLength=50, interactive=True) -> list:
                     if self.protocol == "griddap":
                         self.dataset_kwargs[selected_dataset] = {
                             'latest_bool': self.latest_bool,
-                            'start_time': self.user_start_time,
-                            'end_time': self.user_end_time
+                            'user_start_time': self.user_start_time,
+                            'user_end_time': self.user_end_time
                         }
                         # print(f"Added {selected_dataset} to the cart.")
 
@@ -428,8 +428,8 @@ def selectDatasetFromList(erddapObj, dispLength=50, interactive=True) -> list:
             else:
                 
                 try:
-                    user_start_date = datetime.strptime(args.sd, '%d/%m/%Y') if args.user_start_time else None
-                    user_end_date = datetime.strptime(args.ed, '%d/%m/%Y') if args.user_end_time else None
+                    user_start_date = datetime.strptime(args.user_start_time, '%d/%m/%Y') if args.user_start_time else None
+                    user_end_date = datetime.strptime(args.user_end_time, '%d/%m/%Y') if args.user_end_time else None
                     
                 except Exception as e:
                     print(f"\nThere was an error while converting your input into datetime objects: {e}")

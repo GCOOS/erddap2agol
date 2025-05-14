@@ -263,7 +263,7 @@ class ERDDAPHandler:
             print(f"Error fetching dataset ID list: {e}")
             return []
         
-    def createDatasetObjects(self, dataset_ids: list, griddap_kwargs= None) -> None:
+    def createDatasetObjects(self, dataset_ids: list, griddap_kwargs: dict= None) -> None:
         """Creates DatasetWrangler objects for each dataset ID from the attributes of the selected data"""
         if "gliders.ioos.us" in self.server:
             gliderBool = True
@@ -272,10 +272,12 @@ class ERDDAPHandler:
             
         if self.protocol == "griddap":
             griddap_bool = True
+            kwargs = griddap_kwargs
 
             
         else:
             griddap_bool = False
+            kwargs = None
 
         for dataset_id in dataset_ids:
             dataset = dw.DatasetWrangler(
@@ -284,7 +286,8 @@ class ERDDAPHandler:
                 server= self.server,
                 griddap= griddap_bool,
                 is_nrt= self.is_nrt,
-                is_glider= gliderBool
+                is_glider= gliderBool,
+                griddap_args=kwargs
             )
             self.datasets.append(dataset)
     
