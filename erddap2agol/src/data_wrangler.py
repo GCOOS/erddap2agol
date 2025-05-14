@@ -19,6 +19,7 @@ class DatasetWrangler:
     dataset_title: dict
     server: str
     griddap: bool = False
+    mult_dim: bool = False
     no_time_range: Optional[bool] = None
     row_count: Optional[int] = None
     chunk_size: Optional[int] = None
@@ -111,6 +112,7 @@ class DatasetWrangler:
         Sets major attributes for the dataset"""
         url = f"{self.server}{self.dataset_id}.das"
         try:
+            # agnostic of protocol
             response = requests.get(url)
             response.raise_for_status()
             self.DAS_response = True
@@ -123,7 +125,8 @@ class DatasetWrangler:
             
             if self.griddap:
                 self.attribute_list = dc.getGriddapDimensions
-
+            
+            # following logic does not apply to griddap
             else:
                 if core.user_options.all_attributes_bool:
                     self.attribute_list = dc.getActualAttributes(self, return_all=True)
@@ -297,6 +300,8 @@ class DatasetWrangler:
             url = f"{self.server}{self.dataset_id}.{dataformat}?{self.time_str}%2C{attrs_encoded}{time_constraints}"
             urls.append(url)
         return urls
+    
+    # def generateUrl_griddap(self, dataformat: str, attrs_encoded: str) -> str:
     
 
     #---------------------Data Download---------------------

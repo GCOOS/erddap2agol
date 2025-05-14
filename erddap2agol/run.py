@@ -85,9 +85,12 @@ def add_menu(menu_title:str, glider: bool = False, nrt: bool = False, protocol: 
 
     # create list of dataset_id str and add to erddapObj
     dataset_list, griddap_kwargs = core.selectDatasetFromList(erddapObj)
-
+    
+    if griddap_kwargs:
+        print(f"\ngriddap kwargs: {griddap_kwargs}") 
+    
     # Transforms list into dataset objects 
-    erddapObj.addDatasets_list(dataset_list)
+    erddapObj.createDatasetObjects(dataset_list)
 
     datasetObjlist = (erddapObj.datasets)
 

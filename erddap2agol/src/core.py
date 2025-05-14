@@ -168,8 +168,9 @@ def selectDatasetFromList(erddapObj, dispLength=50, interactive=True) -> list:
             
             self.protocol = erddapObj.protocol
             self.dataset_kwargs = {}
-            self.current_start = None
-            self.current_end =  None
+            self.latest_bool = None
+            self.user_start_time = None
+            self.user_end_time =  None
             
 
         @property
@@ -185,8 +186,9 @@ def selectDatasetFromList(erddapObj, dispLength=50, interactive=True) -> list:
             return self._allDatasetIds[start_index:end_index]
         
         def setDateRange(self, sd, ed):
-            self.current_start = sd
-            self.current_end = ed
+            """Assigns the date range provided by the user to current_start/end attribute"""
+            self.user_start_time = sd
+            self.user_end_time = ed
 
         def goNextPage(self):
             if self.currentPage < self.numPages:
@@ -285,10 +287,11 @@ def selectDatasetFromList(erddapObj, dispLength=50, interactive=True) -> list:
 
                     if self.protocol == "griddap":
                         self.dataset_kwargs[selected_dataset] = {
-                            'start_time': self.current_start,
-                            'end_time': self.current_end
+                            'latest_bool': self.latest_bool,
+                            'start_time': self.user_start_time,
+                            'end_time': self.user_end_time
                         }
-                        print(f"Added {selected_dataset} to the cart.")
+                        # print(f"Added {selected_dataset} to the cart.")
 
                     print(f"Added {selected_dataset} to the cart.")
                 else:
@@ -296,26 +299,23 @@ def selectDatasetFromList(erddapObj, dispLength=50, interactive=True) -> list:
             else:
                 print(f"Invalid index {idx_int} for this page.")
 
-        def _parseInput(user_input: str = None):
-            if user_input in command_map:
-                finished = command_map[user_input](mgr, None)
-                if finished:
+        def _parseInput(self, user_input: str = None):
+            """Returns (selected_list, kwargs) or None"""
+            cmd = user_input.strip()
+            if cmd in command_map:
+                done = command_map[cmd](self, None)
+                if done:
                     clearScreen()
                     print("\nAdding the following datasets to the next step:")
-                    # Create a list of tuples for the table
-                    #print(mgr.selectedDatasets)
-                    table_data = [(ds_id, erddapObj.dataset_titles.get(ds_id, "No title")) for ds_id in mgr.selectedDatasets]
-                    print(tabulate(table_data, headers=['Dataset ID', 'Dataset Title'], tablefmt='grid'))
-
-                    if mgr.protocol == "griddap":
-                        return mgr.selectedDatasets, mgr.dataset_kwargs
-
-                    return mgr.selectedDatasets
+                    table = [(ds, erddapObj.dataset_titles.get(ds, "")) for ds in self.selectedDatasets]
+                    print(tabulate(table, headers=['Dataset ID', 'Dataset Title'], tablefmt='grid'))
+                    if self.protocol == 'griddap':
+                        return self.selectedDatasets, self.dataset_kwargs
+                    return self.selectedDatasets, None
             else:
-                # Possibly indices or ranges
-                mgr.addByIndices(user_input)
-                # here is where we will put a check for flags
+                self.addByIndices(cmd)
                 input("Press Enter to continue...")
+            return None
 
     # ---------------------- CUI Cmd Map ----------------------
     def cmdNext(manager: DatasetListManager, _arg):
@@ -366,10 +366,9 @@ def selectDatasetFromList(erddapObj, dispLength=50, interactive=True) -> list:
         # final_selection = mgr.selectedDatasets
         return mgr
 
-
+    # ---------------------- ------------- ----------------------
     # ---------------------- CUI WhileLoop ----------------------
-
-
+    # ---------------------- ------------- ----------------------
     while True:
         def clearScreen():
             os.system('cls' if os.name == 'nt' else 'clear')
@@ -396,27 +395,55 @@ def selectDatasetFromList(erddapObj, dispLength=50, interactive=True) -> list:
             print("'next', 'back', 'addAll', 'addPage', 'done', 'mainMenu', 'exit'")
             print(" type 'search:keyword1+keyword2' to search datasets.")
             print(" enter comma-separated indices (e.g. '10,12:15') for single or range selection.")
-            print("Specify date range with --start-date dd/mm/yyyy --end-date dd/mm/yyyy")
+            print("\nSpecify date range with --latest OR --start-date dd/mm/yyyy AND --end-date dd/mm/yyyy")
 
             raw_input = input(": ")
 
             tokens = shlex.split(raw_input)
 
             parser = argparse.ArgumentParser(add_help=False)
-            parser.add_argument('-latest', '--latest',   dest='latest', type=str)
-            parser.add_argument('-sd', '--start-date', dest='sd', type=str)
-            parser.add_argument('-ed', '--end-date',   dest='ed', type=str)
             
+            parser.add_argument('-l', '--latest',
+                                dest='latest',
+                                action='store_true',
+                                help="use only the latest date")
+            
+            parser.add_argument('-sd', '--start-date',
+                                dest='user_start_date',
+                                type=str,
+                                help="start date in dd/mm/YYYY")
+            
+            parser.add_argument('-ed', '--end-date',
+                                dest='user_end_date',
+                                type=str,
+                                help="end date in dd/mm/YYYY")
+
             args, rem = parser.parse_known_args(tokens)
 
-            sd_dt = datetime.strptime(args.sd, '%d/%m/%Y') if args.sd else None
-            ed_dt = datetime.strptime(args.ed, '%d/%m/%Y') if args.ed else None
+            if args.latest:
+                # caller asked for “latest” only
+                user_start_date, user_end_date = None, None
+                mgr.latest_bool = True
 
-            mgr.setDateRange(sd_dt, ed_dt)
-
+            else:
+                
+                try:
+                    user_start_date = datetime.strptime(args.sd, '%d/%m/%Y') if args.user_start_time else None
+                    user_end_date = datetime.strptime(args.ed, '%d/%m/%Y') if args.user_end_time else None
+                    
+                except Exception as e:
+                    print(f"\nThere was an error while converting your input into datetime objects: {e}")
+            
+            # Now that we have taken care of the kwargs we can figure out what the requested datasets are
+            mgr.setDateRange(user_start_date, user_end_date)
             selection_str = " ".join(rem)
-
-            mgr._parseInput(selection_str)
+            try:
+                result = mgr._parseInput(selection_str)
+            except Exception as e:
+                print(f"\nThere was an error while parsing your input: {e}")
+                return None
+            if result:
+                return result
 
 
         else:
@@ -432,7 +459,9 @@ def selectDatasetFromList(erddapObj, dispLength=50, interactive=True) -> list:
                 mgr.searchDatasets(term)
                 continue
             
-            mgr._parseInput(user_input)
+            result = mgr._parseInput(user_input)
+            if result:
+                return result
             # Check if it matches one of our known commands
 
             # this is now wrapped in the _parseInput() function

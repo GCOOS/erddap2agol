@@ -261,7 +261,7 @@ def getGriddapDimensions(data_Obj: Any) -> List[str]:
         
         attributes_set = set()
 
-        common_vars = ["time", "altitude", "latitiude", "longitude"]
+        common_vars = ["time", "altitude", "latitiude", "longitude", "NC_GLOBAL"]
 
         for var_name, var_attrs in data.items():
             if var_name in common_vars:
