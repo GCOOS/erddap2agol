@@ -169,6 +169,7 @@ def selectDatasetFromList(erddapObj, dispLength=50, interactive=True) -> list:
             self.protocol = erddapObj.protocol
             self.dataset_kwargs = {}
             self.latest_bool = None
+            self.user_single_date = None
             self.user_start_time = None
             self.user_end_time =  None
             
@@ -288,6 +289,7 @@ def selectDatasetFromList(erddapObj, dispLength=50, interactive=True) -> list:
                     if self.protocol == "griddap":
                         self.dataset_kwargs[selected_dataset] = {
                             'latest_bool': self.latest_bool,
+                            'user_single_date': self.user_single_date,
                             'user_start_time': self.user_start_time,
                             'user_end_time': self.user_end_time
                         }
@@ -300,7 +302,7 @@ def selectDatasetFromList(erddapObj, dispLength=50, interactive=True) -> list:
                 print(f"Invalid index {idx_int} for this page.")
 
         def _parseInput(self, user_input: str = None):
-            """Returns (selected_list, kwargs) or None"""
+            """Returns (selected_list, kwargs) or None, this function is important for the selectDatasetFromList function"""
             cmd = user_input.strip()
             if cmd in command_map:
                 done = command_map[cmd](self, None)
@@ -408,6 +410,11 @@ def selectDatasetFromList(erddapObj, dispLength=50, interactive=True) -> list:
                                 action='store_true',
                                 help="use only the latest date")
             
+            parser.add_argument('-date', '--date',
+                                dest='user_single_date',
+                                type=str,
+                                help="single date in dd/mm/yy")
+            
             parser.add_argument('-sd', '--start-date',
                                 dest='user_start_date',
                                 type=str,
@@ -420,23 +427,35 @@ def selectDatasetFromList(erddapObj, dispLength=50, interactive=True) -> list:
 
             args, rem = parser.parse_known_args(tokens)
 
-            if args.latest:
-                # caller asked for “latest” only
+            # There are three cases for adding imagery, single date, latest, multiple images
+            
+            # case 1
+            if args.user_single_date:
+                user_start_date, user_end_date = None, None
+                mgr.latest_bool = False
+
+            # case 2
+            elif args.latest:
                 user_start_date, user_end_date = None, None
                 mgr.latest_bool = True
-
-            else:
-                
+            
+            # case 3
+            elif args.user_start_date and user_end_date:
                 try:
-                    user_start_date = datetime.strptime(args.user_start_time, '%d/%m/%Y') if args.user_start_time else None
-                    user_end_date = datetime.strptime(args.user_end_time, '%d/%m/%Y') if args.user_end_time else None
-                    
+                    user_start_date = datetime.strptime(args.user_start_time, '%d/%m/%Y') 
+                    user_end_date = datetime.strptime(args.user_end_time, '%d/%m/%Y') 
+                    mgr.setDateRange(user_start_date, user_end_date)
                 except Exception as e:
                     print(f"\nThere was an error while converting your input into datetime objects: {e}")
+            else:
+                pass
             
-            # Now that we have taken care of the kwargs we can figure out what the requested datasets are
-            mgr.setDateRange(user_start_date, user_end_date)
+            # Parse the remaining tokens
             selection_str = " ".join(rem)
+            if selection_str.startswith("search:"):
+                term = selection_str.split(':', 1)[1]
+                mgr.searchDatasets(term)
+                continue
             try:
                 result = mgr._parseInput(selection_str)
             except Exception as e:
@@ -495,6 +514,8 @@ class OptionsMenu:
     bypass_chunking_bool: bool = False
     all_attributes_bool: bool = False
     additional_tags: List[str] = None
+    # query from item
+    # share_to_group
 
     def customTitleMenu(self, dataset): 
         print("Custom Title Option")
