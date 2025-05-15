@@ -261,11 +261,27 @@ def getGriddapDimensions(data_Obj: Any) -> List[str]:
         
         attributes_set = set()
 
-        common_vars = ["time", "altitude", "latitiude", "longitude", "NC_GLOBAL"]
+        common_vars = ["altitude", "latitiude", "longitude", "NC_GLOBAL"]
 
         for var_name, var_attrs in data.items():
             if var_name in common_vars:
                 pass
+            
+            if var_name == "time":
+                    data_Obj.has_time = True
+                    data_Obj.time_str = "time"
+            elif not data_Obj.time_str and var_name == "datecollec":
+                    data_Obj.has_time = True
+                    data_Obj.time_str = "datecollec"
+            elif not data_Obj.time_str and var_name == "date_gmt":
+                    data_Obj.has_time = True
+                    data_Obj.time_str = "date_gmt"
+            elif not data_Obj.time_str:
+                    ioos_cat = var_attrs.get("ioos_category", {}).get("value", "")
+                    units   = var_attrs.get("units", {}).get("value", "")
+                    if ioos_cat == "Time" and units == "seconds since 1970-01-01T00:00:00Z":
+                        data_Obj.has_time = True
+                        data_Obj.time_str = var_name
             else:
                 attributes_set.add(var_name)
 
@@ -338,16 +354,16 @@ def getActualAttributes(data_Obj: Any, return_all: bool = False) -> List[str]:
 
                 # ── only for return_all == False ──
                 if not return_all:
-                    # 1) skip QC/coordinate suffixed names
+                    # skip QC/coordinate suffixed names
                     if any(var_name.endswith(suf) for suf in qc_suffixes) or \
                        any(sub in var_name for sub in ("_qc_", "qartod_")):
                         continue
 
-                    # 2) skip single‐character keys (e.g. "s")
+                    # skip single‐character keys (e.g. "s")
                     if len(var_name) == 1:
                         continue
 
-                    # 3) skip the global metadata key NC_Global
+                    # skip the global metadata key NC_Global
                     if var_name.lower() == "nc_global":
                         continue
 

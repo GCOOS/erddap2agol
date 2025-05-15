@@ -87,7 +87,7 @@ class DatasetWrangler:
                     self.subsetDict = self.calculateTimeSubset()
                 return
         else:
-            print("griddap stuff")
+            print("griddap init")
             self.getDas()
 
     
@@ -121,9 +121,16 @@ class DatasetWrangler:
     def getDas(self) -> None:
         """Fetch and parse DAS metadata.
         Sets major attributes for the dataset"""
-        url = f"{self.server}{self.dataset_id}.das"
+        default_url = f"{self.server}{self.dataset_id}.das"
+        if self.griddap:
+            if "tabledap" in self.server:
+                new_url = default_url.replace("tabledap", "griddap")
+                url = new_url
+        else:
+            url = default_url
         try:
             # agnostic of protocol
+            print(url)
             response = requests.get(url)
             response.raise_for_status()
             self.DAS_response = True
@@ -135,7 +142,7 @@ class DatasetWrangler:
                 self.nc_global = DAS_Dict["NC_GLOBAL"]
             
             if self.griddap:
-                self.attribute_list = dc.getGriddapDimensions
+                self.attribute_list = dc.getGriddapDimensions(self)
                 
 
             # following logic does not apply to griddap
@@ -268,6 +275,10 @@ class DatasetWrangler:
         Build request URLs for data.
         Special handling for subsetting data.
         """
+        #dataformat: str = "csvp",
+        if self.griddap:
+            dataformat = "nc"
+
         urls = []
         # Prepare attributes
         attrs = []

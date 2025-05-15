@@ -75,6 +75,7 @@ def erddapSelection(GliderServ = False, nrtAdd = False, protocol: str = None) ->
         else:
             print("\nInput cannot be none")
             return None
+            
         
         
 # if you want to change dispLength, do that here.
@@ -433,20 +434,29 @@ def selectDatasetFromList(erddapObj, dispLength=50, interactive=True) -> list:
             if args.user_single_date:
                 user_start_date, user_end_date = None, None
                 mgr.latest_bool = False
+                try:
+                    user_single_date = datetime.strptime(str(args.user_single_date), '%d/%m/%Y')
+                except Exception as e:
+                    print(f"\nThere was an issue parsing your input into a date time format, please try again.")
+                    time.sleep(1)
+                    continue
+                mgr.user_single_date = user_single_date
 
             # case 2
             elif args.latest:
-                user_start_date, user_end_date = None, None
+                user_start_date, user_end_date, user_single_date = None, None, None
                 mgr.latest_bool = True
             
             # case 3
             elif args.user_start_date and user_end_date:
                 try:
-                    user_start_date = datetime.strptime(args.user_start_time, '%d/%m/%Y') 
-                    user_end_date = datetime.strptime(args.user_end_time, '%d/%m/%Y') 
+                    user_start_date = datetime.strptime(args.user_start_time, '%d/%m/%Y')
+                    user_end_date = datetime.strptime(args.user_end_time, '%d/%m/%Y')
                     mgr.setDateRange(user_start_date, user_end_date)
                 except Exception as e:
                     print(f"\nThere was an error while converting your input into datetime objects: {e}")
+                    time.sleep(1)
+                    continue 
             else:
                 pass
             
@@ -531,6 +541,23 @@ class OptionsMenu:
             print(f"Invalid input for the dataset, continuing with default title")
             pass
 
+    def getBoundsFromItem(self, id: str, layer_index: int= None):
+        gis = GIS("Home")
+        try:
+            service_item = gis.content.get(id)
+        except Exception as e:
+            print(f"\nThere was an error getting the content item: {e}")
+        
+        if not layer_index:
+            layer_index = 0
+
+        service_layer = service_item.layers[layer_index]
+        service_layer_query =  service_layer.query(where="1=1")
+        service_features = service_layer_query.features
+        service_bounds = service_features[0]
+        bbox_geom = service_bounds.geometry
+        print(bbox_geom)
+        
 # Global variable to hold the options.
 user_options = OptionsMenu()
 
@@ -562,7 +589,8 @@ def options_menu():
         print("6. Toggle Bypass Chunking (currently: {})".format(user_options.bypass_chunking_bool))
         print("7. Get all attributes (currently: {})".format(user_options.all_attributes_bool))
         print("8. Add tags to next batch")
-        print("9. Save options and return to main menu")
+        
+        print("\n9. Save options and return to main menu")
         
         choice = input("Select an option: ").strip()
         
