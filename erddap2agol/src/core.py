@@ -524,7 +524,7 @@ class OptionsMenu:
     bypass_chunking_bool: bool = False
     all_attributes_bool: bool = False
     additional_tags: List[str] = None
-    # query from item
+    item_extent: tuple = None
     # share_to_group
 
     def customTitleMenu(self, dataset): 
@@ -545,18 +545,15 @@ class OptionsMenu:
         gis = GIS("Home")
         try:
             service_item = gis.content.get(id)
+            extent = service_item.extent
         except Exception as e:
             print(f"\nThere was an error getting the content item: {e}")
         
-        if not layer_index:
-            layer_index = 0
-
-        service_layer = service_item.layers[layer_index]
-        service_layer_query =  service_layer.query(where="1=1")
-        service_features = service_layer_query.features
-        service_bounds = service_features[0]
-        bbox_geom = service_bounds.geometry
-        print(bbox_geom)
+        if extent:
+            user_options.item_extent = extent
+        else:
+            print(f"\nThere was an error getting the item extent, no extent set")
+            user_options.item_extent = None
         
 # Global variable to hold the options.
 user_options = OptionsMenu()
@@ -589,8 +586,12 @@ def options_menu():
         print("6. Toggle Bypass Chunking (currently: {})".format(user_options.bypass_chunking_bool))
         print("7. Get all attributes (currently: {})".format(user_options.all_attributes_bool))
         print("8. Add tags to next batch")
+        if user_options.item_extent:
+            print("9. Define bounds with Content Item ID: \n{}".format(user_options.item_extent))
+        else:
+            print("9. Define bounds with Content Item ID")
         
-        print("\n9. Save options and return to main menu")
+        print("\n10. Save options and return to main menu")
         
         choice = input("Select an option: ").strip()
         
@@ -679,9 +680,14 @@ def options_menu():
             if choice_tags == "3":
                 return None
 
-
-
         elif choice == "9":
+            id = input(f"\nEnter the Item ID that you want to query: ")
+            index_input = input(f"\nEnter the index of the layer you want to query, or press enter for (default 0): ")
+            OptionsMenu.getBoundsFromItem(None, id, index_input)
+            
+
+
+        elif choice == "10":
             print("\nOptions saved. Returning to Main Menu...")
             time.sleep(0.5)
             clearScreen()
