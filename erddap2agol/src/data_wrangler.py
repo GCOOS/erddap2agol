@@ -275,9 +275,6 @@ class DatasetWrangler:
         Build request URLs for data.
         Special handling for subsetting data.
         """
-        #dataformat: str = "csvp",
-        if self.griddap:
-            dataformat = "nc"
 
         urls = []
         # Prepare attributes
@@ -338,7 +335,19 @@ class DatasetWrangler:
             urls.append(url)
         return urls
     
-    # def generateUrl_griddap(self, dataformat: str, attrs_encoded: str) -> str:
+    # https://coastwatch.noaa.gov/erddap/griddap/noaacwBLENDEDsshDaily.nc?sla
+    # %5B(2024-03-01T00:00:00Z)%5D%5B(-76.875):(54.125)%5D%5B(-135.875):(116.125)
+    # %5D&.draw=surface&.vars=longitude%7Clatitude%7Csla
+    
+    def generateUrl_griddap(self, dataformat: str, attrs_encoded: str) -> str:
+        urls = []
+        additionalAttr = self.attribute_list.copy if self.attribute_list else []
+        attrs = []
+        check_url = self.server
+        if "tabledap" in check_url:
+                new_url = check_url.replace("tabledap", "griddap")
+                base_url = new_url
+
     
 
     #---------------------Data Download---------------------
