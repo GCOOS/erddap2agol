@@ -524,7 +524,7 @@ class OptionsMenu:
     bypass_chunking_bool: bool = False
     all_attributes_bool: bool = False
     additional_tags: List[str] = None
-    item_extent: tuple = None
+    bounds: tuple = None
     # share_to_group
 
     def customTitleMenu(self, dataset): 
@@ -550,10 +550,10 @@ class OptionsMenu:
             print(f"\nThere was an error getting the content item: {e}")
         
         if extent:
-            user_options.item_extent = extent
+            user_options.bounds = extent
         else:
             print(f"\nThere was an error getting the item extent, no extent set")
-            user_options.item_extent = None
+            user_options.bounds = None
         
 # Global variable to hold the options.
 user_options = OptionsMenu()
@@ -586,8 +586,8 @@ def options_menu():
         print("6. Toggle Bypass Chunking (currently: {})".format(user_options.bypass_chunking_bool))
         print("7. Get all attributes (currently: {})".format(user_options.all_attributes_bool))
         print("8. Add tags to next batch")
-        if user_options.item_extent:
-            print("9. Define bounds with Content Item ID: \n{}".format(user_options.item_extent))
+        if user_options.bounds:
+            print("9. Define bounds with Content Item ID: \n{}".format(user_options.bounds))
         else:
             print("9. Define bounds with Content Item ID")
         

@@ -95,9 +95,13 @@ def add_menu(menu_title:str, glider: bool = False, nrt: bool = False, protocol: 
     datasetObjlist = (erddapObj.datasets)
 
     for datasetObj in datasetObjlist:
-        datasetObj.generateUrl()
-        datasetObj.writeErddapData()
-    
+        if erddapObj.protocol == "tabledap":
+            datasetObj.generateUrl()
+            datasetObj.writeErddapData()
+        else:
+            datasetObj.generateGriddap_url()
+
+            
     agolObj = aw.AgolWrangler(erddap_obj=erddapObj)
     agolObj.datasets = erddapObj.datasets
     agolObj.makeItemProperties()

@@ -285,6 +285,9 @@ def getGriddapDimensions(data_Obj: Any) -> List[str]:
             else:
                 attributes_set.add(var_name)
 
+            if var_name == "NC_GLOBAL":
+                continue
+
         return attributes_set
 
     except Exception as e:
