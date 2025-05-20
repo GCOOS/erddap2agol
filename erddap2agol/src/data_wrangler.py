@@ -88,7 +88,7 @@ class DatasetWrangler:
                     self.subsetDict = self.calculateTimeSubset()
                 return
         else:
-            print("griddap init")
+            # print("griddap init")
             self.getDas()
 
     

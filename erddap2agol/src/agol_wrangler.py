@@ -336,12 +336,17 @@ class AgolWrangler:
                         },
                     }
                     #MULTIDIMENSIONAL CASE
+                    if ds.mult_dim:
+                        multdim_proc =True
+                    else:
+                        multdim_proc =False
+
                     img_item = copy_raster(
                         input_raster=path,
                         raster_type_name="NetCDF",
                         gis=self.gis,
                         folder=None,  # user root
-                        process_as_multidimensional=True,
+                        process_as_multidimensional=multdim_proc,
                         context=context,
                     )
                     # copy_raster already returns the imagery layer item
