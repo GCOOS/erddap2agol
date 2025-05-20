@@ -464,38 +464,69 @@ class DatasetWrangler:
         :param connection_attempts: Number of attempts to fetch a URL before giving up.
         :param timeout_time: Seconds before requests time out.
         """
-        if not self.needs_Subset:
-            return self._writeData_idv(connection_attempts, timeout_time)
+        if not self.griddap:
+            if not self.needs_Subset:
+                return self._writeData_idv(connection_attempts, timeout_time)
+            else:
+                return self._writeData_sub(connection_attempts, timeout_time)
         else:
-            return self._writeData_sub(connection_attempts, timeout_time)
+            return self._writeData_idv(connection_attempts, timeout_time=180)
     
     def _downloadUrl(self, url: str, timeout_time: int, subset_num: Optional[int] = None) -> Optional[str]:
         """
-        Download data from a given URL and write to a CSV file.
-        Returns the file path on success, or None on failure.
+        Download `url` and save it to a temporary file.
+
+        • tabledap  → CSV : parsed into a DataFrame, then written *.csv
+        • griddap   → NetCDF: raw bytes written directly *.nc
+
+        Returns the absolute file-path on success, or None on failure.
         """
         try:
             response = requests.get(url, timeout=timeout_time)
-            response.raise_for_status()
-            csv_data = StringIO(response.text)
-            df = pd.read_csv(csv_data, header=None, low_memory=False)
+            response.raise_for_status()                    # 4xx / 5xx → exception
+
+            # one call, common to both branches
             temp_dir = ec.getTempDir()
-            if self.needs_Subset and subset_num is not None:
-                filename = f"{self.dataset_id}_subset_{subset_num}.csv"
+
+            # ----------------------  GRIDDAP  (NetCDF)  ----------------------
+            if self.griddap:
+                # choose file-name
+                if self.needs_Subset and subset_num is not None:
+                    filename = f"{self.dataset_id}_subset_{subset_num}.nc"
+                else:
+                    filename = f"{self.dataset_id}.nc"
+
+                file_path = os.path.join(temp_dir, filename)
+
+                # binary write
+                with open(file_path, "wb") as f:
+                    f.write(response.content)
+
+                return file_path
+
+            # ----------------------  TABLEDAP  (CSV)  -----------------------
             else:
-                filename = f"{self.dataset_id}.csv"
-            file_path = os.path.join(temp_dir, filename)
-            df.to_csv(file_path, index=False, header=False)
-            return file_path
+                csv_data = StringIO(response.text)
+                df = pd.read_csv(csv_data, header=None, low_memory=False)
+
+                if self.needs_Subset and subset_num is not None:
+                    filename = f"{self.dataset_id}_subset_{subset_num}.csv"
+                else:
+                    filename = f"{self.dataset_id}.csv"
+
+                file_path = os.path.join(temp_dir, filename)
+                df.to_csv(file_path, index=False, header=False)
+
+                return file_path
+
         except requests.exceptions.Timeout as e:
             print(f"\nTimeout for URL: {url} | Error: {e}")
-            return None
         except requests.exceptions.RequestException as e:
             print(f"\nRequest Exception | Error: {e}")
-            return None
         except Exception as e:
             print(f"\nError processing URL | Exception: {e}")
-            return None
+
+        return None
     
     def _writeData_idv(self, connection_attempts: int, timeout_time: int) -> Optional[str]:
         """

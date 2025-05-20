@@ -100,6 +100,8 @@ def add_menu(menu_title:str, glider: bool = False, nrt: bool = False, protocol: 
             datasetObj.writeErddapData()
         else:
             datasetObj.generateGriddap_url()
+            datasetObj.writeErddapData()
+            
 
             
     agolObj = aw.AgolWrangler(erddap_obj=erddapObj)
