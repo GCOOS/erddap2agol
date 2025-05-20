@@ -390,13 +390,13 @@ class DatasetWrangler:
 
         if self.griddap_args:
 
-            # ----------  CASE 1 : latest ----------------------------------
+            # ----------  Case 1 : latest ----------------------------------
             if self.griddap_args.get("latest_bool", True):
                 start_dt =  self.data_end_time
                 end_dt = self.data_end_time
                 time_sel = f"%5B({_iso_z(end_dt)})%5D"
 
-            # ----------  CASE 2 : user single date ------------------------
+            # ----------  Case 2 : user single date ------------------------
             elif self.griddap_args.get("user_single_date"):
                 dt = self.griddap_args["user_single_date"]
                 if isinstance(dt, str):
@@ -406,7 +406,7 @@ class DatasetWrangler:
                 start_dt = end_dt = dt
                 time_sel = f"%5B({_iso_z(dt)})%5D"
 
-            # ----------  CASE 3 : user time range -------------------------
+            # ----------  Case 3 : user time range -------------------------
             else:
                 usr_s = self.griddap_args.get("user_start_time")
                 usr_e = self.griddap_args.get("user_end_time")

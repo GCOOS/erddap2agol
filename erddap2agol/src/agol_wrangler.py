@@ -1,5 +1,8 @@
 from arcgis.gis import GIS, ItemProperties
 from arcgis.features import FeatureLayer, FeatureLayerCollection
+from arcgis.raster import ImageryLayer
+from arcgis.raster.functions import multidimensional_filter
+from arcgis.raster.analytics import copy_raster, create_image_collection, list_datastore_content
 from arcgis.gis._impl._content_manager import SharingLevel
 from . import data_wrangler as dw
 from . import erddap_wrangler as ec
@@ -8,6 +11,7 @@ from . import core
 import os, sys, time, pandas as pd, numpy as np, json
 from dataclasses import dataclass, field
 from typing import Optional, List, Dict
+from pathlib import Path
 #from line_profiler import profile
 from collections import deque
 import concurrent.futures
@@ -22,6 +26,7 @@ class AgolWrangler:
     sharing_pref: str = "EVERYONE"
     datasets: List['dw.DatasetWrangler'] = field(default_factory=list)
     item_properties: Dict[str, Dict] = field(default_factory=dict)
+    filetype: Optional[str] = None
     erddap_obj: Optional['ec.ERDDAPHandler'] = None
     enterprise_bool: Optional[bool] = None
     geoParams = None 
@@ -131,118 +136,73 @@ class AgolWrangler:
             )
             props["description"] = merged_description.strip()
 
-        if self.datasets:
-            for dataset in self.datasets:
-                try:
-                    props = {
-                        "type": "CSV",
-                        "item_type": "Feature Service",
-                        "tags": ["erddap2agol", f"did_{dataset.dataset_id}"]
-                    }
-                    
-                    if dataset.attribute_list:
-                        props["tags"].extend(dataset.attribute_list)
-                    
-                    if dataset.is_nrt is True:
-                        props["tags"].append("e2a_nrt")
-
-                    if dataset.server:
-                        props["tags"].append(str(dataset.server))
-
-                    if dataset.nc_global:
-                        if "publisher_institution" in dataset.nc_global:
-                            props["accessInformation"] = dataset.nc_global["publisher_institution"].get("value", "")
-                        elif "creator_institution" in dataset.nc_global:
-                            props["accessInformation"] = dataset.nc_global["creator_institution"].get("value", "")
-                        elif "institution" in dataset.nc_global:
-                            props["accessInformation"] = dataset.nc_global["institution"].get("value", "")
-
-                        if "license" in dataset.nc_global:
-                            props["licenseInfo"] = dataset.nc_global["license"].get("value", "")
-                        
-                        # swapped assignment of dataset_title from dataset id attribute to dataset title attribute
-                        if core.user_options.custom_title == True:
-                            core.user_options.customTitleMenu(dataset)
-                        dataset_title = dataset.dataset_title
-                        props["title"] = dataset_title
-
-                        server_name = dataset.server.split("/erddap/")[0].split("://")[-1]
-
-                        summary = dataset.nc_global.get("summary", {}).get("value", "")
-                        
-                        props["snippet"] = f"{summary}. {dataset_title} was generated with erddap2agol from the {server_name} ERDDAP."
-
-                        _createDescription(dataset, props)
-
-                    if dataset.is_glider:
-                        props["tags"].append("Glider DAC")
-                        props["type"] = "GeoJson"
-
-                    self.item_properties[dataset.dataset_id] = props
-
-                except Exception as e:
-                    print(f"Error creating item properties for {dataset.dataset_title}: {e}")
-
-    @skipFromError
-    #@profile
-    def pointTableToGeojsonLine(self,  X="longitude (degrees_east)", Y="latitude (degrees_north)") -> None:
-        """For converting standard ERDDAP csvp into geojson"""
         for dataset in self.datasets:
-            if dataset.is_glider == True:
-                filepath = dataset.data_filepath
-                if dataset.data_filepath:
-                    print(f"\nConverting {filepath} to GeoJSON...")
-                    df = pd.read_csv(filepath, low_memory=False)
+            print(f"\nCurrent dataset {dataset.dataset_id}")
+            if not dataset.griddap:
+                self.filetype = "csv"
+                item_type = "Feature Service"
+            else:
+                self.filetype = "nc"
+                item_type = "imageCollection"
+            try:
+                props = {
+                    "type": {self.filetype},
+                    "item_type": {item_type},
+                    "tags": ["erddap2agol", f"did_{dataset.dataset_id}"]
+                }
+                
+                if dataset.attribute_list:
+                    props["tags"].extend(dataset.attribute_list)
+                
+                if dataset.is_nrt is True:
+                    props["tags"].append("e2a_nrt")
 
-                    # Replace NaN with None in the entire DataFrame
-                    df = df.replace({np.nan: None})
+                if dataset.server:
+                    props["tags"].append(str(dataset.server))
 
-                    # Filter out rows with invalid coordinates
-                    df = df.dropna(subset=[X, Y])
+                if dataset.nc_global:
+                    if "publisher_institution" in dataset.nc_global:
+                        props["accessInformation"] = dataset.nc_global["publisher_institution"].get("value", "")
+                    elif "creator_institution" in dataset.nc_global:
+                        props["accessInformation"] = dataset.nc_global["creator_institution"].get("value", "")
+                    elif "institution" in dataset.nc_global:
+                        props["accessInformation"] = dataset.nc_global["institution"].get("value", "")
 
-                    features = []
-                    data_columns = [col for col in df.columns if col not in [X, Y]]
-                    num_points = len(df)
+                    if "license" in dataset.nc_global:
+                        props["licenseInfo"] = dataset.nc_global["license"].get("value", "")
+                    
+                    # swapped assignment of dataset_title from dataset id attribute to dataset title attribute
+                    if core.user_options.custom_title == True:
+                        core.user_options.customTitleMenu(dataset)
+                    dataset_title = dataset.dataset_title
+                    props["title"] = dataset_title
 
-                    for i in range(num_points - 1):
-                        # Coordinates for the line segment
-                        line_start = [df.iloc[i][X], df.iloc[i][Y]]
-                        line_end = [df.iloc[i + 1][X], df.iloc[i + 1][Y]]
-                        coordinates = [line_start, line_end]
+                    server_name = dataset.server.split("/erddap/")[0].split("://")[-1]
 
-                        # Skip if any coordinate is None
-                        if None in line_start or None in line_end:
-                            continue
+                    summary = dataset.nc_global.get("summary", {}).get("value", "")
+                    
+                    props["snippet"] = f"{summary}. {dataset_title} was generated with erddap2agol from the {server_name} ERDDAP."
 
-                        # Properties from the last point of the segment
-                        properties = df.iloc[i + 1][data_columns].to_dict()
+                    _createDescription(dataset, props)
 
-                        # Create the GeoJSON feature for the line segment
-                        feature = {
-                            "type": "Feature",
-                            "geometry": {
-                                "type": "LineString",
-                                "coordinates": coordinates
-                            },
-                            "properties": properties
-                        }
+                if dataset.is_glider:
+                    props["tags"].append("Glider DAC")
+                    props["type"] = "GeoJson"
 
-                        features.append(feature)
+                self.item_properties[dataset.dataset_id] = props
 
-                    # Assemble the FeatureCollection
-                    geojson = {
-                        "type": "FeatureCollection",
-                        "features": features
-                    }
-                    savedir = ec.getTempDir()
-                    filename = dataset.dataset_id + "_line.geojson"
-                    savepath = os.path.join(savedir, filename)
-                    with open(savepath, "w") as f:
-                        json.dump(geojson, f)
-                    print(f"\nGeoJSON conversion complete @ {savepath}.")
-                    setattr(dataset, "data_filepath", savepath)
-                else:
-                    sys.exit()
+            except Exception as e:
+                print(f"Error creating item properties for {dataset.dataset_title}: {e}")
+            
+            # if self.datasets:
+            #     if isinstance(self.datasets, dw.DatasetWrangler):
+            #         _buildProps(self.datasets)
+            #     else:
+            #         for dataset in self.datasets:
+            #             _buildProps(dataset)
+                
+
+  
 
     def mapItemProperties(self, dataset_id) -> ItemProperties:
         """Map metadata to an item properties attribute of the item class"""
@@ -270,9 +230,143 @@ class AgolWrangler:
             access_information=props.get("accessInformation", ""),
             license_info=props.get("licenseInfo", "")
         )
+    
+
+    def postAndPublishImagery(self, timeoutTime: int = 600) -> None:
+        """Publish locally-downloaded rasters in ``self.datasets`` as **hosted imagery
+        layers** (Image Services) without any hard-coded folder names.
+
+        • GeoTIFF / IMG  ➜  *content.add*  ➜  *publish*
+        • NetCDF (multidimensional) ➜ **copy_raster** workflow
+        """
+
         
+        # helper utilities
+        
+        def _try_rename(src: str, dst: str, attempts: int = 5, delay: float = 1):
+            for _ in range(attempts):
+                try:
+                    os.rename(src, dst)
+                    return dst
+                except Exception:
+                    time.sleep(delay)
+            raise RuntimeError(f"Cannot rename {src} : {dst}")
+
+        def _add_or_retry(ds, path: str, max_attempts: int = 10):
+            """Add a GeoTIFF/IMG raster, retrying on 409 collisions."""
+            props_base = self.item_properties[ds.dataset_id].copy()
+            props_base.update({
+                "type": "Raster Dataset",
+                "item_type": "Image Service",
+            })
+            title_root = props_base.get("title", ds.dataset_title)
+            attempt = 0
+            while attempt < max_attempts:
+                props = props_base.copy()
+                if attempt:
+                    props["title"] = f"{title_root}_{attempt}"
+                try:
+                    return self.gis.content.add(props, path)  # root folder
+                except Exception as ex:
+                    if "409" in str(ex) and "already exists" in str(ex):
+                        attempt += 1
+                        new_path = f"{Path(path).with_stem(Path(path).stem + f'_{attempt}')}"  # rename file
+                        path = _try_rename(path, new_path)
+                    else:
+                        raise
+            raise RuntimeError("Exceeded add() retries.")
+
+        def _publish_or_retry(item, publish_params: dict, max_attempts: int = 10):
+            attempt = 0
+            title_root = item.title
+            while attempt < max_attempts:
+                try:
+                    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+                        fut = ex.submit(item.publish,
+                                        publish_parameters=publish_params,
+                                        file_type="Raster Dataset")
+                        return fut.result(timeout=timeoutTime)
+                except Exception as ex:
+                    if "409" in str(ex) and "already exists" in str(ex):
+                        attempt += 1
+                        item.update({"title": f"{title_root}_{attempt}"})
+                    else:
+                        raise
+            raise RuntimeError("Exceeded publish() retries.")
+
+        def _share_and_set_caps(img_item):
+            try:
+                img_item.manager.update_definition({"capabilities": "Image,Download,Metadata"})
+            except Exception as ex:
+                print(f"! capability update failed: {ex}")
+            level = {
+                "EVERYONE": SharingLevel.EVERYONE,
+                "PRIVATE": SharingLevel.PRIVATE,
+            }.get(core.user_options.sharing_level, SharingLevel.ORG)
+            img_item.share(everyone=level == SharingLevel.EVERYONE,
+                        org=level == SharingLevel.ORG)
+
+        
+        # main loop
+        t0 = time.time()
+        processed = 0
+
+        for ds in self.datasets:
+            path = ds.data_filepath
+            if not path:
+                print(f"No raster path for {ds.dataset_title} – skipped")
+                continue
+
+            if ds.dataset_id not in self.item_properties:
+                print(f"No item props for {ds.dataset_title} – skipped")
+                continue
+
+            try:
+                ext = Path(path).suffix.lower()
+                if ext in (".nc", ".nc4"):
+                    # NetCDF  copy_raster (multidimensional)
+                    print(f"copy_raster: {ds.dataset_title}")
+                    context = {
+                        "upload_properties": {"displayProgress": True},
+                        "defineNodata": True,
+                        "noDataArguments": {
+                            "noDataValues": [0],
+                            "numberOfBand": 99,
+                            "compositeValue": True,
+                        },
+                    }
+                    #MULTIDIMENSIONAL CASE
+                    img_item = copy_raster(
+                        input_raster=path,
+                        raster_type_name="NetCDF",
+                        gis=self.gis,
+                        folder=None,  # user root
+                        process_as_multidimensional=True,
+                        context=context,
+                    )
+                    # copy_raster already returns the imagery layer item
+                    img_item.update(item_properties=self.mapItemProperties(ds.dataset_id))
+                    _share_and_set_caps(img_item)
+                else:
+
+                    item = _add_or_retry(ds, path)
+                    analyze = self.gis.content.analyze(item=item.id, file_type="raster")
+                    publish_params = {**analyze["publishParameters"], **self.geoParams}
+                    img_item = _publish_or_retry(item, publish_params)
+                    _share_and_set_caps(img_item)
+
+                processed += 1
+                print(f"Imagery published: {img_item.title}")
+
+            except concurrent.futures.TimeoutError:
+                print(f"TIMEOUT: {ds.dataset_title}")
+            except Exception as ex:
+                print(f"ERROR processing {ds.dataset_title}: {ex}")
+
+        print(f"\nImagery publish complete – {processed}/{len(self.datasets)} datasets in {time.time()-t0:.1f}s")
+
     @skipFromError
-    def postAndPublish(self, inputDataType="csv", timeoutTime=300) -> None:
+    def postAndPublish(self, inputDataType, timeoutTime=300) -> None:
         """Publishes all datasets in self.datasets to ArcGIS, handling subsets if needed."""
         geom_params = self.geoParams.copy()
         geom_params.pop('hasStaticData', None)  # Remove if exists, as done in stable code
@@ -557,3 +651,64 @@ class AgolWrangler:
         # Update the capabilities to disable editing
         flc.manager.update_definition({"capabilities": "Query"})
         print(f"Editing successfully disabled for item {item_id}")
+
+    @skipFromError
+    #@profile
+    def pointTableToGeojsonLine(self,  X="longitude (degrees_east)", Y="latitude (degrees_north)") -> None:
+        """For converting standard ERDDAP csvp into geojson"""
+        for dataset in self.datasets:
+            if dataset.is_glider == True:
+                filepath = dataset.data_filepath
+                if dataset.data_filepath:
+                    print(f"\nConverting {filepath} to GeoJSON...")
+                    df = pd.read_csv(filepath, low_memory=False)
+
+                    # Replace NaN with None in the entire DataFrame
+                    df = df.replace({np.nan: None})
+
+                    # Filter out rows with invalid coordinates
+                    df = df.dropna(subset=[X, Y])
+
+                    features = []
+                    data_columns = [col for col in df.columns if col not in [X, Y]]
+                    num_points = len(df)
+
+                    for i in range(num_points - 1):
+                        # Coordinates for the line segment
+                        line_start = [df.iloc[i][X], df.iloc[i][Y]]
+                        line_end = [df.iloc[i + 1][X], df.iloc[i + 1][Y]]
+                        coordinates = [line_start, line_end]
+
+                        # Skip if any coordinate is None
+                        if None in line_start or None in line_end:
+                            continue
+
+                        # Properties from the last point of the segment
+                        properties = df.iloc[i + 1][data_columns].to_dict()
+
+                        # Create the GeoJSON feature for the line segment
+                        feature = {
+                            "type": "Feature",
+                            "geometry": {
+                                "type": "LineString",
+                                "coordinates": coordinates
+                            },
+                            "properties": properties
+                        }
+
+                        features.append(feature)
+
+                    # Assemble the FeatureCollection
+                    geojson = {
+                        "type": "FeatureCollection",
+                        "features": features
+                    }
+                    savedir = ec.getTempDir()
+                    filename = dataset.dataset_id + "_line.geojson"
+                    savepath = os.path.join(savedir, filename)
+                    with open(savepath, "w") as f:
+                        json.dump(geojson, f)
+                    print(f"\nGeoJSON conversion complete @ {savepath}.")
+                    setattr(dataset, "data_filepath", savepath)
+                else:
+                    sys.exit()

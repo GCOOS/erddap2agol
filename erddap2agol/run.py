@@ -96,14 +96,11 @@ def add_menu(menu_title:str, glider: bool = False, nrt: bool = False, protocol: 
 
     for datasetObj in datasetObjlist:
         if erddapObj.protocol == "tabledap":
-            datasetObj.generateUrl()
-            datasetObj.writeErddapData()
-        else:
+            datasetObj.generateUrl()        
+        else: 
             datasetObj.generateGriddap_url()
-            datasetObj.writeErddapData()
-            
-
-            
+    
+    datasetObj.writeErddapData()
     agolObj = aw.AgolWrangler(erddap_obj=erddapObj)
     agolObj.datasets = erddapObj.datasets
     agolObj.makeItemProperties()
@@ -111,7 +108,11 @@ def add_menu(menu_title:str, glider: bool = False, nrt: bool = False, protocol: 
     if glider:
         agolObj.pointTableToGeojsonLine()
 
-    agolObj.postAndPublish()
+    if erddapObj.protocol == "tabledap":
+        agolObj.postAndPublish()
+    else:
+        agolObj.postAndPublishImagery()
+    
     print("\nReturning to main menu...")
     erddapObj.reset()
     ec.cleanTemp()
