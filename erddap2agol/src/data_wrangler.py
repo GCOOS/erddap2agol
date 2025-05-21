@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from typing import Optional, Dict, List, Union
 from io import StringIO
 import datetime, requests, re, math, os, json, pandas as pd
-from datetime import timedelta, datetime
+from datetime import timedelta, datetime, timezone
 from urllib.parse import quote
 
 #---------------------DatasetWrangler---------------------
@@ -336,23 +336,6 @@ class DatasetWrangler:
             urls.append(url)
         return urls
     
-    # https://coastwatch.noaa.gov/erddap/griddap/noaacwBLENDEDsshDaily.nc?sla
-    # %5B(2024-03-01T00:00:00Z)%5D%5B(-76.875):(54.125)%5D%5B(-135.875):(116.125)
-    # %5D&.draw=surface&.vars=longitude%7Clatitude%7Csla
-    
-    def generateUrl_griddap(self, dataformat: str, attrs_encoded: str) -> str:
-        urls = []
-        additionalAttr = self.attribute_list.copy if self.attribute_list else []
-        attrs = []
-        common_vars = ["altitude", "latitiude", "longitude", "NC_GLOBAL"]
-        dataformat = "nc"
-        base_url = self.server
-
-        # take tabledap out of the URL if relevant 
-        if "tabledap" in base_url:
-                new_url = base_url.replace("tabledap", "griddap")
-                base_url = new_url
-
     def generateGriddap_url(self) -> List[str]:
         """
         Build ERDDAP griddap request URL(s).
@@ -454,6 +437,106 @@ class DatasetWrangler:
         # Record and return
         self.url_s = urls
         return urls
+
+    # review this
+
+    # def generateGriddap_url(self) -> List[str]:
+    #     """
+    #     Build ERDDAP griddap request URL(s).
+
+    #     Uses self.griddap_args for time options and core.user_options for
+    #     optional spatial bounds.  Returns the list of URL strings and
+    #     sets self.url_s.
+    #     """
+    #     urls = []
+    #     data_fmt = "nc"
+
+        
+    #     # Establish base-URL and variables to request
+    #     base_url = self.server.replace("tabledap", "griddap")
+    #     dataformat = "nc"                                # griddap → netCDF
+    #     # remove obvious coordinate / metadata names
+    #     dim_tokens = {"time", "lat", "latitude", "lon", "longitude",
+    #                 "altitude", "depth", "NC_GLOBAL"}
+    #     variables = [v for v in (self.attribute_list or []) if v not in dim_tokens]
+
+    #     if not variables:
+    #         print(f"No data variables detected for {self.dataset_id}")
+    #         return []
+
+    #     # ERDDAP needs at least one variable.  We'll construct one URL per variable
+    #     # if we need to change this we can join them with commas in one string.
+    #     #Time selector
+    #     def _iso_z(dt: datetime) -> str:
+    #         """YYYY-MM-DDTHH:MM:SSZ, always forced to UTC."""
+    #         return dt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    #     # A. defaults fall back to full native range
+    #     start_dt = self.data_start_time
+    #     end_dt   = self.data_end_time
+    #     time_sel = ""                     # will be filled below
+
+    #     if self.griddap_args:
+
+    #         # ----------  Case 1 : latest ----------------------------------
+    #         if self.griddap_args.get("latest_bool", True):
+    #             start_dt =  self.data_end_time
+    #             end_dt = self.data_end_time
+    #             time_sel = f"%5B({_iso_z(end_dt)})%5D"
+
+    #         # ----------  Case 2 : user single date ------------------------
+    #         elif self.griddap_args.get("user_single_date"):
+    #             dt = self.griddap_args["user_single_date"]
+    #             if isinstance(dt, str):
+    #                 dt = datetime.fromisoformat(dt.replace("Z", ""))
+    #             # clip to data range
+    #             dt = max(self.data_start_time, min(dt, self.data_end_time))
+    #             start_dt = end_dt = dt
+    #             time_sel = f"%5B({_iso_z(dt)})%5D"
+
+    #         # ----------  Case 3 : user time range -------------------------
+    #         else:
+    #             usr_s = self.griddap_args.get("user_start_time")
+    #             usr_e = self.griddap_args.get("user_end_time")
+
+    #             if isinstance(usr_s, str):
+    #                 usr_s = datetime.fromisoformat(usr_s.replace("Z", ""))
+    #             if isinstance(usr_e, str):
+    #                 usr_e = datetime.fromisoformat(usr_e.replace("Z", ""))
+
+    #             if usr_s:  start_dt = max(self.data_start_time, usr_s)
+    #             if usr_e:  end_dt   = min(self.data_end_time,   usr_e)
+
+    #             time_sel = f"%5B({_iso_z(start_dt)}):1:({_iso_z(end_dt)})%5D"
+
+    #     self.req_start_time = start_dt
+    #     self.req_end_time   = end_dt
+
+    #     # lat lon sel
+    #     dim_names = getattr(self, "dim_names", ['time','altitude','lat','lon'])
+    #     has_alt   = any(d in dim_names for d in ("altitude", "depth"))
+
+    #     lat_sel = lon_sel = "[]"  
+    #     alt_sel = "[(0)]" if has_alt else ""       
+    #     bounds = getattr(core.user_options, "bounds", None)  # [[lon0,lat0],[lon1,lat1]]
+
+    #     if bounds and len(bounds) == 2:
+    #         lon_min, lat_min = bounds[0]
+    #         lon_max, lat_max = bounds[1]
+    #         lat_sel = f"[({lat_min}):({lat_max})]"
+    #         lon_sel = f"[({lon_min}):({lon_max})]"
+
+    #     selector_block = f"{time_sel}{alt_sel}{lat_sel}{lon_sel}"
+
+        
+    #     per_var = [f"{var}{selector_block}" for var in variables]
+    #     query_plain = ",".join(per_var)                    # leave commas!
+    #     query = quote(query_plain, safe=":,[]()")          # encode everything else
+
+    #     url = f"{base_url}{self.dataset_id}.{data_fmt}?{query}"
+    #     urls.append(url)
+    #     self.url_s = urls
+    #     return urls
 
     #---------------------Data Download---------------------
     @skipFromError

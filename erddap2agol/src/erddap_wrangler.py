@@ -234,7 +234,9 @@ class ERDDAPHandler:
                 return []
 
             title_idx = col_names.index("Title")
-            proto_idx = col_names.index(f"{self.protocol}")                  
+            proto_idx = col_names.index(f"{self.protocol}")
+            # minTime_idx = col_names.index()
+            # maxTime_idx                  
             dataset_id_list = []
             self.dataset_titles = {}  # reset or build fresh each time
 

@@ -220,6 +220,10 @@ class AgolWrangler:
             if core.user_options.additional_tags:
                 for tag in core.user_options.additional_tags:
                     new_tags.append(tag)
+        # lazy removal of lat and lon tags
+        for tag in new_tags:
+            if tag == "longitude" or tag == "latitude":
+                new_tags.remove(tag)
 
         return ItemProperties(
             title=props.get("title", ""),
@@ -236,8 +240,8 @@ class AgolWrangler:
         """Publish locally-downloaded rasters in ``self.datasets`` as **hosted imagery
         layers** (Image Services) without any hard-coded folder names.
 
-        • GeoTIFF / IMG  ➜  *content.add*  ➜  *publish*
-        • NetCDF (multidimensional) ➜ **copy_raster** workflow
+        • GeoTIFF / IMG  ->  *content.add*  ->  *publish*
+        • NetCDF (multidimensional) -> **copy_raster** workflow
         """
 
         
@@ -294,17 +298,33 @@ class AgolWrangler:
                         raise
             raise RuntimeError("Exceeded publish() retries.")
 
-        def _share_and_set_caps(img_item):
+        # deprecated needs update
+        def adjustSharingCapabilities(img_item):
             try:
-                img_item.manager.update_definition({"capabilities": "Image,Download,Metadata"})
-            except Exception as ex:
-                print(f"! capability update failed: {ex}")
-            level = {
-                "EVERYONE": SharingLevel.EVERYONE,
-                "PRIVATE": SharingLevel.PRIVATE,
-            }.get(core.user_options.sharing_level, SharingLevel.ORG)
-            img_item.share(everyone=level == SharingLevel.EVERYONE,
-                        org=level == SharingLevel.ORG)
+                refreshed_item = self.gis.content.get(img_item.id)
+            except Exception as e:
+                print(f"Error retrieving refreshed item: {e}")
+                return
+
+            try:
+                item_flc = FeatureLayerCollection.fromitem(refreshed_item)
+                update_definition_dict = {"capabilities": "Image,Download,Metadata"}
+                item_flc.manager.update_definition(update_definition_dict)
+            except Exception as e:
+                print(f"Error adjusting capabilities: {e}")
+
+            try:
+                item_sharing_mgr = refreshed_item.sharing
+                if core.user_options.sharing_level == "EVERYONE":
+                    item_sharing_mgr.sharing_level = SharingLevel.EVERYONE
+                elif core.user_options.sharing_level == "ORG":
+                    item_sharing_mgr.sharing_level = SharingLevel.ORG
+                elif core.user_options.sharing_level == "PRIVATE":
+                    item_sharing_mgr.sharing_level = SharingLevel.PRIVATE
+                else:
+                    item_sharing_mgr.sharing_level = SharingLevel.ORG
+            except Exception as e:
+                print(f"Error adjusting sharing level: {e}")
 
         
         # main loop
@@ -314,18 +334,18 @@ class AgolWrangler:
         for ds in self.datasets:
             path = ds.data_filepath
             if not path:
-                print(f"No raster path for {ds.dataset_title} – skipped")
+                print(f"No raster path for {ds.dataset_title} - skipped")
                 continue
 
             if ds.dataset_id not in self.item_properties:
-                print(f"No item props for {ds.dataset_title} – skipped")
+                print(f"No item props for {ds.dataset_title} - skipped")
                 continue
 
             try:
                 ext = Path(path).suffix.lower()
                 if ext in (".nc", ".nc4"):
                     # NetCDF  copy_raster (multidimensional)
-                    print(f"copy_raster: {ds.dataset_title}")
+                    print(f"Running copy_raster for {ds.dataset_title}")
                     context = {
                         "upload_properties": {"displayProgress": True},
                         "defineNodata": True,
@@ -351,14 +371,14 @@ class AgolWrangler:
                     )
                     # copy_raster already returns the imagery layer item
                     img_item.update(item_properties=self.mapItemProperties(ds.dataset_id))
-                    _share_and_set_caps(img_item)
+                    adjustSharingCapabilities(img_item)
                 else:
 
                     item = _add_or_retry(ds, path)
                     analyze = self.gis.content.analyze(item=item.id, file_type="raster")
                     publish_params = {**analyze["publishParameters"], **self.geoParams}
                     img_item = _publish_or_retry(item, publish_params)
-                    _share_and_set_caps(img_item)
+                    adjustSharingCapabilities(img_item)
 
                 processed += 1
                 print(f"Imagery published: {img_item.title}")
@@ -368,7 +388,7 @@ class AgolWrangler:
             except Exception as ex:
                 print(f"ERROR processing {ds.dataset_title}: {ex}")
 
-        print(f"\nImagery publish complete – {processed}/{len(self.datasets)} datasets in {time.time()-t0:.1f}s")
+        print(f"\nImagery publish complete - {processed}/{len(self.datasets)} datasets in {time.time()-t0:.1f}s")
 
     @skipFromError
     def postAndPublish(self, inputDataType, timeoutTime=300) -> None:

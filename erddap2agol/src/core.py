@@ -448,7 +448,7 @@ def selectDatasetFromList(erddapObj, dispLength=50, interactive=True) -> list:
                 mgr.latest_bool = True
             
             # case 3
-            elif args.user_start_date and user_end_date:
+            elif args.user_start_date and args.user_end_date:
                 try:
                     user_start_date = datetime.strptime(args.user_start_time, '%d/%m/%Y')
                     user_end_date = datetime.strptime(args.user_end_time, '%d/%m/%Y')
@@ -587,7 +587,7 @@ def options_menu():
         print("7. Get all attributes (currently: {})".format(user_options.all_attributes_bool))
         print("8. Add tags to next batch")
         if user_options.bounds:
-            print("9. Define bounds with Content Item ID: \n{}".format(user_options.bounds))
+            print("9. Define bounds with Content Item ID (griddap only): \n{}".format(user_options.bounds))
         else:
             print("9. Define bounds with Content Item ID")
         
