@@ -55,7 +55,9 @@ class DatasetWrangler:
     has_time: Optional[bool] = True
     time_str: Optional[str] = None
     
-    
+    lat_range = None
+    lon_range = None
+
     def __post_init__(self):
         if not self.griddap:
             # always figure out your chunk_size
@@ -90,6 +92,7 @@ class DatasetWrangler:
         else:
             # print("griddap init")
             self.getDas()
+            self.getGeographicRange()
 
     
     def skipFromError(func):
@@ -127,6 +130,8 @@ class DatasetWrangler:
             if "tabledap" in self.server:
                 new_url = default_url.replace("tabledap", "griddap")
                 url = new_url
+            # other griddap params
+            
         else:
             url = default_url
         try:
@@ -162,6 +167,8 @@ class DatasetWrangler:
                         self.data_start_time = self.data_start_time.replace(tzinfo=timezone.utc)
                     if self.data_end_time.tzinfo is None:
                         self.data_end_time = self.data_end_time.replace(tzinfo=timezone.utc)
+        
+
         except requests.RequestException as e:
             print(f"\nError fetching DAS for {self.dataset_id}: {e}")
             self.has_error = True
@@ -181,7 +188,9 @@ class DatasetWrangler:
 
     #     elif self.griddap_args["user_data_end_time"] > self.data_end_time:
     #         print(f"\nThe requested end time {self.griddap_args["user_data_end_time"]} exceeds the datasets end time")
-
+    def getGeographicRange(self) -> None:
+        self.lon_range = self.nc_global['geospatial_lon_min']["value"], self.nc_global['geospatial_lon_max']["value"]
+        self.lat_range = self.nc_global['geospatial_lat_min']["value"], self.nc_global['geospatial_lat_max']["value"]
 
     @skipFromNoTime
     @skipFromNoRange
@@ -346,6 +355,10 @@ class DatasetWrangler:
         otherwise one URL per variable (original behaviour)
         • returns the list of URLs and stores it in self.url_s
         """
+        alt_sel = "%5B(0)%5D"
+        # lon_sel = "%5B%5D" 
+        # lat_sel = "%5B%5D" 
+
         urls: List[str] = []
         # print(f"GRIDDAP ARGS: {griddap_args}")
 
@@ -426,7 +439,6 @@ class DatasetWrangler:
        
         # Optional lat/lon selector
       
-        lat_sel = lon_sel = "%5B%5D"      # empty [] = full extent
 
         bounds = getattr(core.user_options, "bounds", None)
         if bounds and len(bounds) == 2:
@@ -434,12 +446,17 @@ class DatasetWrangler:
             lon_max, lat_max = bounds[1]
             lat_sel = f"%5B({lat_min}):({lat_max})%5D"
             lon_sel = f"%5B({lon_min}):({lon_max})%5D"
-            alt_sel = "%5B%5D"
+        else:
+            lon_min, lon_max = self.lon_range
+            lat_min, lat_max = self.lat_range
+
+            lat_sel = f"%5B({lat_min}):({lat_max})%5D"
+            lon_sel = f"%5B({lon_min}):({lon_max})%5D"
 
         
         # build urls
-        if not alt_sel:
-            alt_sel = ""
+        # if not alt_sel:
+        
 
         if core.user_options.mult_dim_bool:
             # one URL holding ALL variables
