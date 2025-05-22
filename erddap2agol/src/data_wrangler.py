@@ -131,7 +131,7 @@ class DatasetWrangler:
             url = default_url
         try:
             # agnostic of protocol
-            print(url)
+            # print(url)
             response = requests.get(url)
             response.raise_for_status()
             self.DAS_response = True
@@ -347,10 +347,10 @@ class DatasetWrangler:
         • returns the list of URLs and stores it in self.url_s
         """
         urls: List[str] = []
-        print(f"GRIDDAP ARGS: {griddap_args}")
+        # print(f"GRIDDAP ARGS: {griddap_args}")
 
         ds_args = (griddap_args or {}).get(self.dataset_id, {})
-        # ------------------------------------------------------------------
+        
         # 1.  Base URL and variable list
         # ------------------------------------------------------------------
         base_url   = self.server.replace("tabledap", "griddap")
@@ -367,9 +367,9 @@ class DatasetWrangler:
             print(f"No data variables detected for {self.dataset_id}")
             return []
 
-        # ------------------------------------------------------------------
-        # 2.  Time selector
-        # ------------------------------------------------------------------
+        
+        #Time selector
+        
         def _iso_z(dt: datetime) -> str:
             """UTC → 'YYYY-MM-DDTHH:MM:SSZ'"""
             return dt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -423,9 +423,9 @@ class DatasetWrangler:
         self.req_start_time = start_dt
         self.req_end_time   = end_dt
 
-        # ------------------------------------------------------------------
-        # 3.  Optional lat/lon selector
-        # ------------------------------------------------------------------
+       
+        # Optional lat/lon selector
+      
         lat_sel = lon_sel = "%5B%5D"      # empty [] = full extent
 
         bounds = getattr(core.user_options, "bounds", None)
@@ -434,15 +434,17 @@ class DatasetWrangler:
             lon_max, lat_max = bounds[1]
             lat_sel = f"%5B({lat_min}):({lat_max})%5D"
             lon_sel = f"%5B({lon_min}):({lon_max})%5D"
+            alt_sel = "%5B%5D"
 
-        # ------------------------------------------------------------------
-        # 4.  Compose URL(s)
-        # ------------------------------------------------------------------
+        
+        # build urls
+        if not alt_sel:
+            alt_sel = ""
 
         if core.user_options.mult_dim_bool:
             # one URL holding ALL variables
             vars_query = ",".join(
-                f"{quote(v, safe='')}{time_sel}{lat_sel}{lon_sel}" for v in variables
+                f"{quote(v, safe='')}{time_sel}{alt_sel}{lat_sel}{lon_sel}" for v in variables
             )
             url = f"{base_url}{self.dataset_id}.{dataformat}?{vars_query}"
             urls.append(url)
@@ -451,7 +453,7 @@ class DatasetWrangler:
             # legacy: one URL per variable
             for v in variables:
                 v_enc  = quote(v, safe="")
-                query  = f"{v_enc}{time_sel}{lat_sel}{lon_sel}"
+                query  = f"{v_enc}{time_sel}{alt_sel}{lat_sel}{lon_sel}"
                 url    = f"{base_url}{self.dataset_id}.{dataformat}?{query}"
                 urls.append(url)
 
