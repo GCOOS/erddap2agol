@@ -171,8 +171,8 @@ def selectDatasetFromList(erddapObj, dispLength=50, interactive=True) -> list:
             self.dataset_kwargs = {}
             self.latest_bool = None
             self.user_single_date = None
-            self.user_start_time = None
-            self.user_end_time =  None
+            self.user_start_date = None
+            self.user_end_date =  None
             
 
         @property
@@ -189,8 +189,8 @@ def selectDatasetFromList(erddapObj, dispLength=50, interactive=True) -> list:
         
         def setDateRange(self, sd, ed):
             """Assigns the date range provided by the user to current_start/end attribute"""
-            self.user_start_time = sd
-            self.user_end_time = ed
+            self.user_start_date = sd
+            self.user_end_date = ed
 
         def goNextPage(self):
             if self.currentPage < self.numPages:
@@ -291,8 +291,8 @@ def selectDatasetFromList(erddapObj, dispLength=50, interactive=True) -> list:
                         self.dataset_kwargs[selected_dataset] = {
                             'latest_bool': self.latest_bool,
                             'user_single_date': self.user_single_date,
-                            'user_start_time': self.user_start_time,
-                            'user_end_time': self.user_end_time
+                            'user_start_date': self.user_start_date,
+                            'user_end_date': self.user_end_date
                         }
                         # print(f"Added {selected_dataset} to the cart.")
 
@@ -391,7 +391,7 @@ def selectDatasetFromList(erddapObj, dispLength=50, interactive=True) -> list:
                 min_t, max_t = erddapObj.dataset_dates.get(ds, ("", ""))
                 title_str = (
                     f"{start_idx + i + 1}. {title} "
-                    f"[{min_t[:10]} ⟶ {max_t[:10]}]"
+                    f"[{min_t[:10]} -> {max_t[:10]}]"
                 )
             else:
                 title_str = f"{start_idx + i + 1}. {title}"
@@ -529,6 +529,7 @@ class OptionsMenu:
     all_attributes_bool: bool = False
     additional_tags: List[str] = None
     bounds: tuple = None
+    mult_dim_bool: bool = True
     # share_to_group
 
     def customTitleMenu(self, dataset): 
@@ -593,9 +594,11 @@ def options_menu():
         if user_options.bounds:
             print("9. Define bounds with Content Item ID (griddap only): \n{}".format(user_options.bounds))
         else:
-            print("9. Define bounds with Content Item ID")
+            print("9. Define bounds with Content Item ID (griddap only)")
+
+        print("10. Toggle Multidimensional Imagery Option (currently: {})".format(user_options.mult_dim_bool))
         
-        print("\n10. Save options and return to main menu")
+        print("\nType **done** to save options and return to main menu")
         
         choice = input("Select an option: ").strip()
         
@@ -689,9 +692,11 @@ def options_menu():
             index_input = input(f"\nEnter the index of the layer you want to query, or press enter for (default 0): ")
             OptionsMenu.getBoundsFromItem(None, id, index_input)
             
-
-
         elif choice == "10":
+            user_options.mult_dim_bool = not user_options.mult_dim_bool
+            print("Bypass chunking toggled to: {}".format(user_options.bypass_chunking_bool))
+
+        elif choice == "done":
             print("\nOptions saved. Returning to Main Menu...")
             time.sleep(0.5)
             clearScreen()

@@ -222,7 +222,7 @@ class AgolWrangler:
                     new_tags.append(tag)
         # lazy removal of lat and lon tags
         for tag in new_tags:
-            if tag == "longitude" or tag == "latitude":
+            if tag == "longitude" or tag == "latitude" or tag == "NC_Global":
                 new_tags.remove(tag)
 
         return ItemProperties(
@@ -328,7 +328,7 @@ class AgolWrangler:
                 print(f"Error adjusting sharing level: {e}")
 
         
-        # main loop
+        # ----------------------------------------- main loop
         t0 = time.time()
         processed = 0
 
@@ -357,7 +357,7 @@ class AgolWrangler:
                         },
                     }
                     #MULTIDIMENSIONAL CASE
-                    if ds.mult_dim:
+                    if core.user_options.mult_dim_bool:
                         multdim_proc =True
                     else:
                         multdim_proc =False

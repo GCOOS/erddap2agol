@@ -336,105 +336,125 @@ class DatasetWrangler:
             urls.append(url)
         return urls
     
-    def generateGriddap_url(self) -> List[str]:
+    def generateGriddap_url(self, griddap_args: dict) -> List[str]:
         """
-        Build ERDDAP griddap request URL(s).
+        Build one or many ERDDAP griddap URLs.
 
-        Uses self.griddap_args for time options and core.user_options for
-        optional spatial bounds.  Returns the list of URL strings and
-        sets self.url_s.
+        • honours griddap_args   for time selection
+        • honours core.user_options.bounds for optional lat/lon clipping
+        • if self.mult_dim == True   → one URL containing ALL variables
+        otherwise one URL per variable (original behaviour)
+        • returns the list of URLs and stores it in self.url_s
         """
         urls: List[str] = []
+        print(f"GRIDDAP ARGS: {griddap_args}")
 
-        
-        # Establish base-URL and variables to request
-        base_url = self.server.replace("tabledap", "griddap")
-        dataformat = "nc"                                # griddap → netCDF
-        # remove obvious coordinate / metadata names
-        dim_tokens = {"time", "lat", "latitude", "lon", "longitude",
-                    "altitude", "depth", "NC_GLOBAL"}
+        ds_args = (griddap_args or {}).get(self.dataset_id, {})
+        # ------------------------------------------------------------------
+        # 1.  Base URL and variable list
+        # ------------------------------------------------------------------
+        base_url   = self.server.replace("tabledap", "griddap")
+        dataformat = "nc"
+        # took out "time",
+        dim_tokens = {
+            "lat", "latitude",
+            "lon", "longitude",
+            "altitude", "depth", "NC_GLOBAL",
+        }
         variables = [v for v in (self.attribute_list or []) if v not in dim_tokens]
 
         if not variables:
             print(f"No data variables detected for {self.dataset_id}")
             return []
 
-        # ERDDAP needs at least one variable.  We'll construct one URL per variable
-        # if we need to change this we can join them with commas in one string.
-        #Time selector
+        # ------------------------------------------------------------------
+        # 2.  Time selector
+        # ------------------------------------------------------------------
         def _iso_z(dt: datetime) -> str:
-            """YYYY-MM-DDTHH:MM:SSZ, always forced to UTC."""
+            """UTC → 'YYYY-MM-DDTHH:MM:SSZ'"""
             return dt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-        # A. defaults fall back to full native range
-        start_dt = self.data_start_time
-        end_dt   = self.data_end_time
-        time_sel = ""                     # will be filled below
+        # start_dt: datetime = self.data_start_time
+        # end_dt:   datetime = self.data_end_time
+        # time_sel: str      = ""
 
-        if self.griddap_args:
+        if ds_args:
 
-            # ----------  Case 1 : latest ----------------------------------
-            if self.griddap_args.get("latest_bool", True):
-                start_dt =  self.data_end_time
-                end_dt = self.data_end_time
+            # latest_bool is **only** true when explicitly supplied
+            if ds_args.get("latest_bool") is True:
+                start_dt = end_dt = self.data_end_time
                 time_sel = f"%5B({_iso_z(end_dt)})%5D"
 
-            # ----------  Case 2 : user single date ------------------------
-            elif self.griddap_args.get("user_single_date"):
-                dt = self.griddap_args["user_single_date"]
+            elif ds_args.get("user_single_date"):
+                dt = ds_args["user_single_date"]
                 if isinstance(dt, str):
                     dt = datetime.fromisoformat(dt.replace("Z", ""))
-                # clip to data range
                 dt = max(self.data_start_time, min(dt, self.data_end_time))
                 start_dt = end_dt = dt
                 time_sel = f"%5B({_iso_z(dt)})%5D"
 
-            # ----------  Case 3 : user time range -------------------------
-            else:
-                usr_s = self.griddap_args.get("user_start_time")
-                usr_e = self.griddap_args.get("user_end_time")
+            else:  # user range
+                usr_s = ds_args.get("user_start_date")
+                usr_e = ds_args.get("user_end_date")
+
+                start_dt = usr_s
+                end_dt = usr_e
 
                 if isinstance(usr_s, str):
                     usr_s = datetime.fromisoformat(usr_s.replace("Z", ""))
                 if isinstance(usr_e, str):
                     usr_e = datetime.fromisoformat(usr_e.replace("Z", ""))
 
-                if usr_s:  start_dt = max(self.data_start_time, usr_s)
-                if usr_e:  end_dt   = min(self.data_end_time,   usr_e)
+                # if usr_s:
+                #     start_dt = max(self.data_start_time, usr_s)
+                # if usr_e:
+                #     end_dt   = min(self.data_end_time,   usr_e)
 
                 time_sel = f"%5B({_iso_z(start_dt)}):1:({_iso_z(end_dt)})%5D"
 
+        # Default selector if nothing chosen yet
+        if not time_sel:
+            if start_dt == end_dt:
+                time_sel = f"%5B({_iso_z(end_dt)})%5D"
+            else:
+                time_sel = f"%5B({_iso_z(start_dt)}):1:({_iso_z(end_dt)})%5D"
+
+        # Persist for later inspection
         self.req_start_time = start_dt
         self.req_end_time   = end_dt
 
-        # # Build encoded time selector
-        # if start_dt == end_dt:   # single timestep
-        #     time_sel = f"%5B({_iso_z(end_dt)})%5D"
-        # else:                    # range – 1-step stride
-        #     time_sel = f"%5B({_iso_z(start_dt)}):1:({_iso_z(end_dt)})%5D"
-
-        # 2.  Latitude / longitude selector  (optional)
-        lat_sel = lon_sel = "%5B%5D"         # empty []  → full extent
+        # ------------------------------------------------------------------
+        # 3.  Optional lat/lon selector
+        # ------------------------------------------------------------------
+        lat_sel = lon_sel = "%5B%5D"      # empty [] = full extent
 
         bounds = getattr(core.user_options, "bounds", None)
         if bounds and len(bounds) == 2:
-            # bounds = [[lon_min, lat_min], [lon_max, lat_max]]
-            lon_min, lat_min = bounds[0]    
-            lon_max, lat_max = bounds[1]    
-
-            
+            lon_min, lat_min = bounds[0]
+            lon_max, lat_max = bounds[1]
             lat_sel = f"%5B({lat_min}):({lat_max})%5D"
             lon_sel = f"%5B({lon_min}):({lon_max})%5D"
 
-        # Assemble URLs   (one per variable)
-        # que es multidimensional?
-        for var in variables:
-            var_enc = quote(var, safe="")                   # tidy variable name
-            query = f"{var_enc}{time_sel}{lat_sel}{lon_sel}"
-            url = f"{base_url}{self.dataset_id}.{dataformat}?{query}"
+        # ------------------------------------------------------------------
+        # 4.  Compose URL(s)
+        # ------------------------------------------------------------------
+
+        if core.user_options.mult_dim_bool:
+            # one URL holding ALL variables
+            vars_query = ",".join(
+                f"{quote(v, safe='')}{time_sel}{lat_sel}{lon_sel}" for v in variables
+            )
+            url = f"{base_url}{self.dataset_id}.{dataformat}?{vars_query}"
             urls.append(url)
 
-        # Record and return
+        else:
+            # legacy: one URL per variable
+            for v in variables:
+                v_enc  = quote(v, safe="")
+                query  = f"{v_enc}{time_sel}{lat_sel}{lon_sel}"
+                url    = f"{base_url}{self.dataset_id}.{dataformat}?{query}"
+                urls.append(url)
+
         self.url_s = urls
         return urls
 
