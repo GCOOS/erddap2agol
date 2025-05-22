@@ -281,6 +281,7 @@ class AgolWrangler:
             raise RuntimeError("Exceeded add() retries.")
 
         def _publish_or_retry(item, publish_params: dict, max_attempts: int = 10):
+            print(f"\nPublishing Raster Dataset for {item.title}")
             attempt = 0
             title_root = item.title
             while attempt < max_attempts:
@@ -376,7 +377,8 @@ class AgolWrangler:
 
                     item = _add_or_retry(ds, path)
                     analyze = self.gis.content.analyze(item=item.id, file_type="raster")
-                    publish_params = {**analyze["publishParameters"], **self.geoParams}
+                    publish_params = {**analyze["publishParameters"]}
+                    # publish_params = {**analyze["publishParameters"], **self.geoParams}
                     img_item = _publish_or_retry(item, publish_params)
                     adjustSharingCapabilities(img_item)
 

@@ -386,12 +386,16 @@ def selectDatasetFromList(erddapObj, dispLength=50, interactive=True) -> list:
         start_idx = (mgr.currentPage - 1) * mgr._dispLength
         #enumerate through current ds, idx used for selection
         for i, ds in enumerate(current_ds):
-            #ref datasetTitles dict
-            titles = erddapObj.dataset_titles.get(ds,"")
-            title_str = f"{start_idx + i + 1}. {titles}"
-            # id_str = f"ID: {ds}"
-            print(title_str) 
-            # print(f"{start_idx + i + 1}. {titles}\tID: {ds}")
+            title = erddapObj.dataset_titles.get(ds, "")
+            if erddapObj.protocol == "griddap":
+                min_t, max_t = erddapObj.dataset_dates.get(ds, ("", ""))
+                title_str = (
+                    f"{start_idx + i + 1}. {title} "
+                    f"[{min_t[:10]} ⟶ {max_t[:10]}]"
+                )
+            else:
+                title_str = f"{start_idx + i + 1}. {title}"
+            print(title_str)
             
         if mgr.protocol == "griddap":
             print("\nCommands:")
@@ -406,7 +410,7 @@ def selectDatasetFromList(erddapObj, dispLength=50, interactive=True) -> list:
 
             parser = argparse.ArgumentParser(add_help=False)
             
-            parser.add_argument('-l', '--latest',
+            parser.add_argument('-l', '-latest',
                                 dest='latest',
                                 action='store_true',
                                 help="use only the latest date")
@@ -416,12 +420,12 @@ def selectDatasetFromList(erddapObj, dispLength=50, interactive=True) -> list:
                                 type=str,
                                 help="single date in dd/mm/yy")
             
-            parser.add_argument('-sd', '--start-date',
+            parser.add_argument('-sd', '-start-date',
                                 dest='user_start_date',
                                 type=str,
                                 help="start date in dd/mm/YYYY")
             
-            parser.add_argument('-ed', '--end-date',
+            parser.add_argument('-ed', '-end-date',
                                 dest='user_end_date',
                                 type=str,
                                 help="end date in dd/mm/YYYY")
@@ -450,8 +454,8 @@ def selectDatasetFromList(erddapObj, dispLength=50, interactive=True) -> list:
             # case 3
             elif args.user_start_date and args.user_end_date:
                 try:
-                    user_start_date = datetime.strptime(args.user_start_time, '%d/%m/%Y')
-                    user_end_date = datetime.strptime(args.user_end_time, '%d/%m/%Y')
+                    user_start_date = datetime.strptime(args.user_start_date, '%d/%m/%Y')
+                    user_end_date = datetime.strptime(args.user_end_date, '%d/%m/%Y')
                     mgr.setDateRange(user_start_date, user_end_date)
                 except Exception as e:
                     print(f"\nThere was an error while converting your input into datetime objects: {e}")
