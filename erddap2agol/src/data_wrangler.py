@@ -38,6 +38,8 @@ class DatasetWrangler:
     req_start_time: Optional[datetime] = None
     req_end_time: Optional[datetime] = None
     
+    dim_attrs: Optional[Dict] = None
+
     needs_Subset: Optional[bool] = None
     DAS_response: Optional[bool] = None
     is_glider: bool = False
@@ -191,6 +193,11 @@ class DatasetWrangler:
     def getGeographicRange(self) -> None:
         self.lon_range = self.nc_global['geospatial_lon_min']["value"], self.nc_global['geospatial_lon_max']["value"]
         self.lat_range = self.nc_global['geospatial_lat_min']["value"], self.nc_global['geospatial_lat_max']["value"]
+
+        #dim_attrs 
+        #{dimension: low, high}
+        # if self.nc_global[]
+
 
     @skipFromNoTime
     @skipFromNoRange
@@ -465,6 +472,9 @@ class DatasetWrangler:
             )
             url = f"{base_url}{self.dataset_id}.{dataformat}?{vars_query}"
             urls.append(url)
+
+        # elif len(variables) > 1:
+
 
         else:
             # legacy: one URL per variable

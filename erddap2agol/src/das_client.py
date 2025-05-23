@@ -51,7 +51,7 @@ def parseDasResponse(response_text) -> OrderedDict:
         if line.startswith("Attributes {"):
             continue
         
-        # Check if line ends with '{' => new section
+        # Check if line ends with '{' -> new section
         if line.endswith("{"):
             section_name = line.split()[0]  # e.g. "NC_GLOBAL"
             current_section = OrderedDict()
@@ -252,6 +252,8 @@ def getGriddapDimensions(data_Obj: Any) -> List[str]:
     das_conf_dir = getConfDir()
     filepath = os.path.join(das_conf_dir, f'{dataset_id}.json')
 
+    dim_attrs = {}
+
     try:
         with open(filepath, 'r') as json_file:
             data = json.load(json_file)
@@ -261,7 +263,7 @@ def getGriddapDimensions(data_Obj: Any) -> List[str]:
         
         attributes_set = set()
 
-        common_vars = ["altitude", "latitiude", "longitude", "NC_GLOBAL"]
+        common_vars = ["altitude", "latitiude", "longitude","time"]
 
         for var_name, var_attrs in data.items():
             if var_name in common_vars:
