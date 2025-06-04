@@ -79,93 +79,103 @@ def erddapSelection(GliderServ = False, nrtAdd = False, protocol: str = None) ->
         
         
 # if you want to change dispLength, do that here.
-def selectDatasetFromList(erddapObj, dispLength=50, interactive=True) -> list:
+def selectDatasetFromList(erddapObj, dispLength: int = 50, interactive: bool = True) -> list:
     """
-    The big search function that allows users to search datasets and select them for processing.
-    Encapuslates the DatalistManager class.
-    
-    If 'interactive' is True, this prompts for user input (CLI).
-    If 'interactive' is False, you can manage the selection programmatically by
-    working directly with the returned data structures or adding your own logic.
-    
-    Returns a list of selected datasets (the user's "cart").
+    Search, browse, and select ERDDAP datasets.
+
+    If `interactive` is True, the function drives a CLI prompt.  
+    If False, you can work with the returned data structures directly
+    (e.g., in a notebook or automated workflow).
+
+    Returns
+    -------
+    list
+        The list of dataset IDs the user added to their “cart”.
     """
-    # lazy place to put this
-    if user_options.disp_length:
-        dispLength = user_options.disp_length 
-    # ---------------------- Helper Functions ----------------------
-    def _updateDatasetList(erddapObj, search_term=None):
+    # honour a global user-option override
+    if getattr(user_options, "disp_length", None):
+        dispLength = user_options.disp_length
+
+    # ------------------------------------------------------------------
+    # Helper to keep the server query + cache-restore logic in one place
+    # ------------------------------------------------------------------
+    def _updateDatasetList(erddapObj, search_term: str | None = None) -> list:
         """
-        For a given ERDDAPHandler, fetch and/or filter the dataset list based on search_term.
+        Populate `erddapObj.dataset_titles / dataset_dates` for the
+        current search and return *just* the list of dataset IDs.
         """
+        # make sure the master cache is built
+        erddapObj.buildDateCache()
+
         original_info = erddapObj.serverInfo
-        base_url = original_info.split('/erddap/')[0] + '/erddap'
-        
-        # If the object is flagged as NRT, we handle the 7-day search
-        #-------- Modify for different moving window size
-        if erddapObj.is_nrt is True:
+        root         = original_info.split("/erddap/")[0] + "/erddap"
+
+        # ------- build the correct search URL -------
+        if erddapObj.is_nrt:
+            # NRT queries always use /search/advanced.json with a relative time window
             if search_term:
                 search_url = (
-                    f"{base_url}/search/advanced.json?"
+                    f"{root}/search/advanced.json?"
                     f"searchFor={search_term}"
-                    f"&page=1&itemsPerPage=10000000&minTime=now-{erddapObj.moving_window_days}days&maxTime=&protocol={erddapObj.protocol}"
+                    f"&page=1&itemsPerPage=10000000"
+                    f"&minTime=now-{erddapObj.moving_window_days}days"
+                    f"&maxTime=&protocol={erddapObj.protocol}"
                 )
             else:
                 search_url = (
-                    f"{base_url}/search/advanced.json?"
-                    f"page=1&itemsPerPage=10000000&minTime=now-{erddapObj.moving_window_days}days&maxTime=&protocol={erddapObj.protocol}"
+                    f"{root}/search/advanced.json?"
+                    f"page=1&itemsPerPage=10000000"
+                    f"&minTime=now-{erddapObj.moving_window_days}days"
+                    f"&maxTime=&protocol={erddapObj.protocol}"
                 )
-            erddapObj.serverInfo = search_url
-            dataset_id_list = erddapObj.getDatasetIDList()
-            erddapObj.serverInfo = original_info
-            return dataset_id_list
+        else:
+            # historic catalogue search
+            if search_term:
+                search_url = (
+                    f"{root}/search/index.json?"
+                    f"searchFor={search_term}"
+                    f"&page=1&itemsPerPage=100000"
+                    f"&protocol={erddapObj.protocol}"
+                )
+            else:
+                # full catalogue – same as erddapObj.getDatasetIDList() default
+                search_url = None  # sentinel
 
-        # non-NRT
-        if search_term:
-            base_url = original_info.split('/erddap/')[0] + '/erddap'
-            search_url = (
-                f"{base_url}/search/index.json?"
-                f"searchFor={search_term}"
-                f"&page=1&itemsPerPage=100000&protocol={erddapObj.protocol}"
-            )
+        # ------- execute the query -------
+        if search_url:
             erddapObj.serverInfo = search_url
-            dataset_id_list = erddapObj.getDatasetIDList()
+            id_list = erddapObj.getDatasetIDList()
             erddapObj.serverInfo = original_info
-            return dataset_id_list
+        else:
+            id_list = erddapObj.getDatasetIDList()
 
-        # Default: no search term, return the entire dataset list
-        return erddapObj.getDatasetIDList()
+        # ------- restore authoritative date ranges from the cache -------
+        for ds_id in id_list:
+            if ds_id in erddapObj.date_range_cache:
+                erddapObj.dataset_dates[ds_id] = erddapObj.date_range_cache[ds_id]
+
+        return id_list
 
     # ---------------------- DatasetListManager ----------------------
     class DatasetListManager:
         """
-        Manages the dataset list, pagination, and selected items (the "cart").
+        Manages dataset pagination and the user’s selected items.
         """
         def __init__(self, erddapObj, _dispLength):
-            self.erddapObj = erddapObj
+            self.erddapObj   = erddapObj
             self._dispLength = _dispLength
-            
+
             self._allDatasetIds = _updateDatasetList(erddapObj)
-            total_datasets = len(self._allDatasetIds)
+            total_datasets      = len(self._allDatasetIds)
 
-            if user_options.disp_length:
+            if getattr(user_options, "disp_length", None):
                 self._dispLength = user_options.disp_length
-
             if total_datasets < self._dispLength:
                 self._dispLength = total_datasets
 
-            if total_datasets == 0:
-                # if no datasets returned
-                self.numPages = 0
-                self.currentPage = 0
-                print("No datasets available for this server or search term.")
-            else:
-                # pagination
-                self.numPages = math.ceil(total_datasets / self._dispLength)
-                self.currentPage = 1
-
-             # list of selectedDatasets (the cart)
-            self.selectedDatasets = []
+            self.numPages = 0 if total_datasets == 0 else math.ceil(total_datasets / self._dispLength)
+            self.currentPage = 1 if total_datasets else 0
+            self.selectedDatasets: list[str] = []
             
             self.protocol = erddapObj.protocol
             self.dataset_kwargs = {}
@@ -402,7 +412,7 @@ def selectDatasetFromList(erddapObj, dispLength=50, interactive=True) -> list:
             print("'next', 'back', 'addAll', 'addPage', 'done', 'mainMenu', 'exit'")
             print(" type 'search:keyword1+keyword2' to search datasets.")
             print(" enter comma-separated indices (e.g. '10,12:15') for single or range selection.")
-            print("\nSpecify date range with --latest OR --start-date dd/mm/yyyy AND --end-date dd/mm/yyyy")
+            print("\nSpecify date range with -l (latest) OR -sd dd/mm/yyyy AND -ed dd/mm/yyyy")
 
             raw_input = input(": ")
 
@@ -551,14 +561,16 @@ class OptionsMenu:
         try:
             service_item = gis.content.get(id)
             extent = service_item.extent
+
+            if extent:
+                user_options.bounds = extent
+            else:
+                print(f"\nThere was an error getting the item extent, no extent set")
+                user_options.bounds = None
         except Exception as e:
             print(f"\nThere was an error getting the content item: {e}")
         
-        if extent:
-            user_options.bounds = extent
-        else:
-            print(f"\nThere was an error getting the item extent, no extent set")
-            user_options.bounds = None
+        
         
 # Global variable to hold the options.
 user_options = OptionsMenu()

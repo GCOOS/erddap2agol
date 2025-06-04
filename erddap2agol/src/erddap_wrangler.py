@@ -84,33 +84,57 @@ def showErddapList() -> None:
 
 #--------------------------------------------------------------------------------
 class ERDDAPHandler:
-    def __init__(
-            self, 
-            server: str = None,
-            serverInfo: str = None,
-            protocol: str = None, 
-            datasetid: str= None, 
-            fileType: str = None, 
-            geoParams={
-            "locationType": "coordinates",
-            "latitudeFieldName": "latitude__degrees_north_",
-            "longitudeFieldName": "longitude__degrees_east_",
-            "timeFieldName": "time__UTC_",
-            } 
-        ):
-        self.server = server
-        self.serverInfo = serverInfo
-        self.datasetid = datasetid
-        self.protocol = protocol
-        self.fileType = fileType
-        self.geoParams = geoParams
+    """
+    Lightweight wrapper for an ERDDAP server (griddap / tabledap).
 
-        self.datasets = []
-        self.dataset_titles = {}
-        self.dataset_dates  = {} 
-        
-        self.is_nrt = False
+    You can instantiate it with no arguments and later call
+    `setErddap(idx)` (your existing helper).  If you *do* pass a
+    `server` URL now, the object is immediately usable.
+    """
+
+    def __init__(
+        self,
+        server: str | None = None,
+        serverInfo: str | None = None,
+        protocol: str | None = "griddap",
+        datasetid: str | None = None,
+        fileType: str | None = None,
+        geoParams: dict | None = None,
+    ):
+        # core connection details -------------------------------------------------
+        self.server       = server                       # may be None → set later
+        self.protocol     = (protocol or "griddap").lower()
+        self.datasetid    = datasetid
+        self.fileType     = fileType
+        self.geoParams    = geoParams or {
+            "locationType":      "coordinates",
+            "latitudeFieldName": "latitude",
+            "longitudeFieldName": "longitude",
+            "timeFieldName":     "time",
+        }
+
+        # choose a sensible default for serverInfo if possible -------------------
+        if serverInfo is not None:
+            self.serverInfo = serverInfo
+        elif server is not None:
+            self.serverInfo = f"{server.rstrip('/')}/erddap/search/index.json"
+        else:
+            # will be filled in by setErddap()
+            self.serverInfo = None
+
+        # per-query working copies ----------------------------------------------
+        self.datasets:       list[str]                  = []
+        self.dataset_titles: dict[str, str]             = {}
+        self.dataset_dates:  dict[str, tuple[str, str]] = {}
+
+        # one-time authoritative date cache -------------------------------------
+        self.date_range_cache: dict[str, tuple[str, str]] = {}
+        self._date_cache_ready: bool                      = False
+
+        # NRT flags --------------------------------------------------------------
+        self.is_nrt             = False
         self.moving_window_days = 7
+
         self._availData = None
 
     @classmethod            
@@ -210,6 +234,36 @@ class ERDDAPHandler:
     def __getitem__(self, index):
         """Allow index access to datasets"""
         return self.datasets[index]
+    
+    def buildDateCache(self) -> None:
+     
+        if self._date_cache_ready:
+            return  # already built
+
+        # Choose an endpoint that actually includes min/max dates
+        original_info = self.serverInfo or ""
+        if original_info.endswith("allDatasets.json"):
+            # the handler was already initialised with the right URL
+            cache_url = original_info
+        else:
+            if not self.server:
+                raise ValueError(
+                    "server URL not set.  Call setErddap() or pass `server=` "
+                    "when instantiating ERDDAPHandler."
+                )
+            cache_url = f"{self.server.rstrip('/')}{self.protocol}/allDatasets.json"
+
+        self.serverInfo = cache_url
+
+        # `getDatasetIDList()` will now fill self.dataset_dates w/t ranges
+        _ = self.getDatasetIDList()
+
+        # take a snapshot for later restores
+        self.date_range_cache  = self.dataset_dates.copy()
+        self._date_cache_ready = True
+
+        # restore the caller's URL (important for subsequent calls)
+        self.serverInfo = original_info or cache_url
     
   
     def getDatasetIDList(self) -> list:

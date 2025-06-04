@@ -269,6 +269,7 @@ def getGriddapDimensions(data_Obj: Any) -> List[str]:
             if var_name in common_vars:
                 pass
             
+            # time checks
             if var_name == "time":
                     data_Obj.has_time = True
                     data_Obj.time_str = "time"
@@ -284,8 +285,14 @@ def getGriddapDimensions(data_Obj: Any) -> List[str]:
                     if ioos_cat == "Time" and units == "seconds since 1970-01-01T00:00:00Z":
                         data_Obj.has_time = True
                         data_Obj.time_str = var_name
+            # alright its not time
             else:
-                attributes_set.add(var_name)
+                # if quality info off
+                content_type = var_attrs.get("coverage_content_type", {}).get("value", "")
+                if content_type == "qualityInformation":
+                    pass
+                else:
+                    attributes_set.add(var_name)
 
             if var_name == "NC_GLOBAL":
                 continue

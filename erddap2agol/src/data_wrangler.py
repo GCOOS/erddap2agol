@@ -30,7 +30,7 @@ class DatasetWrangler:
     # what the user requested and what is available within the data
     # This applies to griddap only, tabledap simply uses data start time
     griddap_args: dict = None
-    mult_dim: bool = False
+    mult_dim: bool = None
     data_start_time: Optional[datetime] = None
     data_end_time: Optional[datetime] = None
     user_start_time: Optional[datetime] = None
@@ -358,11 +358,11 @@ class DatasetWrangler:
 
         • honours griddap_args   for time selection
         • honours core.user_options.bounds for optional lat/lon clipping
-        • if self.mult_dim == True   → one URL containing ALL variables
+        • if self.mult_dim == True -> one URL containing ALL variables
         otherwise one URL per variable (original behaviour)
         • returns the list of URLs and stores it in self.url_s
         """
-        alt_sel = "%5B(0)%5D"
+        
         # lon_sel = "%5B%5D" 
         # lat_sel = "%5B%5D" 
 
@@ -381,6 +381,16 @@ class DatasetWrangler:
             "lon", "longitude",
             "altitude", "depth", "NC_GLOBAL",
         }
+        z_dim = ["altitude", "depth"]
+
+        for attribute in self.attribute_list:
+            if attribute in z_dim:
+                has_alt = True
+            else:
+                has_alt = False
+
+        
+        alt_sel = "%5B0%5D" if has_alt else ""
         variables = [v for v in (self.attribute_list or []) if v not in dim_tokens]
 
         if not variables:
@@ -451,14 +461,14 @@ class DatasetWrangler:
         if bounds and len(bounds) == 2:
             lon_min, lat_min = bounds[0]
             lon_max, lat_max = bounds[1]
-            lat_sel = f"%5B({lat_min}):({lat_max})%5D"
-            lon_sel = f"%5B({lon_min}):({lon_max})%5D"
+            lat_sel = f"%5B({lat_min}):1:({lat_max})%5D"
+            lon_sel = f"%5B({lon_min}):1:({lon_max})%5D"
         else:
             lon_min, lon_max = self.lon_range
             lat_min, lat_max = self.lat_range
 
-            lat_sel = f"%5B({lat_min}):({lat_max})%5D"
-            lon_sel = f"%5B({lon_min}):({lon_max})%5D"
+            lat_sel = f"%5B({lat_min}):1:({lat_max})%5D"
+            lon_sel = f"%5B({lon_min}):1:({lon_max})%5D"
 
         
         # build urls
@@ -485,6 +495,7 @@ class DatasetWrangler:
                 urls.append(url)
 
         self.url_s = urls
+        print(urls)
         return urls
 
     # review this
