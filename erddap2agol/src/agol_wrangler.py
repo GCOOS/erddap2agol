@@ -1,7 +1,8 @@
 from arcgis.gis import GIS, ItemProperties
 from arcgis.features import FeatureLayer, FeatureLayerCollection
-from arcgis.raster import ImageryLayer
+from arcgis.raster import ImageryLayer, Raster
 from arcgis.raster.functions import multidimensional_filter
+# import arcgis.raster
 from arcgis.raster.analytics import copy_raster, create_image_collection, list_datastore_content
 from arcgis.gis._impl._content_manager import SharingLevel
 from . import data_wrangler as dw
@@ -222,7 +223,7 @@ class AgolWrangler:
                     new_tags.append(tag)
         # lazy removal of lat and lon tags
         for tag in new_tags:
-            if tag == "longitude" or tag == "latitude" or tag == "NC_Global":
+            if tag == "longitude" or tag == "latitude" or tag == "NC_GLOBAL" or tag == "mask":
                 new_tags.remove(tag)
 
         return ItemProperties(
@@ -299,6 +300,7 @@ class AgolWrangler:
                         raise
             raise RuntimeError("Exceeded publish() retries.")
 
+        # ---------------------!!!!!!!!!!!!!-------------------------
         # deprecated needs update
         def adjustSharingCapabilities(img_item):
             try:
@@ -347,9 +349,14 @@ class AgolWrangler:
                 if ext in (".nc", ".nc4"):
                     # NetCDF  copy_raster (multidimensional)
                     print(f"Running copy_raster for {ds.dataset_title}")
+                    # lets get the crs from the file
+                    r = Raster(path)
+                    print(f"{r.spatial_reference, r.extent}")
+
                     context = {
                         "upload_properties": {"displayProgress": True},
                         "defineNodata": True,
+                        "outSr":r.spatial_reference,
                         "noDataArguments": {
                             "noDataValues": [0],
                             "numberOfBand": 99,
@@ -357,17 +364,20 @@ class AgolWrangler:
                         },
                     }
                     #MULTIDIMENSIONAL CASE
-                    if core.user_options.mult_dim_bool:
+                    if ds.mult_dim:
                         multdim_proc =True
                     else:
                         multdim_proc =False
 
+
+                    #output cellsize {"distance":60,"units":meters}
                     img_item = copy_raster(
                         input_raster=path,
                         raster_type_name="NetCDF",
                         gis=self.gis,
                         folder=None,  # user root
                         process_as_multidimensional=multdim_proc,
+                        output_name= ds.dataset_id,
                         context=context,
                     )
                     # copy_raster already returns the imagery layer item

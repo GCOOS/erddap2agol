@@ -36,9 +36,9 @@ class DatasetWrangler:
     user_start_time: Optional[datetime] = None
     user_end_time: Optional[datetime] = None
     req_start_time: Optional[datetime] = None
-    req_end_time: Optional[datetime] = None
-    
+    req_end_time: Optional[datetime] = None 
     dim_attrs: Optional[Dict] = None
+    cellsize: Optional[Dict] = None
 
     needs_Subset: Optional[bool] = None
     DAS_response: Optional[bool] = None
@@ -193,6 +193,9 @@ class DatasetWrangler:
     def getGeographicRange(self) -> None:
         self.lon_range = self.nc_global['geospatial_lon_min']["value"], self.nc_global['geospatial_lon_max']["value"]
         self.lat_range = self.nc_global['geospatial_lat_min']["value"], self.nc_global['geospatial_lat_max']["value"]
+        #output cellsize {"distance":60,"units":meters}
+        ncglobal_cellsize = self.nc_global['geospatial_lat_min']["value"]
+        # self.cellsize = 
 
         #dim_attrs 
         #{dimension: low, high}
@@ -371,26 +374,27 @@ class DatasetWrangler:
 
         ds_args = (griddap_args or {}).get(self.dataset_id, {})
         
-        # 1.  Base URL and variable list
+        # Base URL and variable list
         # ------------------------------------------------------------------
         base_url   = self.server.replace("tabledap", "griddap")
         dataformat = "nc"
         # took out "time",
         dim_tokens = {
-            "lat", "latitude",
-            "lon", "longitude",
+            "latitude",
+            "longitude",
             "altitude", "depth", "NC_GLOBAL",
         }
         z_dim = ["altitude", "depth"]
 
-        for attribute in self.attribute_list:
-            if attribute in z_dim:
-                has_alt = True
-            else:
-                has_alt = False
+        has_alt = any(attr.lower() in z_dim for attr in (self.attribute_list or []))
+        if has_alt:
+            print("Altitude/depth axis detected -> adding [0] slice")
+            alt_sel = "%5B0%5D" 
+        else:
+             alt_sel = ""
 
         
-        alt_sel = "%5B0%5D" if has_alt else ""
+        # alt_sel = "%5B0%5D" if has_alt else ""
         variables = [v for v in (self.attribute_list or []) if v not in dim_tokens]
 
         if not variables:
@@ -473,9 +477,16 @@ class DatasetWrangler:
         
         # build urls
         # if not alt_sel:
+
+        if len(variables) > 1:
+            self.mult_dim = True
+            # print("Mult dim true")
+        else:
+            self.mult_dim = False
+            # print("Mult Dim False")
         
 
-        if core.user_options.mult_dim_bool:
+        if core.user_options.mult_dim_bool and self.mult_dim:
             # one URL holding ALL variables
             vars_query = ",".join(
                 f"{quote(v, safe='')}{time_sel}{alt_sel}{lat_sel}{lon_sel}" for v in variables
@@ -495,108 +506,10 @@ class DatasetWrangler:
                 urls.append(url)
 
         self.url_s = urls
-        print(urls)
+        # print(urls)
         return urls
 
-    # review this
 
-    # def generateGriddap_url(self) -> List[str]:
-    #     """
-    #     Build ERDDAP griddap request URL(s).
-
-    #     Uses self.griddap_args for time options and core.user_options for
-    #     optional spatial bounds.  Returns the list of URL strings and
-    #     sets self.url_s.
-    #     """
-    #     urls = []
-    #     data_fmt = "nc"
-
-        
-    #     # Establish base-URL and variables to request
-    #     base_url = self.server.replace("tabledap", "griddap")
-    #     dataformat = "nc"                                # griddap → netCDF
-    #     # remove obvious coordinate / metadata names
-    #     dim_tokens = {"time", "lat", "latitude", "lon", "longitude",
-    #                 "altitude", "depth", "NC_GLOBAL"}
-    #     variables = [v for v in (self.attribute_list or []) if v not in dim_tokens]
-
-    #     if not variables:
-    #         print(f"No data variables detected for {self.dataset_id}")
-    #         return []
-
-    #     # ERDDAP needs at least one variable.  We'll construct one URL per variable
-    #     # if we need to change this we can join them with commas in one string.
-    #     #Time selector
-    #     def _iso_z(dt: datetime) -> str:
-    #         """YYYY-MM-DDTHH:MM:SSZ, always forced to UTC."""
-    #         return dt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-
-    #     # A. defaults fall back to full native range
-    #     start_dt = self.data_start_time
-    #     end_dt   = self.data_end_time
-    #     time_sel = ""                     # will be filled below
-
-    #     if self.griddap_args:
-
-    #         # ----------  Case 1 : latest ----------------------------------
-    #         if self.griddap_args.get("latest_bool", True):
-    #             start_dt =  self.data_end_time
-    #             end_dt = self.data_end_time
-    #             time_sel = f"%5B({_iso_z(end_dt)})%5D"
-
-    #         # ----------  Case 2 : user single date ------------------------
-    #         elif self.griddap_args.get("user_single_date"):
-    #             dt = self.griddap_args["user_single_date"]
-    #             if isinstance(dt, str):
-    #                 dt = datetime.fromisoformat(dt.replace("Z", ""))
-    #             # clip to data range
-    #             dt = max(self.data_start_time, min(dt, self.data_end_time))
-    #             start_dt = end_dt = dt
-    #             time_sel = f"%5B({_iso_z(dt)})%5D"
-
-    #         # ----------  Case 3 : user time range -------------------------
-    #         else:
-    #             usr_s = self.griddap_args.get("user_start_time")
-    #             usr_e = self.griddap_args.get("user_end_time")
-
-    #             if isinstance(usr_s, str):
-    #                 usr_s = datetime.fromisoformat(usr_s.replace("Z", ""))
-    #             if isinstance(usr_e, str):
-    #                 usr_e = datetime.fromisoformat(usr_e.replace("Z", ""))
-
-    #             if usr_s:  start_dt = max(self.data_start_time, usr_s)
-    #             if usr_e:  end_dt   = min(self.data_end_time,   usr_e)
-
-    #             time_sel = f"%5B({_iso_z(start_dt)}):1:({_iso_z(end_dt)})%5D"
-
-    #     self.req_start_time = start_dt
-    #     self.req_end_time   = end_dt
-
-    #     # lat lon sel
-    #     dim_names = getattr(self, "dim_names", ['time','altitude','lat','lon'])
-    #     has_alt   = any(d in dim_names for d in ("altitude", "depth"))
-
-    #     lat_sel = lon_sel = "[]"  
-    #     alt_sel = "[(0)]" if has_alt else ""       
-    #     bounds = getattr(core.user_options, "bounds", None)  # [[lon0,lat0],[lon1,lat1]]
-
-    #     if bounds and len(bounds) == 2:
-    #         lon_min, lat_min = bounds[0]
-    #         lon_max, lat_max = bounds[1]
-    #         lat_sel = f"[({lat_min}):({lat_max})]"
-    #         lon_sel = f"[({lon_min}):({lon_max})]"
-
-    #     selector_block = f"{time_sel}{alt_sel}{lat_sel}{lon_sel}"
-
-        
-    #     per_var = [f"{var}{selector_block}" for var in variables]
-    #     query_plain = ",".join(per_var)                    # leave commas!
-    #     query = quote(query_plain, safe=":,[]()")          # encode everything else
-
-    #     url = f"{base_url}{self.dataset_id}.{data_fmt}?{query}"
-    #     urls.append(url)
-    #     self.url_s = urls
-    #     return urls
 
     #---------------------Data Download---------------------
     @skipFromError
@@ -619,8 +532,8 @@ class DatasetWrangler:
         """
         Download `url` and save it to a temporary file.
 
-        • tabledap  → CSV : parsed into a DataFrame, then written *.csv
-        • griddap   → NetCDF: raw bytes written directly *.nc
+        • tabledap  -> CSV : parsed into a DataFrame, then written *.csv
+        • griddap   -> NetCDF: raw bytes written directly *.nc
 
         Returns the absolute file-path on success, or None on failure.
         """
@@ -665,6 +578,11 @@ class DatasetWrangler:
         except requests.exceptions.Timeout as e:
             print(f"\nTimeout for URL: {url} | Error: {e}")
         except requests.exceptions.RequestException as e:
+            status = getattr(e.response, "status_code", None)
+            if status == "413":
+                print(f"\nHTTP 413 (Payload Too Large) for URL: {url}")
+                return "HTTP_413"
+
             print(f"\nRequest Exception | Error: {e}")
         except Exception as e:
             print(f"\nError processing URL | Exception: {e}")
@@ -683,9 +601,11 @@ class DatasetWrangler:
             attempts += 1
             print(f"\nDownloading data data for {self.dataset_title} (Attempt: {attempts}/{connection_attempts})")
             filepath = self._downloadUrl(url, timeout_time)
-        if filepath:
-            self.data_filepath = filepath
-            return filepath
+            if filepath == "413" and self.griddap:
+                break
+            if filepath and filepath != "HTTP_413":
+                self.data_filepath = filepath
+                return filepath
         else:
             self.has_error = True
             return None
