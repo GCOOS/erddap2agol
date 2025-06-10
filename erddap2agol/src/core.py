@@ -579,9 +579,7 @@ class OptionsMenu:
         try:
             service_item = gis.content.get(id)
             extent = service_item.extent
-            print(extent)
-            time.sleep(1)
-
+            
             if extent:
                 user_options.bounds = extent
             else:
@@ -590,7 +588,7 @@ class OptionsMenu:
                 user_options.bounds = None
         except Exception as e:
             print(f"\nThere was an error getting the content item: {e}")
-            time.sleep(5)
+            time.sleep(1)
         
         
         

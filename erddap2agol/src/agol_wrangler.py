@@ -406,13 +406,14 @@ class AgolWrangler:
                                 "compositeValue": True,
                             },
                         }
+                        # refine 
                         #MULTIDIMENSIONAL CASE
                         if ds.mult_dim:
                             multdim_proc =True
-                            print(f"True {multdim_proc}")
+                            #print(f"True {multdim_proc}")
                         else:
                             multdim_proc =False
-                            print(f"False {multdim_proc}")
+                            #print(f"False {multdim_proc}")
 
                         #output cellsize {"distance":60,"units":meters}
                         if idx > 1:
