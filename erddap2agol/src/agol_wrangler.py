@@ -236,6 +236,36 @@ class AgolWrangler:
             license_info=props.get("licenseInfo", "")
         )
     
+    # --- add near the top of AgolWrangler (or in a utils module) -----------------
+    def changeArrayDims(self, nc_path: str) -> str:
+        """
+        Returns a path to a NetCDF whose latitude coordinate runs
+        north->south. If the input already meets that condition, the
+        original path is returned untouched; otherwise a flipped temporary
+        file is written and its path is returned.
+        """
+        import xarray as xr, tempfile, os
+
+        ds = xr.open_dataset(nc_path, chunks={})  # lazy open – no big memory hit
+        lat_name = next((n for n in ('latitude', 'lat', 'y')
+                        if n in ds.coords), None)
+        if lat_name is None:
+            ds.close()
+            return nc_path                                # nothing to do
+
+        if ds[lat_name][0] < ds[lat_name][-1]:
+            ds.close()
+            return nc_path                                # already ascending
+
+        # ---- flip latitude & all data variables ----
+        ds_flipped = ds.reindex({lat_name: ds[lat_name][::-1]})
+        tmp = tempfile.NamedTemporaryFile(suffix='.nc', delete=False)
+        ds_flipped.to_netcdf(tmp.name, format='NETCDF4_CLASSIC')
+        ds.close()
+        ds_flipped.close()
+        return tmp.name
+
+    
 
     def postAndPublishImagery(self, timeoutTime: int = 600) -> None:
         """Publish locally-downloaded rasters in ``self.datasets`` as **hosted imagery
@@ -245,7 +275,6 @@ class AgolWrangler:
         • NetCDF (multidimensional) -> **copy_raster** workflow
         """
 
-        
         # helper utilities
         
         def _try_rename(src: str, dst: str, attempts: int = 5, delay: float = 1):
@@ -351,8 +380,10 @@ class AgolWrangler:
                     print(f"Running copy_raster for {ds.dataset_title}")
                     # lets get the crs from the file
                     r = Raster(path)
-                    print(f"{r.spatial_reference, r.extent}")
-
+                    print(f"{r.spatial_reference}")
+                    fixed_raster = self.changeArrayDims(path)
+                    r2 = Raster(fixed_raster)
+                    print(f"\n{r2.spatial_reference}")
                     context = {
                         "upload_properties": {"displayProgress": True},
                         "defineNodata": True,
@@ -372,7 +403,7 @@ class AgolWrangler:
 
                     #output cellsize {"distance":60,"units":meters}
                     img_item = copy_raster(
-                        input_raster=path,
+                        input_raster=fixed_raster,
                         raster_type_name="NetCDF",
                         gis=self.gis,
                         folder=None,  # user root

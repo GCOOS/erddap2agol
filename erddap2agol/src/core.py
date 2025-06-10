@@ -399,10 +399,15 @@ def selectDatasetFromList(erddapObj, dispLength: int = 50, interactive: bool = T
             title = erddapObj.dataset_titles.get(ds, "")
             if erddapObj.protocol == "griddap":
                 min_t, max_t = erddapObj.dataset_dates.get(ds, ("", ""))
-                title_str = (
-                    f"{start_idx + i + 1}. {title} "
-                    f"[{min_t[:10]} -> {max_t[:10]}]"
-                )
+                if min_t and max_t:
+                    title_str = (
+                        f"{start_idx + i + 1}. {title} "
+                        f"[{min_t[:10]} -> {max_t[:10]}]"
+                    )
+                else:
+                    title_str = (
+                        f"{start_idx + i + 1}. {title} "
+                    )
             else:
                 title_str = f"{start_idx + i + 1}. {title}"
             print(title_str)
