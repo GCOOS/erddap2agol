@@ -254,54 +254,48 @@ def getGriddapDimensions(data_Obj: Any) -> List[str]:
 
     dim_attrs = {}
 
-    try:
-        with open(filepath, 'r') as json_file:
-            data = json.load(json_file)
-            if "error" in data and data["error"].get("Found") is not None:
-                print(f"File {filepath} does not contain data.")
-                return None
+    with open(filepath, 'r') as json_file:
+        data = json.load(json_file)
+        if "error" in data and data["error"].get("Found") is not None:
+            print(f"File {filepath} does not contain data.")
+            return None
         
         attributes_set = set()
 
-        common_vars = ["altitude", "latitiude", "longitude","time"]
+        common_vars = {"altitude", "latitude", "longitude", "time", "NC_GLOBAL"}
 
         for var_name, var_attrs in data.items():
-            if var_name in common_vars:
-                pass
-            
-            # time checks
-            if var_name == "time":
-                    data_Obj.has_time = True
-                    data_Obj.time_str = "time"
-            elif not data_Obj.time_str and var_name == "datecollec":
-                    data_Obj.has_time = True
-                    data_Obj.time_str = "datecollec"
-            elif not data_Obj.time_str and var_name == "date_gmt":
-                    data_Obj.has_time = True
-                    data_Obj.time_str = "date_gmt"
-            elif not data_Obj.time_str:
-                    ioos_cat = var_attrs.get("ioos_category", {}).get("value", "")
-                    units   = var_attrs.get("units", {}).get("value", "")
-                    if ioos_cat == "Time" and units == "seconds since 1970-01-01T00:00:00Z":
-                        data_Obj.has_time = True
-                        data_Obj.time_str = var_name
-            # alright its not time
-            else:
-                # if quality info off
-                content_type = var_attrs.get("coverage_content_type", {}).get("value", "")
-                if content_type == "qualityInformation":
-                    pass
-                else:
-                    attributes_set.add(var_name)
-
-            if var_name == "NC_GLOBAL":
+            # so, yeah
+            if var_name == "sst_gradient_magnitude":
                 continue
 
-        return attributes_set
+            # ---------------- common geodetic axes -----------------
+            if var_name in common_vars:
+                if var_name == "time":
+                    data_Obj.has_time = True
+                    data_Obj.time_str = "time"
+                continue                         # <- skip to next var
 
-    except Exception as e:
-        print(f"\nThere was an error while getting the dimensions of the raster from the DAS: {e}")
-        return None
+            # ---------------- alternative time candidates ----------
+            if not data_Obj.time_str and var_name in ("datecollec", "date_gmt"):
+                data_Obj.has_time = True
+                data_Obj.time_str = var_name
+                continue
+
+            if (not data_Obj.time_str and
+                var_attrs.get("ioos_category", {}).get("value") == "Time" and
+                var_attrs.get("units", {}).get("value") == "seconds since 1970-01-01T00:00:00Z"):
+                data_Obj.has_time = True
+                data_Obj.time_str = var_name
+                continue
+
+            cctype = var_attrs.get("coverage_content_type", {}).get("value", "")
+            if cctype in ("qualityInformation", "referenceInformation", "thematicClassification"):
+                continue
+
+            attributes_set.add(var_name)
+
+        return list(attributes_set)
 
 
 def getActualAttributes(data_Obj: Any, return_all: bool = False) -> List[str]:

@@ -10,6 +10,7 @@ from typing import Optional, Dict, List, Union
 from io import StringIO
 import datetime, requests, re, math, os, json, pandas as pd
 from datetime import timedelta, datetime, timezone
+from dateutil.relativedelta import relativedelta 
 from urllib.parse import quote
 
 #---------------------DatasetWrangler---------------------
@@ -94,6 +95,10 @@ class DatasetWrangler:
         else:
             # print("griddap init")
             self.getDas()
+            if len(self.attribute_list) > 1:
+                self.mult_dim = True
+            else:
+                self.mult_dim = False
             self.getGeographicRange()
 
     
@@ -179,6 +184,39 @@ class DatasetWrangler:
             print(f"\nError parsing DAS for {self.dataset_id}: {e}")
             self.DAS_response = False
 
+
+    def griddapDivider(self):
+        """
+        Yield (bucket_start, bucket_end, label_suffix) tuples.
+        label_suffix is what you'll tack onto the item title or output_name.
+        """
+
+        start = self.griddap_args.get("user_start_date")
+        end = self.griddap_args.get("user_end_date")
+        division = self.griddap_args.get("division").lower()
+
+        cur = start
+        if division == "day":
+            while cur <= end:
+                nxt = cur
+                yield cur, nxt, cur.strftime("%Y-%m-%d")
+                cur += timedelta(days=1)
+
+        elif division == "week":
+            # ISO 8601 week number
+            while cur <= end:
+                year, wk, _ = cur.isocalendar()
+                wk_end = cur + timedelta(days=6)
+                nxt = min(wk_end, end)
+                yield cur, nxt, f"W{wk:02d}-{year}"
+                cur = nxt + timedelta(days=1)
+
+        elif division == "month":
+            while cur <= end:
+                m_end = (cur + relativedelta(months=1)).replace(day=1) - timedelta(days=1)
+                nxt = min(m_end, end)
+                yield cur, nxt, cur.strftime("%b-%Y")   # e.g. "Jan-2025"
+                cur = nxt + timedelta(days=1)
     # def setGriddapTimes(self):
     #     # user
     #     # data
@@ -356,16 +394,7 @@ class DatasetWrangler:
         return urls
     
     def generateGriddap_url(self, griddap_args: dict) -> List[str]:
-        """
-        Build one or many ERDDAP griddap URLs.
-
-        • honours griddap_args   for time selection
-        • honours core.user_options.bounds for optional lat/lon clipping
-        • if self.mult_dim == True -> one URL containing ALL variables
-        otherwise one URL per variable (original behaviour)
-        • returns the list of URLs and stores it in self.url_s
-        """
-        
+               
         # lon_sel = "%5B%5D" 
         # lat_sel = "%5B%5D" 
 
@@ -373,6 +402,7 @@ class DatasetWrangler:
         # print(f"GRIDDAP ARGS: {griddap_args}")
 
         ds_args = (griddap_args or {}).get(self.dataset_id, {})
+        self.griddap_args = ds_args
         
         # Base URL and variable list
         # ------------------------------------------------------------------
@@ -478,35 +508,37 @@ class DatasetWrangler:
         # build urls
         # if not alt_sel:
 
-        if len(variables) > 1:
-            self.mult_dim = True
-            # print("Mult dim true")
+        urls     : List[str] = []
+        suffixes : List[Optional[str]] = []        
+
+        def _assemble(sel: str, label_suffix: Optional[str]):
+            """Inner helper to append one or many URLs + matching suffix."""
+            if core.user_options.mult_dim_bool and self.mult_dim:
+                vars_query = ",".join(
+                    f"{quote(v, safe='')}{sel}{alt_sel}{lat_sel}{lon_sel}"
+                    for v in variables
+                )
+                urls.append(f"{base_url}{self.dataset_id}.{dataformat}?{vars_query}")
+                suffixes.append(label_suffix)
+            else:
+                for v in variables:
+                    query = f"{quote(v, safe='')}{sel}{alt_sel}{lat_sel}{lon_sel}"
+                    urls.append(f"{base_url}{self.dataset_id}.{dataformat}?{query}")
+                    suffixes.append(label_suffix)
+
+      
+        if self.griddap_args and self.griddap_args.get("division"):
+            for t_start, t_end, label in self.griddapDivider():
+                sel = (f"%5B({_iso_z(t_start)}):1:({_iso_z(t_end)})%5D"
+                    if t_start != t_end else
+                    f"%5B({_iso_z(t_end)})%5D")
+                _assemble(sel, label)
         else:
-            self.mult_dim = False
-            # print("Mult Dim False")
-        
+            _assemble(time_sel, None)             
 
-        if core.user_options.mult_dim_bool and self.mult_dim:
-            # one URL holding ALL variables
-            vars_query = ",".join(
-                f"{quote(v, safe='')}{time_sel}{alt_sel}{lat_sel}{lon_sel}" for v in variables
-            )
-            url = f"{base_url}{self.dataset_id}.{dataformat}?{vars_query}"
-            urls.append(url)
-
-        # elif len(variables) > 1:
-
-
-        else:
-            # legacy: one URL per variable
-            for v in variables:
-                v_enc  = quote(v, safe="")
-                query  = f"{v_enc}{time_sel}{alt_sel}{lat_sel}{lon_sel}"
-                url    = f"{base_url}{self.dataset_id}.{dataformat}?{query}"
-                urls.append(url)
-
-        self.url_s = urls
-        # print(urls)
+        # ----------------------------------------------------------------------
+        self.url_s        = urls                 
+        self.url_labels   = suffixes             
         return urls
 
 
@@ -526,9 +558,12 @@ class DatasetWrangler:
             else:
                 return self._writeData_sub(connection_attempts, timeout_time)
         else:
-            return self._writeData_idv(connection_attempts, timeout_time=180)
+            if getattr(self, "url_labels", None) and len(self.url_s) > 1:
+                return self._writeData_division(connection_attempts, timeout_time=180)
+
+        return self._writeData_idv(connection_attempts, timeout_time=180)
     
-    def _downloadUrl(self, url: str, timeout_time: int, subset_num: Optional[int] = None) -> Optional[str]:
+    def _downloadUrl(self, url: str, timeout_time: int, subset_num: Optional[int] = None, label_suffix: Optional[str] = None ) -> Optional[str]:
         """
         Download `url` and save it to a temporary file.
 
@@ -546,18 +581,17 @@ class DatasetWrangler:
 
             # ----------------------  GRIDDAP  (NetCDF)  ----------------------
             if self.griddap:
-                # choose file-name
-                if self.needs_Subset and subset_num is not None:
+                if label_suffix:                             
+                    safe = re.sub(r"[^A-Za-z0-9_-]", "_", label_suffix)
+                    filename = f"{self.dataset_id}_{safe}.nc"
+                elif subset_num is not None:
                     filename = f"{self.dataset_id}_subset_{subset_num}.nc"
                 else:
                     filename = f"{self.dataset_id}.nc"
 
                 file_path = os.path.join(temp_dir, filename)
-
-                # binary write
                 with open(file_path, "wb") as f:
                     f.write(response.content)
-
                 return file_path
 
             # ----------------------  TABLEDAP  (CSV)  -----------------------
@@ -637,6 +671,43 @@ class DatasetWrangler:
                 else:
                     print(f"\nMax retries exceeded for subset {subset_index} URL: {url}")
                     self.has_error = True
+        if filepaths:
+            self.data_filepath = filepaths
+            return filepaths
+        return None
+    
+    def _writeData_division(self,
+                        connection_attempts: int,
+                        timeout_time: int) -> Optional[List[str]]:
+        """
+        Download each griddap division URL (day/week/month buckets).
+        """
+        filepaths     = []
+        url_pairs     = list(zip(self.url_s, self.url_labels))   # label can be None
+        urls_queue    = deque(url_pairs)
+        attempts_dict = {url: 0 for url, _ in url_pairs}
+
+        while urls_queue:
+            url, label = urls_queue.popleft()
+            attempts_dict[url] += 1
+            attempt_num = attempts_dict[url]
+
+            print(f"\nDownloading chunk '{label or 'slice'}' "
+                f"(Attempt {attempt_num}/{connection_attempts})")
+
+            fp = self._downloadUrl(url,
+                                timeout_time,
+                                label_suffix=label)
+
+            if fp:
+                filepaths.append(fp)
+            else:
+                if attempt_num < connection_attempts:
+                    urls_queue.append((url, label))
+                else:
+                    print(f"Max retries exceeded for chunk '{label}'")
+                    self.has_error = True
+
         if filepaths:
             self.data_filepath = filepaths
             return filepaths

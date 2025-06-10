@@ -183,6 +183,7 @@ def selectDatasetFromList(erddapObj, dispLength: int = 50, interactive: bool = T
             self.user_single_date = None
             self.user_start_date = None
             self.user_end_date =  None
+            self.division = None
             
 
         @property
@@ -302,7 +303,9 @@ def selectDatasetFromList(erddapObj, dispLength: int = 50, interactive: bool = T
                             'latest_bool': self.latest_bool,
                             'user_single_date': self.user_single_date,
                             'user_start_date': self.user_start_date,
-                            'user_end_date': self.user_end_date
+                            'user_end_date': self.user_end_date,
+                            "division": self.division,
+
                         }
                         # print(f"Added {selected_dataset} to the cart.")
 
@@ -444,11 +447,21 @@ def selectDatasetFromList(erddapObj, dispLength: int = 50, interactive: bool = T
                                 dest='user_end_date',
                                 type=str,
                                 help="end date in dd/mm/YYYY")
+            
+            parser.add_argument('-div', '-division', dest='division',
+                    choices=('day', 'week', 'month'), type=str.lower,
+                    help="split selected date range into day/week/month chunks")
 
             args, rem = parser.parse_known_args(tokens)
 
             # There are three cases for adding imagery, single date, latest, multiple images
             
+            mgr.division = args.division
+
+            if args.division and not (args.user_start_date and args.user_end_date):
+                print("\nThere needs to be a start and end date specified with division")
+                continue
+
             # case 1
             if args.user_single_date:
                 user_start_date, user_end_date = None, None
@@ -571,9 +584,11 @@ class OptionsMenu:
                 user_options.bounds = extent
             else:
                 print(f"\nThere was an error getting the item extent, no extent set")
+                time.sleep(1)
                 user_options.bounds = None
         except Exception as e:
             print(f"\nThere was an error getting the content item: {e}")
+            time.sleep(5)
         
         
         
@@ -705,9 +720,16 @@ def options_menu():
                 return None
 
         elif choice == "9":
-            id = input(f"\nEnter the Item ID that you want to query: ")
-            index_input = input(f"\nEnter the index of the layer you want to query, or press enter for (default 0): ")
-            OptionsMenu.getBoundsFromItem(None, id, index_input)
+            item_id = input("Enter the Item ID to query: ").strip()
+            layer_in = input("Layer index (ENTER for 0): ").strip()
+            try:
+                layer_idx = int(layer_in) if layer_in else 0
+            except ValueError:
+                print("Index must be an integer.")
+                time.sleep(1)
+                continue
+
+            OptionsMenu.getBoundsFromItem(item_id, layer_idx)
             
         elif choice == "10":
             user_options.mult_dim_bool = not user_options.mult_dim_bool

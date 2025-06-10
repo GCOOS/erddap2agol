@@ -364,74 +364,95 @@ class AgolWrangler:
         processed = 0
 
         for ds in self.datasets:
-            path = ds.data_filepath
-            if not path:
+            paths = ds.data_filepath
+            titles = getattr(ds, "url_labels", []) or [None] * len(paths)
+
+            if isinstance(paths, (str, os.PathLike)):
+                paths  = [paths]
+                titles = [titles[0] if titles else None]
+
+            if not paths:
                 print(f"No raster path for {ds.dataset_title} - skipped")
                 continue
 
             if ds.dataset_id not in self.item_properties:
                 print(f"No item props for {ds.dataset_title} - skipped")
                 continue
+            
+            idx = 1
+            for path, suffix in zip(paths, titles):
+                idx += 1
+                base_title = ds.dataset_title
+                item_title = f"{base_title}: {suffix}" if suffix else base_title
+        
+                try:
+                    ext = Path(path).suffix.lower()
+                    if ext in (".nc", ".nc4"):
+                        # NetCDF  copy_raster (multidimensional)
+                        print(f"Running copy_raster for {item_title}")
+                        # lets get the crs from the file
+                        r = Raster(path)
+                        # print(f"{r.spatial_reference}")
+                        fixed_raster = self.changeArrayDims(path)
+                        r2 = Raster(fixed_raster)
+                        # print(f"\n{r2.spatial_reference}")
+                        context = {
+                            "upload_properties": {"displayProgress": True},
+                            "defineNodata": True,
+                            "outSr":r.spatial_reference,
+                            "noDataArguments": {
+                                "noDataValues": [0],
+                                "numberOfBand": 99,
+                                "compositeValue": True,
+                            },
+                        }
+                        #MULTIDIMENSIONAL CASE
+                        if ds.mult_dim:
+                            multdim_proc =True
+                            print(f"True {multdim_proc}")
+                        else:
+                            multdim_proc =False
+                            print(f"False {multdim_proc}")
 
-            try:
-                ext = Path(path).suffix.lower()
-                if ext in (".nc", ".nc4"):
-                    # NetCDF  copy_raster (multidimensional)
-                    print(f"Running copy_raster for {ds.dataset_title}")
-                    # lets get the crs from the file
-                    r = Raster(path)
-                    print(f"{r.spatial_reference}")
-                    fixed_raster = self.changeArrayDims(path)
-                    r2 = Raster(fixed_raster)
-                    print(f"\n{r2.spatial_reference}")
-                    context = {
-                        "upload_properties": {"displayProgress": True},
-                        "defineNodata": True,
-                        "outSr":r.spatial_reference,
-                        "noDataArguments": {
-                            "noDataValues": [0],
-                            "numberOfBand": 99,
-                            "compositeValue": True,
-                        },
-                    }
-                    #MULTIDIMENSIONAL CASE
-                    if ds.mult_dim:
-                        multdim_proc =True
+                        #output cellsize {"distance":60,"units":meters}
+                        if idx > 1:
+                            output_name = ds.dataset_id + f"_{idx}"
+                        else:
+                            output_name = ds.dataset_id 
+
+                        img_item = copy_raster(
+                            input_raster=fixed_raster,
+                            raster_type_name="NetCDF",
+                            gis=self.gis,
+                            folder=None,  # user root
+                            process_as_multidimensional=multdim_proc,
+                            output_name= output_name,
+                            context=context,
+                        )
+                        # copy_raster already returns the imagery layer item
+                        img_item.update(item_properties=self.mapItemProperties(ds.dataset_id))
+                        update_title = {"title": item_title}
+                        img_item.update(item_properties=update_title)
+                        # fixxxxxx!!!!!!
+                        # adjustSharingCapabilities(img_item)
                     else:
-                        multdim_proc =False
 
+                        item = _add_or_retry(ds, path)
+                        analyze = self.gis.content.analyze(item=item.id, file_type="raster")
+                        publish_params = {**analyze["publishParameters"]}
+                        # publish_params = {**analyze["publishParameters"], **self.geoParams}
+                        img_item = _publish_or_retry(item, publish_params)
+                        adjustSharingCapabilities(img_item)
 
-                    #output cellsize {"distance":60,"units":meters}
-                    img_item = copy_raster(
-                        input_raster=fixed_raster,
-                        raster_type_name="NetCDF",
-                        gis=self.gis,
-                        folder=None,  # user root
-                        process_as_multidimensional=multdim_proc,
-                        output_name= ds.dataset_id,
-                        context=context,
-                    )
-                    # copy_raster already returns the imagery layer item
-                    img_item.update(item_properties=self.mapItemProperties(ds.dataset_id))
-                    adjustSharingCapabilities(img_item)
-                else:
+                    processed += 1
+                    print(f"Imagery published: {img_item.title}")
 
-                    item = _add_or_retry(ds, path)
-                    analyze = self.gis.content.analyze(item=item.id, file_type="raster")
-                    publish_params = {**analyze["publishParameters"]}
-                    # publish_params = {**analyze["publishParameters"], **self.geoParams}
-                    img_item = _publish_or_retry(item, publish_params)
-                    adjustSharingCapabilities(img_item)
+                except concurrent.futures.TimeoutError:
+                    print(f"TIMEOUT: {ds.dataset_title}")
+                except Exception as ex:
+                    print(f"ERROR processing {ds.dataset_title}: {ex}")
 
-                processed += 1
-                print(f"Imagery published: {img_item.title}")
-
-            except concurrent.futures.TimeoutError:
-                print(f"TIMEOUT: {ds.dataset_title}")
-            except Exception as ex:
-                print(f"ERROR processing {ds.dataset_title}: {ex}")
-
-        print(f"\nImagery publish complete - {processed}/{len(self.datasets)} datasets in {time.time()-t0:.1f}s")
+            print(f"\nImagery publish complete - {processed}/{len(self.datasets)} datasets in {time.time()-t0:.1f}s")
 
     @skipFromError
     def postAndPublish(self, inputDataType, timeoutTime=300) -> None:
