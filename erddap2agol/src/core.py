@@ -574,11 +574,13 @@ class OptionsMenu:
             print(f"Invalid input for the dataset, continuing with default title")
             pass
 
-    def getBoundsFromItem(self, id: str, layer_index: int= None):
+    def getBoundsFromItem(id: str):
         gis = GIS("Home")
         try:
             service_item = gis.content.get(id)
             extent = service_item.extent
+            print(extent)
+            time.sleep(1)
 
             if extent:
                 user_options.bounds = extent
@@ -721,15 +723,15 @@ def options_menu():
 
         elif choice == "9":
             item_id = input("Enter the Item ID to query: ").strip()
-            layer_in = input("Layer index (ENTER for 0): ").strip()
-            try:
-                layer_idx = int(layer_in) if layer_in else 0
-            except ValueError:
-                print("Index must be an integer.")
-                time.sleep(1)
-                continue
+            # layer_in = input("Layer index (ENTER for 0): ").strip()
+            # try:
+            #     layer_idx = int(layer_in) if layer_in else 0
+            # except ValueError:
+            #     print("Index must be an integer.")
+            #     time.sleep(1)
+            #     continue
 
-            OptionsMenu.getBoundsFromItem(item_id, layer_idx)
+            OptionsMenu.getBoundsFromItem(item_id)
             
         elif choice == "10":
             user_options.mult_dim_bool = not user_options.mult_dim_bool
