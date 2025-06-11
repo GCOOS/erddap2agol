@@ -102,7 +102,7 @@ class ERDDAPHandler:
         geoParams: dict | None = None,
     ):
         # core connection details -------------------------------------------------
-        self.server       = server                       # may be None → set later
+        self.server       = server                      
         self.protocol     = (protocol or "griddap").lower()
         self.datasetid    = datasetid
         self.fileType     = fileType

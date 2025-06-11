@@ -267,18 +267,13 @@ class AgolWrangler:
         ds_flipped.close()
         return tmp.name
 
-    
-
     def postAndPublishImagery(self, timeoutTime: int = 600) -> None:
         """Publish locally-downloaded rasters in ``self.datasets`` as **hosted imagery
         layers** (Image Services) without any hard-coded folder names.
 
-        • GeoTIFF / IMG  ->  *content.add*  ->  *publish*
-        • NetCDF (multidimensional) -> **copy_raster** workflow
         """
 
         # helper utilities
-        
         def _try_rename(src: str, dst: str, attempts: int = 5, delay: float = 1):
             for _ in range(attempts):
                 try:
@@ -331,21 +326,23 @@ class AgolWrangler:
                         raise
             raise RuntimeError("Exceeded publish() retries.")
 
-        # ---------------------!!!!!!!!!!!!!-------------------------
-        # deprecated needs update
         def adjustSharingCapabilities(img_item):
             try:
                 refreshed_item = self.gis.content.get(img_item.id)
             except Exception as e:
-                print(f"Error retrieving refreshed item: {e}")
+                print(f"Error retrieving refreshed item, sharing will not be updated: {e}")
                 return
 
             try:
-                item_flc = FeatureLayerCollection.fromitem(refreshed_item)
-                update_definition_dict = {"capabilities": "Image,Download,Metadata"}
-                item_flc.manager.update_definition(update_definition_dict)
+                # grab image layer, then its properties
+                # layer_properties = refreshed_item.layers.properties
+                # capabilities for imagery
+                update_definition_dict = {"capabilities": "Image,Download,Metadata,Mensuration,Catalog"}
+                # probs not how to set this
+                # layer_properties.capabilities = update_definition_dict
+                refreshed_item.update(update_definition_dict)
             except Exception as e:
-                print(f"Error adjusting capabilities: {e}")
+                print(f"There was an error adjusting capabilities: {e}")
 
             try:
                 item_sharing_mgr = refreshed_item.sharing
@@ -410,11 +407,11 @@ class AgolWrangler:
                         }
                         # refine 
                         #MULTIDIMENSIONAL CASE
-                        if ds.mult_dim:
-                            multdim_proc =True
+                        if not core.OptionsMenu.mult_dim_bool:
+                            multdim_proc =False
                             #print(f"True {multdim_proc}")
                         else:
-                            multdim_proc =False
+                            multdim_proc =True
                             #print(f"False {multdim_proc}")
 
                         #output cellsize {"distance":60,"units":meters}
@@ -428,7 +425,7 @@ class AgolWrangler:
                             raster_type_name="NetCDF",
                             gis=self.gis,
                             folder=None,  # user root
-                            process_as_multidimensional=True,
+                            process_as_multidimensional=multdim_proc,
                             output_name= output_name,
                             context=context,
                         )
@@ -457,6 +454,7 @@ class AgolWrangler:
 
             print(f"\nImagery publish complete - {processed}/{len(self.datasets)} datasets in {time.time()-t0:.1f}s")
 
+   
     @skipFromError
     def postAndPublish(self, inputDataType, timeoutTime=300) -> None:
         """Publishes all datasets in self.datasets to ArcGIS, handling subsets if needed."""

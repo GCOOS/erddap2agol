@@ -269,14 +269,12 @@ def getGriddapDimensions(data_Obj: Any) -> List[str]:
             if var_name == "sst_gradient_magnitude":
                 continue
 
-            # ---------------- common geodetic axes -----------------
             if var_name in common_vars:
                 if var_name == "time":
                     data_Obj.has_time = True
                     data_Obj.time_str = "time"
                 continue                         # <- skip to next var
 
-            # ---------------- alternative time candidates ----------
             if not data_Obj.time_str and var_name in ("datecollec", "date_gmt"):
                 data_Obj.has_time = True
                 data_Obj.time_str = var_name
