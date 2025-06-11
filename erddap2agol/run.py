@@ -48,8 +48,8 @@ def cui():
 
         if user_choice == "1":
             print(f"\nSelect Protocol: "
-                "\n1.) tabledap"
-                "\n2.) griddap ")
+                "\n1.) Tabledap"
+                "\n2.) Griddap (Requires ArcPy Enabled Environment)")
             
             proto_choice = input(": ")
             if proto_choice == "1":

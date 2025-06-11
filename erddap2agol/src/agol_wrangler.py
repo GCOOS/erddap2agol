@@ -213,14 +213,16 @@ class AgolWrangler:
         if core.user_options.enable_tags_bool == False:
             if core.user_options.additional_tags:
                 for tag in core.user_options.additional_tags:
-                    new_tags.append(tag)
+                    if tag not in new_tags:
+                        new_tags.append(tag)
             else:
                 new_tags= []
         else:
             new_tags = props.get("tags", [])
             if core.user_options.additional_tags:
                 for tag in core.user_options.additional_tags:
-                    new_tags.append(tag)
+                    if tag not in new_tags:
+                        new_tags.append(tag)
         # lazy removal of lat and lon tags
         for tag in new_tags:
             if tag == "longitude" or tag == "latitude" or tag == "NC_GLOBAL" or tag == "mask":
@@ -379,7 +381,7 @@ class AgolWrangler:
                 print(f"No item props for {ds.dataset_title} - skipped")
                 continue
             
-            idx = 1
+            idx = 0
             for path, suffix in zip(paths, titles):
                 idx += 1
                 base_title = ds.dataset_title
@@ -420,13 +422,13 @@ class AgolWrangler:
                             output_name = ds.dataset_id + f"_{idx}"
                         else:
                             output_name = ds.dataset_id 
-
+                        # try except catch for multidimensional
                         img_item = copy_raster(
                             input_raster=fixed_raster,
                             raster_type_name="NetCDF",
                             gis=self.gis,
                             folder=None,  # user root
-                            process_as_multidimensional=multdim_proc,
+                            process_as_multidimensional=True,
                             output_name= output_name,
                             context=context,
                         )
