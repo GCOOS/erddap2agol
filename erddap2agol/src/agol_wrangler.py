@@ -337,7 +337,7 @@ class AgolWrangler:
                 # grab image layer, then its properties
                 # layer_properties = refreshed_item.layers.properties
                 # capabilities for imagery
-                update_definition_dict = {"capabilities": "Image,Download,Metadata,Mensuration,Catalog"}
+                update_definition_dict = {"capabilities": "Image,Download,Metadata,Mensuration,Catalog,Query"}
                 # probs not how to set this
                 # layer_properties.capabilities = update_definition_dict
                 refreshed_item.update(update_definition_dict)
@@ -407,12 +407,12 @@ class AgolWrangler:
                         }
                         # refine 
                         #MULTIDIMENSIONAL CASE
-                        if not core.OptionsMenu.mult_dim_bool:
-                            multdim_proc =False
-                            #print(f"True {multdim_proc}")
-                        else:
+                        if core.user_options.mult_dim_bool == True:
                             multdim_proc =True
-                            #print(f"False {multdim_proc}")
+                            # print(f"multdim: {multdim_proc}")
+                        else:
+                            multdim_proc =False
+                            # print(f"multdim: {multdim_proc}")
 
                         #output cellsize {"distance":60,"units":meters}
                         if idx > 1:
@@ -433,8 +433,7 @@ class AgolWrangler:
                         img_item.update(item_properties=self.mapItemProperties(ds.dataset_id))
                         update_title = {"title": item_title}
                         img_item.update(item_properties=update_title)
-                        # fixxxxxx!!!!!!
-                        # adjustSharingCapabilities(img_item)
+                        adjustSharingCapabilities(img_item)
                     else:
 
                         item = _add_or_retry(ds, path)
@@ -451,6 +450,7 @@ class AgolWrangler:
                     print(f"TIMEOUT: {ds.dataset_title}")
                 except Exception as ex:
                     print(f"ERROR processing {ds.dataset_title}: {ex}")
+                    continue
 
             print(f"\nImagery publish complete - {processed}/{len(self.datasets)} datasets in {time.time()-t0:.1f}s")
 

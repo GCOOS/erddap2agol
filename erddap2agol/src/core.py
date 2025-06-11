@@ -418,9 +418,9 @@ def selectDatasetFromList(erddapObj, dispLength: int = 50, interactive: bool = T
         if mgr.protocol == "griddap":
             print("\nCommands:")
             print("'next', 'back', 'addAll', 'addPage', 'done', 'mainMenu', 'exit'")
-            print(" type 'search:keyword1+keyword2' to search datasets.")
-            print(" enter comma-separated indices (e.g. '10,12:15') for single or range selection.")
-            print("\nSpecify date range with -l (latest) OR -sd dd/mm/yyyy AND -ed dd/mm/yyyy")
+            print("Type 'search:keyword1+keyword2' to search datasets.")
+            print("Specify date range with -l (latest) OR -sd dd/mm/yyyy AND -ed dd/mm/yyyy")
+            print("Use '-div' and 'day', 'week', or 'month' to specify division (not required)")
 
             raw_input = input(": ")
 
