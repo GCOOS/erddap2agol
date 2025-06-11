@@ -35,7 +35,7 @@ def _gliderWorkflow(search_term: str = None) -> None:
 def cui():
     ec.cleanTemp()
     while True:
-        print("\nWelcome to ERDDAP2AGOL v.0.8.1")
+        print("\nWelcome to ERDDAP2AGOL v.0.8.2")
         print("GCOOS GIS, 2025.")
         print("\n1. Create ERDDAP Datasets")
         print("2. Create Glider DAC Datasets")
