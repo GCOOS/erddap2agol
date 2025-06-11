@@ -412,9 +412,9 @@ class DatasetWrangler:
         dim_tokens = {
             "latitude",
             "longitude",
-            "altitude", "depth", "NC_GLOBAL",
+            "altitude", "zlev","depth", "NC_GLOBAL",
         }
-        z_dim = ["altitude", "depth"]
+        z_dim = ["altitude", "depth", "zlev"]
 
         has_alt = any(attr.lower() in z_dim for attr in (self.attribute_list or []))
         if has_alt:
