@@ -35,7 +35,7 @@ def _gliderWorkflow(search_term: str = None) -> None:
 def cui():
     ec.cleanTemp()
     while True:
-        print("\nWelcome to ERDDAP2AGOL.")
+        print("\nWelcome to ERDDAP2AGOL v.0.8.1")
         print("GCOOS GIS, 2025.")
         print("\n1. Create ERDDAP Datasets")
         print("2. Create Glider DAC Datasets")
@@ -47,7 +47,17 @@ def cui():
         user_choice = input(": ")  
 
         if user_choice == "1":
-            add_menu("Create static ERDDAP Item")
+            print(f"\nSelect Protocol: "
+                "\n1.) Tabledap"
+                "\n2.) Griddap (Requires ArcPy Enabled Environment)")
+            
+            proto_choice = input(": ")
+            if proto_choice == "1":
+                proto = "tabledap"
+            elif proto_choice == "2":
+                proto = "griddap"
+            add_menu("Create static ERDDAP Item", protocol= proto)
+
         elif user_choice == "2":
             add_menu("Create Glider DAC Tracks", glider=True)
         elif user_choice == "3":
@@ -63,27 +73,31 @@ def cui():
         else:
             print("\nInvalid input. Please try again.")
 
-def add_menu(menu_title:str, glider: bool = False, nrt: bool = False):
+def add_menu(menu_title:str, glider: bool = False, nrt: bool = False, protocol: str = None):
     print(f"\nWelcome to {menu_title}")
 
     # pass user params to erddapSelection
     erddapObj = core.erddapSelection(
         GliderServ=glider,
-        nrtAdd=nrt
+        nrtAdd=nrt,
+        protocol= protocol
     )
 
     # create list of dataset_id str and add to erddapObj
-    dataset_list = core.selectDatasetFromList(erddapObj)
-
+    dataset_list, griddap_args = core.selectDatasetFromList(erddapObj)
+    
     # Transforms list into dataset objects 
-    erddapObj.addDatasets_list(dataset_list)
+    erddapObj.createDatasetObjects(dataset_list, griddap_args)
 
     datasetObjlist = (erddapObj.datasets)
 
     for datasetObj in datasetObjlist:
-        datasetObj.generateUrl()
-        datasetObj.writeErddapData()
+        if erddapObj.protocol == "tabledap":
+            datasetObj.generateUrl()        
+        else: 
+            datasetObj.generateGriddap_url(griddap_args)
     
+    datasetObj.writeErddapData()
     agolObj = aw.AgolWrangler(erddap_obj=erddapObj)
     agolObj.datasets = erddapObj.datasets
     agolObj.makeItemProperties()
@@ -91,7 +105,11 @@ def add_menu(menu_title:str, glider: bool = False, nrt: bool = False):
     if glider:
         agolObj.pointTableToGeojsonLine()
 
-    agolObj.postAndPublish()
+    if erddapObj.protocol == "tabledap":
+        agolObj.postAndPublish()
+    else:
+        agolObj.postAndPublishImagery()
+    
     print("\nReturning to main menu...")
     erddapObj.reset()
     ec.cleanTemp()

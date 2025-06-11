@@ -28,7 +28,7 @@ def cleanTemp() -> None:
     filepath = os.path.join('/arcgis/home', 'e2a_temp')
     if os.path.exists(filepath):
         for filename in os.listdir(filepath):
-            if filename.endswith(".csv") or filename.endswith("geojson"):
+            if filename.endswith(".csv") or filename.endswith("geojson") or filename.endswith("nc"):
                 full_path = os.path.join(filepath, filename)
                 try:
                     os.remove(full_path)
@@ -84,30 +84,57 @@ def showErddapList() -> None:
 
 #--------------------------------------------------------------------------------
 class ERDDAPHandler:
+    """
+    Lightweight wrapper for an ERDDAP server (griddap / tabledap).
+
+    You can instantiate it with no arguments and later call
+    `setErddap(idx)` (your existing helper).  If you *do* pass a
+    `server` URL now, the object is immediately usable.
+    """
+
     def __init__(
-            self, 
-            server: str = None,
-            serverInfo: str = None,
-            protocol: str = None, 
-            datasetid= None, 
-            fileType: str = None, 
-            geoParams={
-            "locationType": "coordinates",
-            "latitudeFieldName": "latitude__degrees_north_",
-            "longitudeFieldName": "longitude__degrees_east_",
-            "timeFieldName": "time__UTC_",
-            } 
-        ):
-        self.server = server
-        self.serverInfo = serverInfo
-        self.datasetid = datasetid
-        self.protocol = protocol
-        self.fileType = fileType
-        self.geoParams = geoParams
-        self.datasets = []
-        self.dataset_titles = {}
-        self.is_nrt = False
+        self,
+        server: str | None = None,
+        serverInfo: str | None = None,
+        protocol: str | None = "griddap",
+        datasetid: str | None = None,
+        fileType: str | None = None,
+        geoParams: dict | None = None,
+    ):
+        # core connection details -------------------------------------------------
+        self.server       = server                      
+        self.protocol     = (protocol or "griddap").lower()
+        self.datasetid    = datasetid
+        self.fileType     = fileType
+        self.geoParams    = geoParams or {
+            "locationType":      "coordinates",
+            "latitudeFieldName": "latitude",
+            "longitudeFieldName": "longitude",
+            "timeFieldName":     "time",
+        }
+
+        # choose a sensible default for serverInfo if possible -------------------
+        if serverInfo is not None:
+            self.serverInfo = serverInfo
+        elif server is not None:
+            self.serverInfo = f"{server.rstrip('/')}/erddap/search/index.json"
+        else:
+            # will be filled in by setErddap()
+            self.serverInfo = None
+
+        # per-query working copies ----------------------------------------------
+        self.datasets:       list[str]                  = []
+        self.dataset_titles: dict[str, str]             = {}
+        self.dataset_dates:  dict[str, tuple[str, str]] = {}
+
+        # one-time authoritative date cache -------------------------------------
+        self.date_range_cache: dict[str, tuple[str, str]] = {}
+        self._date_cache_ready: bool                      = False
+
+        # NRT flags --------------------------------------------------------------
+        self.is_nrt             = False
         self.moving_window_days = 7
+
         self._availData = None
 
     @classmethod            
@@ -149,7 +176,8 @@ class ERDDAPHandler:
 
                 # Set server info URL 
                 # https://www.ncei.noaa.gov/erddap/tabledap/allDatasets.json
-                server_info_url = f"{baseurl}/info/index.json?itemsPerPage=100000"
+                server_info_url = f"{baseurl}tabledap/allDatasets.json"
+                # server_info_url = f"{baseurl}/info/index.json?itemsPerPage=100000"
                 
 
                 return cls(
@@ -207,76 +235,120 @@ class ERDDAPHandler:
         """Allow index access to datasets"""
         return self.datasets[index]
     
+    def buildDateCache(self) -> None:
+     
+        if self._date_cache_ready:
+            return  # already built
+
+        # Choose an endpoint that actually includes min/max dates
+        original_info = self.serverInfo or ""
+        if original_info.endswith("allDatasets.json"):
+            # the handler was already initialised with the right URL
+            cache_url = original_info
+        else:
+            if not self.server:
+                raise ValueError(
+                    "server URL not set.  Call setErddap() or pass `server=` "
+                    "when instantiating ERDDAPHandler."
+                )
+            cache_url = f"{self.server.rstrip('/')}{self.protocol}/allDatasets.json"
+
+        self.serverInfo = cache_url
+
+        # `getDatasetIDList()` will now fill self.dataset_dates w/t ranges
+        _ = self.getDatasetIDList()
+
+        # take a snapshot for later restores
+        self.date_range_cache  = self.dataset_dates.copy()
+        self._date_cache_ready = True
+
+        # restore the caller's URL (important for subsequent calls)
+        self.serverInfo = original_info or cache_url
+    
   
     def getDatasetIDList(self) -> list:
-        """Fetches a list of dataset IDs and titles from the ERDDAP server.
-           spits out list of dataset IDs and {datasetid, title} dictionary"""
-        
-        url = self.serverInfo
+        """
+        Return a list of datasetIDs available from the current serverInfo URL
+        and populate self.dataset_titles / self.dataset_dates.
+        """
+
+        def _find_idx(name_list, *candidates):
+            """Return the index of the first candidate column name (case-insensitive)."""
+            low_names = [n.lower() for n in name_list]
+            for cand in candidates:
+                if cand.lower() in low_names:
+                    return low_names.index(cand.lower())
+            return None
+        # ---------------------------------------------------------
+
         try:
-            # print(url)
-            response = requests.get(url)
-            response.raise_for_status()
-            data = response.json()
+            resp = requests.get(self.serverInfo, timeout=30)
+            resp.raise_for_status()
+            data = resp.json()
 
-            if not data.get("table") or "columnNames" not in data["table"]:
-                print(f"Invalid response format from {url}")
+            cols  = data["table"]["columnNames"]
+            rows  = data["table"]["rows"]
+
+            idx_id   = _find_idx(cols, "datasetID", "Dataset ID")
+            idx_ttl  = _find_idx(cols, "title", "Title")
+            idx_proto= _find_idx(cols, self.protocol)
+            idx_min  = _find_idx(cols, "minTime", "Min Time")
+            idx_max  = _find_idx(cols, "maxTime", "Max Time")
+
+            if idx_id is None or idx_proto is None:
+                print("Couldn’t locate mandatory columns in ERDDAP response.")
                 return []
 
-            col_names = data["table"]["columnNames"]
-            rows = data["table"]["rows"]
-
-            # Find the index of "Dataset ID"
-            try:
-                datasetid_idx = col_names.index("Dataset ID")
-            except ValueError:
-                print("No 'Dataset ID' column found in server response.")
-                return []
-
-            title_idx = col_names.index("Title")
-            proto_idx = col_names.index(f"{self.protocol}")                  
-            dataset_id_list = []
-            self.dataset_titles = {}  # reset or build fresh each time
+            id_list = []
+            self.dataset_titles.clear()
+            self.dataset_dates.clear()
 
             for row in rows:
-                # this should filter out tabledap vs griddap
-                proto_val = row[proto_idx]
-                if proto_val == '':
-                    continue                  
+                ds_id   = row[idx_id]
+                proto   = row[idx_proto]
 
-                data_id = row[datasetid_idx]
-                # Skip the special "allDatasets" row if present
-                if data_id == "allDatasets":
-                    continue
-                
-                # If there's a valid title column, retrieve it; otherwise None
-                dataset_title = None
-                if title_idx is not None:
-                    dataset_title = row[title_idx]
+                if proto == "" or ds_id == "allDatasets":
+                    continue  # skip unsupported rows
 
-                dataset_id_list.append(data_id)
-                self.dataset_titles[data_id] = dataset_title
+                title = row[idx_ttl] if idx_ttl is not None else ""
+                min_t = row[idx_min] if idx_min is not None else ""
+                max_t = row[idx_max] if idx_max is not None else ""
 
-            return dataset_id_list
+                id_list.append(ds_id)
+                self.dataset_titles[ds_id] = title
+                self.dataset_dates[ds_id]  = (min_t, max_t)
 
-        except Exception as e:
-            print(f"Error fetching dataset ID list: {e}")
+            return id_list
+
+        except Exception as exc:
+            print(f"Error fetching dataset ID list: {exc}")
             return []
         
-    def addDatasets_list(self, dataset_ids: list) -> None:
-        """Creates DatasetWrangler objects for each dataset ID"""
+    def createDatasetObjects(self, dataset_ids: list, griddap_kwargs: dict= None) -> None:
+        """Creates DatasetWrangler objects for each dataset ID from the attributes of the selected data"""
         if "gliders.ioos.us" in self.server:
             gliderBool = True
         else:
             gliderBool = False
             
+        if self.protocol == "griddap":
+            griddap_bool = True
+            kwargs = griddap_kwargs
+
+            
+        else:
+            griddap_bool = False
+            kwargs = None
+
         for dataset_id in dataset_ids:
             dataset = dw.DatasetWrangler(
                 dataset_id= dataset_id,
                 dataset_title=(self.dataset_titles.get(dataset_id)),
                 server= self.server,
+                griddap= griddap_bool,
                 is_nrt= self.is_nrt,
-                is_glider= gliderBool
+                is_glider= gliderBool,
+                griddap_args=kwargs
             )
             self.datasets.append(dataset)
     

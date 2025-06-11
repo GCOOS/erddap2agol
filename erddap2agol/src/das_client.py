@@ -51,7 +51,7 @@ def parseDasResponse(response_text) -> OrderedDict:
         if line.startswith("Attributes {"):
             continue
         
-        # Check if line ends with '{' => new section
+        # Check if line ends with '{' -> new section
         if line.endswith("{"):
             section_name = line.split()[0]  # e.g. "NC_GLOBAL"
             current_section = OrderedDict()
@@ -242,6 +242,59 @@ def displayAttributes(timeintv: int , attributes: list) -> None:
     print(f"\nThere are {timeintv} days worth of records")
     #print(f"\nAttributes: {attributes}")
 
+def getGriddapDimensions(data_Obj: Any) -> List[str]:
+    """
+    Simplified version of the getActualAttributes function for determining the dimensions of a griddap dataset
+
+    Returns list of dimension names, used to define the dimensions of an ArcGIS image collection image service 
+    """
+    dataset_id = data_Obj.dataset_id
+    das_conf_dir = getConfDir()
+    filepath = os.path.join(das_conf_dir, f'{dataset_id}.json')
+
+    dim_attrs = {}
+
+    with open(filepath, 'r') as json_file:
+        data = json.load(json_file)
+        if "error" in data and data["error"].get("Found") is not None:
+            print(f"File {filepath} does not contain data.")
+            return None
+        
+        attributes_set = set()
+
+        common_vars = {"altitude", "latitude", "longitude", "time", "NC_GLOBAL"}
+
+        for var_name, var_attrs in data.items():
+            # so, yeah
+            if var_name == "sst_gradient_magnitude":
+                continue
+
+            if var_name in common_vars:
+                if var_name == "time":
+                    data_Obj.has_time = True
+                    data_Obj.time_str = "time"
+                continue                         # <- skip to next var
+
+            if not data_Obj.time_str and var_name in ("datecollec", "date_gmt"):
+                data_Obj.has_time = True
+                data_Obj.time_str = var_name
+                continue
+
+            if (not data_Obj.time_str and
+                var_attrs.get("ioos_category", {}).get("value") == "Time" and
+                var_attrs.get("units", {}).get("value") == "seconds since 1970-01-01T00:00:00Z"):
+                data_Obj.has_time = True
+                data_Obj.time_str = var_name
+                continue
+
+            cctype = var_attrs.get("coverage_content_type", {}).get("value", "")
+            if cctype in ("qualityInformation", "referenceInformation", "thematicClassification"):
+                continue
+
+            attributes_set.add(var_name)
+
+        return list(attributes_set)
+
 
 def getActualAttributes(data_Obj: Any, return_all: bool = False) -> List[str]:
     """
@@ -305,16 +358,16 @@ def getActualAttributes(data_Obj: Any, return_all: bool = False) -> List[str]:
 
                 # ── only for return_all == False ──
                 if not return_all:
-                    # 1) skip QC/coordinate suffixed names
+                    # skip QC/coordinate suffixed names
                     if any(var_name.endswith(suf) for suf in qc_suffixes) or \
                        any(sub in var_name for sub in ("_qc_", "qartod_")):
                         continue
 
-                    # 2) skip single‐character keys (e.g. "s")
+                    # skip single‐character keys (e.g. "s")
                     if len(var_name) == 1:
                         continue
 
-                    # 3) skip the global metadata key NC_Global
+                    # skip the global metadata key NC_Global
                     if var_name.lower() == "nc_global":
                         continue
 

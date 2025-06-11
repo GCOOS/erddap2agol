@@ -1,4 +1,4 @@
-import sys, os, concurrent.futures, time, math
+import sys, os, concurrent.futures, time, math, shlex, argparse
 from tabulate import tabulate
 from . import erddap_wrangler as ec
 from . import agol_wrangler as aw
@@ -10,7 +10,7 @@ from IPython.display import clear_output
 from arcgis.gis import GIS
 from typing import Optional, Dict, List, Union
 from dataclasses import dataclass, field
-
+from datetime import datetime
 
 
 ###################################
@@ -35,7 +35,7 @@ def inputToList(user_input) -> list:
 
  # Show erddap menu and define gcload with selection
  # Survives refactor
-def erddapSelection(GliderServ = False, nrtAdd = False) -> ec.ERDDAPHandler:
+def erddapSelection(GliderServ = False, nrtAdd = False, protocol: str = None) -> ec.ERDDAPHandler:
     if GliderServ == True:
         erddapObj = ec.ERDDAPHandler().setErddap(15)
         return erddapObj
@@ -60,8 +60,10 @@ def erddapSelection(GliderServ = False, nrtAdd = False) -> ec.ERDDAPHandler:
                     print("\nContinuing with selected server...")
                     if nrtAdd is True:
                         erddapObj.is_nrt = True
+                        erddapObj.protocol = protocol
                         return erddapObj
                     else:
+                        erddapObj.protocol = protocol
                         return erddapObj
                 else:
                     print("\nReturning to main menu...")
@@ -73,96 +75,116 @@ def erddapSelection(GliderServ = False, nrtAdd = False) -> ec.ERDDAPHandler:
         else:
             print("\nInput cannot be none")
             return None
+            
         
         
 # if you want to change dispLength, do that here.
-def selectDatasetFromList(erddapObj, dispLength=50, interactive=True) -> list:
+def selectDatasetFromList(erddapObj, dispLength: int = 50, interactive: bool = True) -> list:
     """
-    The big search function that allows users to search datasets and select them for processing.
-    Encapuslates the DatalistManager class.
-    
-    If 'interactive' is True, this prompts for user input (CLI).
-    If 'interactive' is False, you can manage the selection programmatically by
-    working directly with the returned data structures or adding your own logic.
-    
-    Returns a list of selected datasets (the user's "cart").
+    Search, browse, and select ERDDAP datasets.
+
+    If `interactive` is True, the function drives a CLI prompt.  
+    If False, you can work with the returned data structures directly
+    (e.g., in a notebook or automated workflow).
+
+    Returns
+    -------
+    list
+        The list of dataset IDs the user added to their “cart”.
     """
-    # lazy place to put this
-    if user_options.disp_length:
-        dispLength = user_options.disp_length 
-    # ---------------------- Helper Functions ----------------------
-    def _updateDatasetList(erddapObj, search_term=None):
+    # honour a global user-option override
+    if getattr(user_options, "disp_length", None):
+        dispLength = user_options.disp_length
+
+    # ------------------------------------------------------------------
+    # Helper to keep the server query + cache-restore logic in one place
+    # ------------------------------------------------------------------
+    def _updateDatasetList(erddapObj, search_term: str | None = None) -> list:
         """
-        For a given ERDDAPHandler, fetch and/or filter the dataset list based on search_term.
+        Populate `erddapObj.dataset_titles / dataset_dates` for the
+        current search and return *just* the list of dataset IDs.
         """
+        # make sure the master cache is built
+        erddapObj.buildDateCache()
+
         original_info = erddapObj.serverInfo
-        base_url = original_info.split('/erddap/')[0] + '/erddap'
-        
-        # If the object is flagged as NRT, we handle the 7-day search
-        #-------- Modify for different moving window size
-        if erddapObj.is_nrt is True:
+        root         = original_info.split("/erddap/")[0] + "/erddap"
+
+        # ------- build the correct search URL -------
+        if erddapObj.is_nrt:
+            # NRT queries always use /search/advanced.json with a relative time window
             if search_term:
                 search_url = (
-                    f"{base_url}/search/advanced.json?"
+                    f"{root}/search/advanced.json?"
                     f"searchFor={search_term}"
-                    f"&page=1&itemsPerPage=10000000&minTime=now-{erddapObj.moving_window_days}days&maxTime=&protocol={erddapObj.protocol}"
+                    f"&page=1&itemsPerPage=10000000"
+                    f"&minTime=now-{erddapObj.moving_window_days}days"
+                    f"&maxTime=&protocol={erddapObj.protocol}"
                 )
             else:
                 search_url = (
-                    f"{base_url}/search/advanced.json?"
-                    f"page=1&itemsPerPage=10000000&minTime=now-{erddapObj.moving_window_days}days&maxTime=&protocol={erddapObj.protocol}"
+                    f"{root}/search/advanced.json?"
+                    f"page=1&itemsPerPage=10000000"
+                    f"&minTime=now-{erddapObj.moving_window_days}days"
+                    f"&maxTime=&protocol={erddapObj.protocol}"
                 )
-            erddapObj.serverInfo = search_url
-            dataset_id_list = erddapObj.getDatasetIDList()
-            erddapObj.serverInfo = original_info
-            return dataset_id_list
+        else:
+            # historic catalogue search
+            if search_term:
+                search_url = (
+                    f"{root}/search/index.json?"
+                    f"searchFor={search_term}"
+                    f"&page=1&itemsPerPage=100000"
+                    f"&protocol={erddapObj.protocol}"
+                )
+            else:
+                # full catalogue – same as erddapObj.getDatasetIDList() default
+                search_url = None  # sentinel
 
-        # non-NRT
-        if search_term:
-            base_url = original_info.split('/erddap/')[0] + '/erddap'
-            search_url = (
-                f"{base_url}/search/index.json?"
-                f"searchFor={search_term}"
-                f"&page=1&itemsPerPage=100000&protocol={erddapObj.protocol}"
-            )
+        # ------- execute the query -------
+        if search_url:
             erddapObj.serverInfo = search_url
-            dataset_id_list = erddapObj.getDatasetIDList()
+            id_list = erddapObj.getDatasetIDList()
             erddapObj.serverInfo = original_info
-            return dataset_id_list
+        else:
+            id_list = erddapObj.getDatasetIDList()
 
-        # Default: no search term, return the entire dataset list
-        return erddapObj.getDatasetIDList()
+        # ------- restore authoritative date ranges from the cache -------
+        for ds_id in id_list:
+            if ds_id in erddapObj.date_range_cache:
+                erddapObj.dataset_dates[ds_id] = erddapObj.date_range_cache[ds_id]
+
+        return id_list
 
     # ---------------------- DatasetListManager ----------------------
     class DatasetListManager:
         """
-        Manages the dataset list, pagination, and selected items (the "cart").
+        Manages dataset pagination and the user’s selected items.
         """
         def __init__(self, erddapObj, _dispLength):
-            self.erddapObj = erddapObj
+            self.erddapObj   = erddapObj
             self._dispLength = _dispLength
-            
+
             self._allDatasetIds = _updateDatasetList(erddapObj)
-            total_datasets = len(self._allDatasetIds)
+            total_datasets      = len(self._allDatasetIds)
 
-            if user_options.disp_length:
+            if getattr(user_options, "disp_length", None):
                 self._dispLength = user_options.disp_length
-
             if total_datasets < self._dispLength:
                 self._dispLength = total_datasets
 
-            if total_datasets == 0:
-                # if no datasets returned
-                self.numPages = 0
-                self.currentPage = 0
-                print("No datasets available for this server or search term.")
-            else:
-                # pagination
-                self.numPages = math.ceil(total_datasets / self._dispLength)
-                self.currentPage = 1
-
-             # list of selectedDatasets (the cart)
-            self.selectedDatasets = []
+            self.numPages = 0 if total_datasets == 0 else math.ceil(total_datasets / self._dispLength)
+            self.currentPage = 1 if total_datasets else 0
+            self.selectedDatasets: list[str] = []
+            
+            self.protocol = erddapObj.protocol
+            self.dataset_kwargs = {}
+            self.latest_bool = None
+            self.user_single_date = None
+            self.user_start_date = None
+            self.user_end_date =  None
+            self.division = None
+            
 
         @property
         def totalDatasets(self):
@@ -175,6 +197,11 @@ def selectDatasetFromList(erddapObj, dispLength=50, interactive=True) -> list:
             start_index = (self.currentPage - 1) * self._dispLength
             end_index = min(start_index + self._dispLength, self.totalDatasets)
             return self._allDatasetIds[start_index:end_index]
+        
+        def setDateRange(self, sd, ed):
+            """Assigns the date range provided by the user to current_start/end attribute"""
+            self.user_start_date = sd
+            self.user_end_date = ed
 
         def goNextPage(self):
             if self.currentPage < self.numPages:
@@ -270,11 +297,41 @@ def selectDatasetFromList(erddapObj, dispLength=50, interactive=True) -> list:
                 selected_dataset = self._allDatasetIds[idx_int - 1]
                 if selected_dataset not in self.selectedDatasets:
                     self.selectedDatasets.append(selected_dataset)
+
+                    if self.protocol == "griddap":
+                        self.dataset_kwargs[selected_dataset] = {
+                            'latest_bool': self.latest_bool,
+                            'user_single_date': self.user_single_date,
+                            'user_start_date': self.user_start_date,
+                            'user_end_date': self.user_end_date,
+                            "division": self.division,
+
+                        }
+                        # print(f"Added {selected_dataset} to the cart.")
+
                     print(f"Added {selected_dataset} to the cart.")
                 else:
                     print(f"{selected_dataset} is already in the cart.")
             else:
                 print(f"Invalid index {idx_int} for this page.")
+
+        def _parseInput(self, user_input: str = None):
+            """Returns (selected_list, kwargs) or None, this function is important for the selectDatasetFromList function"""
+            cmd = user_input.strip()
+            if cmd in command_map:
+                done = command_map[cmd](self, None)
+                if done:
+                    clearScreen()
+                    print("\nAdding the following datasets to the next step:")
+                    table = [(ds, erddapObj.dataset_titles.get(ds, "")) for ds in self.selectedDatasets]
+                    print(tabulate(table, headers=['Dataset ID', 'Dataset Title'], tablefmt='grid'))
+                    if self.protocol == 'griddap':
+                        return self.selectedDatasets, self.dataset_kwargs
+                    return self.selectedDatasets, None
+            else:
+                self.addByIndices(cmd)
+                input("Press Enter to continue...")
+            return None
 
     # ---------------------- CUI Cmd Map ----------------------
     def cmdNext(manager: DatasetListManager, _arg):
@@ -325,10 +382,9 @@ def selectDatasetFromList(erddapObj, dispLength=50, interactive=True) -> list:
         # final_selection = mgr.selectedDatasets
         return mgr
 
-
+    # ---------------------- ------------- ----------------------
     # ---------------------- CUI WhileLoop ----------------------
-
-
+    # ---------------------- ------------- ----------------------
     while True:
         def clearScreen():
             os.system('cls' if os.name == 'nt' else 'clear')
@@ -343,42 +399,148 @@ def selectDatasetFromList(erddapObj, dispLength=50, interactive=True) -> list:
         start_idx = (mgr.currentPage - 1) * mgr._dispLength
         #enumerate through current ds, idx used for selection
         for i, ds in enumerate(current_ds):
-            #ref datasetTitles dict
-            titles = erddapObj.dataset_titles.get(ds,"")
-            title_str = f"{start_idx + i + 1}. {titles}"
-            # id_str = f"ID: {ds}"
-            print(title_str) 
-            # print(f"{start_idx + i + 1}. {titles}\tID: {ds}")
+            title = erddapObj.dataset_titles.get(ds, "")
+            if erddapObj.protocol == "griddap":
+                min_t, max_t = erddapObj.dataset_dates.get(ds, ("", ""))
+                if min_t and max_t:
+                    title_str = (
+                        f"{start_idx + i + 1}. {title} "
+                        f"[{min_t[:10]} -> {max_t[:10]}]"
+                    )
+                else:
+                    title_str = (
+                        f"{start_idx + i + 1}. {title} "
+                    )
+            else:
+                title_str = f"{start_idx + i + 1}. {title}"
+            print(title_str)
             
+        if mgr.protocol == "griddap":
+            print("\nCommands:")
+            print("'next', 'back', 'addAll', 'addPage', 'done', 'mainMenu', 'exit'")
+            print("Type 'search:keyword1+keyword2' to search datasets.")
+            print("Specify date range with -l (latest) OR -sd dd/mm/yyyy AND -ed dd/mm/yyyy")
+            print("Use '-div' and 'day', 'week', or 'month' to specify division (not required)")
 
-        print("\nCommands:")
-        print("'next', 'back', 'addAll', 'addPage', 'done', 'mainMenu', 'exit'")
-        print(" type 'search:keyword1+keyword2' to search datasets.")
-        print(" enter comma-separated indices (e.g. '10,12:15') for single or range selection.")
-        user_input = input(": ")
+            raw_input = input(": ")
 
-        # Check search syntax
-        if user_input.startswith('search:'):
-            term = user_input.split(':', 1)[1]
-            mgr.searchDatasets(term)
-            continue
+            tokens = shlex.split(raw_input)
 
-        # Check if it matches one of our known commands
-        if user_input in command_map:
-            finished = command_map[user_input](mgr, None)
-            if finished:
-                clearScreen()
-                print("\nAdding the following datasets to the next step:")
-                # Create a list of tuples for the table
-                #print(mgr.selectedDatasets)
-                table_data = [(ds_id, erddapObj.dataset_titles.get(ds_id, "No title")) for ds_id in mgr.selectedDatasets]
-                print(tabulate(table_data, headers=['Dataset ID', 'Dataset Title'], tablefmt='grid'))
-                return mgr.selectedDatasets
+            parser = argparse.ArgumentParser(add_help=False)
+            
+            parser.add_argument('-l', '-latest',
+                                dest='latest',
+                                action='store_true',
+                                help="use only the latest date")
+            
+            parser.add_argument('-date', '--date',
+                                dest='user_single_date',
+                                type=str,
+                                help="single date in dd/mm/yy")
+            
+            parser.add_argument('-sd', '-start-date',
+                                dest='user_start_date',
+                                type=str,
+                                help="start date in dd/mm/YYYY")
+            
+            parser.add_argument('-ed', '-end-date',
+                                dest='user_end_date',
+                                type=str,
+                                help="end date in dd/mm/YYYY")
+            
+            parser.add_argument('-div', '-division', dest='division',
+                    choices=('day', 'week', 'month'), type=str.lower,
+                    help="split selected date range into day/week/month chunks")
+
+            args, rem = parser.parse_known_args(tokens)
+
+            # There are three cases for adding imagery, single date, latest, multiple images
+            
+            mgr.division = args.division
+
+            if args.division and not (args.user_start_date and args.user_end_date):
+                print("\nThere needs to be a start and end date specified with division")
+                continue
+
+            # case 1
+            if args.user_single_date:
+                user_start_date, user_end_date = None, None
+                mgr.latest_bool = False
+                try:
+                    user_single_date = datetime.strptime(str(args.user_single_date), '%d/%m/%Y')
+                except Exception as e:
+                    print(f"\nThere was an issue parsing your input into a date time format, please try again.")
+                    time.sleep(1)
+                    continue
+                mgr.user_single_date = user_single_date
+
+            # case 2
+            elif args.latest:
+                user_start_date, user_end_date, user_single_date = None, None, None
+                mgr.latest_bool = True
+            
+            # case 3
+            elif args.user_start_date and args.user_end_date:
+                try:
+                    user_start_date = datetime.strptime(args.user_start_date, '%d/%m/%Y')
+                    user_end_date = datetime.strptime(args.user_end_date, '%d/%m/%Y')
+                    mgr.setDateRange(user_start_date, user_end_date)
+                except Exception as e:
+                    print(f"\nThere was an error while converting your input into datetime objects: {e}")
+                    time.sleep(1)
+                    continue 
+            else:
+                pass
+            
+            # Parse the remaining tokens
+            selection_str = " ".join(rem)
+            if selection_str.startswith("search:"):
+                term = selection_str.split(':', 1)[1]
+                mgr.searchDatasets(term)
+                continue
+            try:
+                result = mgr._parseInput(selection_str)
+            except Exception as e:
+                print(f"\nThere was an error while parsing your input: {e}")
+                return None
+            if result:
+                return result
+
+
         else:
-            # Possibly indices or ranges
-            mgr.addByIndices(user_input)
-            # here is where we will put a check for flags
-            input("Press Enter to continue...")
+            print("\nCommands:")
+            print("'next', 'back', 'addAll', 'addPage', 'done', 'mainMenu', 'exit'")
+            print(" type 'search:keyword1+keyword2' to search datasets.")
+            print(" enter comma-separated indices (e.g. '10,12:15') for single or range selection.")
+            user_input = input(": ")
+
+            # Check search syntax
+            if user_input.startswith('search:'):
+                term = user_input.split(':', 1)[1]
+                mgr.searchDatasets(term)
+                continue
+            
+            result = mgr._parseInput(user_input)
+            if result:
+                return result
+            # Check if it matches one of our known commands
+
+            # this is now wrapped in the _parseInput() function
+            # if user_input in command_map:
+            #     finished = command_map[user_input](mgr, None)
+            #     if finished:
+            #         clearScreen()
+            #         print("\nAdding the following datasets to the next step:")
+            #         # Create a list of tuples for the table
+            #         #print(mgr.selectedDatasets)
+            #         table_data = [(ds_id, erddapObj.dataset_titles.get(ds_id, "No title")) for ds_id in mgr.selectedDatasets]
+            #         print(tabulate(table_data, headers=['Dataset ID', 'Dataset Title'], tablefmt='grid'))
+            #         return mgr.selectedDatasets
+            # else:
+            #     # Possibly indices or ranges
+            #     mgr.addByIndices(user_input)
+            #     # here is where we will put a check for flags
+            #     input("Press Enter to continue...")
 
 # programmatic example of accessing a dataset id list 
 # mgr = selectDatasetFromList(erddapObj, dispLength=75, interactive=False) 
@@ -394,6 +556,9 @@ class OptionsMenu:
     bypass_chunking_bool: bool = False
     all_attributes_bool: bool = False
     additional_tags: List[str] = None
+    bounds: tuple = None
+    mult_dim_bool: bool = True
+    # share_to_group
 
     def customTitleMenu(self, dataset): 
         print("Custom Title Option")
@@ -409,6 +574,24 @@ class OptionsMenu:
             print(f"Invalid input for the dataset, continuing with default title")
             pass
 
+    def getBoundsFromItem(id: str):
+        gis = GIS("Home")
+        try:
+            service_item = gis.content.get(id)
+            extent = service_item.extent
+            
+            if extent:
+                user_options.bounds = extent
+            else:
+                print(f"\nThere was an error getting the item extent, no extent set")
+                time.sleep(1)
+                user_options.bounds = None
+        except Exception as e:
+            print(f"\nThere was an error getting the content item: {e}")
+            time.sleep(1)
+        
+        
+        
 # Global variable to hold the options.
 user_options = OptionsMenu()
 
@@ -440,7 +623,14 @@ def options_menu():
         print("6. Toggle Bypass Chunking (currently: {})".format(user_options.bypass_chunking_bool))
         print("7. Get all attributes (currently: {})".format(user_options.all_attributes_bool))
         print("8. Add tags to next batch")
-        print("9. Save options and return to main menu")
+        if user_options.bounds:
+            print("9. Define bounds with Content Item ID (griddap only): \n{}".format(user_options.bounds))
+        else:
+            print("9. Define bounds with Content Item ID (griddap only)")
+
+        print("10. Toggle Multidimensional Imagery Option (currently: {})".format(user_options.mult_dim_bool))
+        
+        print("\nType **done** to save options and return to main menu")
         
         choice = input("Select an option: ").strip()
         
@@ -529,9 +719,23 @@ def options_menu():
             if choice_tags == "3":
                 return None
 
-
-
         elif choice == "9":
+            item_id = input("Enter the Item ID to query: ").strip()
+            # layer_in = input("Layer index (ENTER for 0): ").strip()
+            # try:
+            #     layer_idx = int(layer_in) if layer_in else 0
+            # except ValueError:
+            #     print("Index must be an integer.")
+            #     time.sleep(1)
+            #     continue
+
+            OptionsMenu.getBoundsFromItem(item_id)
+            
+        elif choice == "10":
+            user_options.mult_dim_bool = not user_options.mult_dim_bool
+            print("Bypass chunking toggled to: {}".format(user_options.bypass_chunking_bool))
+
+        elif choice == "done":
             print("\nOptions saved. Returning to Main Menu...")
             time.sleep(0.5)
             clearScreen()
