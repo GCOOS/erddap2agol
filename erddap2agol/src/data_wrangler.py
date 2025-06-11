@@ -510,9 +510,11 @@ class DatasetWrangler:
 
         urls     : List[str] = []
         suffixes : List[Optional[str]] = []        
-
+        # change this for by variable
+        by_variable =False
         def _assemble(sel: str, label_suffix: Optional[str]):
             """Inner helper to append one or many URLs + matching suffix."""
+            # if core.user_options.mult_dim_bool and self.mult_dim:
             if core.user_options.mult_dim_bool and self.mult_dim:
                 vars_query = ",".join(
                     f"{quote(v, safe='')}{sel}{alt_sel}{lat_sel}{lon_sel}"
@@ -520,11 +522,21 @@ class DatasetWrangler:
                 )
                 urls.append(f"{base_url}{self.dataset_id}.{dataformat}?{vars_query}")
                 suffixes.append(label_suffix)
-            else:
+            # mult dim bool does not impact multiple attributes, just time dimension
+            elif not core.user_options.mult_dim_bool and self.mult_dim:
+                vars_query = ",".join(
+                    f"{quote(v, safe='')}{sel}{alt_sel}{lat_sel}{lon_sel}"
+                    for v in variables
+                )
+                urls.append(f"{base_url}{self.dataset_id}.{dataformat}?{vars_query}")
+                suffixes.append(label_suffix)
+            elif by_variable:
                 for v in variables:
                     query = f"{quote(v, safe='')}{sel}{alt_sel}{lat_sel}{lon_sel}"
                     urls.append(f"{base_url}{self.dataset_id}.{dataformat}?{query}")
                     suffixes.append(label_suffix)
+                    # so we dont get an error later
+                    core.user_options.mult_dim_bool = False
 
       
         if self.griddap_args and self.griddap_args.get("division"):

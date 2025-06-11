@@ -416,9 +416,9 @@ class AgolWrangler:
 
                         #output cellsize {"distance":60,"units":meters}
                         if idx > 1:
-                            output_name = ds.dataset_id + f"_{idx}"
+                            output_name = ds.dataset_id + f"_{idx}" + f"_{suffix}" 
                         else:
-                            output_name = ds.dataset_id 
+                            output_name = ds.dataset_id + f"_{suffix}" 
                         # try except catch for multidimensional
                         img_item = copy_raster(
                             input_raster=fixed_raster,
