@@ -56,6 +56,8 @@ class DatasetWrangler:
     has_error: Optional[bool] = False
     ignore_error: Optional[bool] = False
     has_time: Optional[bool] = True
+    # new
+    has_alt: Optional[bool] = False
     time_str: Optional[str] = None
     
     lat_range = None
@@ -412,14 +414,17 @@ class DatasetWrangler:
         dim_tokens = {
             "latitude",
             "longitude",
-            "altitude", "zlev","depth", "NC_GLOBAL",
+            "altitude", "zlev","depth", "NC_GLOBAL", "l2_lat", "l2_lon", "l2_time"   
         }
         z_dim = ["altitude", "depth", "zlev"]
 
         has_alt = any(attr.lower() in z_dim for attr in (self.attribute_list or []))
         if has_alt:
             print("Altitude/depth axis detected -> adding [0] slice")
-            alt_sel = "%5B0%5D" 
+            alt_sel = "%5B0%5D"
+            for attr in self.attribute_list:
+                if attr in z_dim:  
+                    self.attribute_list.remove(attr)
         else:
              alt_sel = ""
 
