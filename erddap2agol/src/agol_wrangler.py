@@ -16,6 +16,7 @@ from pathlib import Path
 #from line_profiler import profile
 from collections import deque
 import concurrent.futures
+import re
 # sharing levels
 # PRIVATE
 # ORGANIZATION
@@ -325,6 +326,21 @@ class AgolWrangler:
                     else:
                         raise
             raise RuntimeError("Exceeded publish() retries.")
+        
+        def _copy_raster_or_retry(max_attempts=5, **kwargs):
+            attempt = 0
+            while attempt < max_attempts:
+                try:
+                    return copy_raster(**kwargs)
+                except Exception as ex:
+                    # Typical collision comes back as a 409 / “already exists”
+                    if "409" in str(ex) and "already exists" in str(ex):
+                        attempt += 1
+                        kwargs["output_name"] = f"{kwargs['output_name']}_{attempt}"
+                        time.sleep(1)
+                    else:
+                        raise
+            raise RuntimeError("Exceeded copy_raster retries.")
 
         def adjustSharingCapabilities(img_item):
             try:
@@ -381,6 +397,12 @@ class AgolWrangler:
             idx = 0
             for path, suffix in zip(paths, titles):
                 idx += 1
+
+                id_suffix = ""
+                if suffix:
+                    id_suffix = re.sub(r'[^0-9A-Za-z_]+', '_', suffix.replace('-', '_'))
+                    id_suffix = id_suffix.strip('_')
+
                 base_title = ds.dataset_title
                 item_title = f"{base_title}: {suffix}" if suffix else base_title
         
@@ -416,11 +438,12 @@ class AgolWrangler:
 
                         #output cellsize {"distance":60,"units":meters}
                         if idx > 1:
-                            output_name = ds.dataset_id + f"_{idx}" + f"_{suffix}" 
+                            output_name = f"{ds.dataset_id}_{idx}_{id_suffix}"
                         else:
-                            output_name = ds.dataset_id + f"_{suffix}" 
+                            output_name = f"{ds.dataset_id}_{id_suffix}"
                         # try except catch for multidimensional
-                        img_item = copy_raster(
+                        raster_display_params = {"StretchType": "StdDev; -2; 2"}
+                        img_item = _copy_raster_or_retry(
                             input_raster=fixed_raster,
                             raster_type_name="NetCDF",
                             gis=self.gis,
@@ -428,6 +451,7 @@ class AgolWrangler:
                             process_as_multidimensional=multdim_proc,
                             output_name= output_name,
                             context=context,
+                            raster_type_params=raster_display_params
                         )
                         # copy_raster already returns the imagery layer item
                         img_item.update(item_properties=self.mapItemProperties(ds.dataset_id))
@@ -444,7 +468,7 @@ class AgolWrangler:
                         adjustSharingCapabilities(img_item)
 
                     processed += 1
-                    print(f"Imagery published: {img_item.title}")
+                    print(f"\nImagery published: {img_item.title}")
 
                 except concurrent.futures.TimeoutError:
                     print(f"TIMEOUT: {ds.dataset_title}")
