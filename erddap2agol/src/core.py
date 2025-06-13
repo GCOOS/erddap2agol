@@ -60,7 +60,7 @@ def erddapSelection(GliderServ = False, nrtAdd = False, protocol: str = None) ->
                     print("\nContinuing with selected server...")
                     if nrtAdd is True:
                         erddapObj.is_nrt = True
-                        erddapObj.protocol = protocol
+                        erddapObj.protocol = "tabledap"
                         return erddapObj
                     else:
                         erddapObj.protocol = protocol
@@ -111,23 +111,21 @@ def selectDatasetFromList(erddapObj, dispLength: int = 50, interactive: bool = T
         root         = original_info.split("/erddap/")[0] + "/erddap"
 
         # ------- build the correct search URL -------
-        if erddapObj.is_nrt:
-            # NRT queries always use /search/advanced.json with a relative time window
+        if erddapObj.is_nrt is True:
+            original_info = erddapObj.serverInfo
+            base_url = original_info.split('/erddap/')[0] + '/erddap'
             if search_term:
                 search_url = (
-                    f"{root}/search/advanced.json?"
+                    f"{base_url}/search/advanced.json?"
                     f"searchFor={search_term}"
-                    f"&page=1&itemsPerPage=10000000"
-                    f"&minTime=now-{erddapObj.moving_window_days}days"
-                    f"&maxTime=&protocol={erddapObj.protocol}"
+                    f"&page=1&itemsPerPage=10000000&minTime=now-{erddapObj.moving_window_days}days&maxTime=&protocol={erddapObj.protocol}"
                 )
             else:
                 search_url = (
-                    f"{root}/search/advanced.json?"
-                    f"page=1&itemsPerPage=10000000"
-                    f"&minTime=now-{erddapObj.moving_window_days}days"
-                    f"&maxTime=&protocol={erddapObj.protocol}"
+                    f"{base_url}/search/advanced.json?"
+                    f"page=1&itemsPerPage=10000000&minTime=now-{erddapObj.moving_window_days}days&maxTime=&protocol={erddapObj.protocol}"
                 )
+                
         else:
             # historic catalogue search
             if search_term:

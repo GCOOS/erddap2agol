@@ -307,8 +307,10 @@ class ERDDAPHandler:
                 ds_id   = row[idx_id]
                 proto   = row[idx_proto]
 
-                if proto == "" or ds_id == "allDatasets":
-                    continue  # skip unsupported rows
+                if idx_proto is not None and row[idx_proto] == "":
+                    continue
+                if ds_id == "allDatasets":
+                    continue
 
                 title = row[idx_ttl] if idx_ttl is not None else ""
                 min_t = row[idx_min] if idx_min is not None else ""
