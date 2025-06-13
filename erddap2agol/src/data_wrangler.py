@@ -747,8 +747,8 @@ class DatasetWrangler:
     def nrtTimeSet(self):
         """Sets data_start_time/data_end_time in ISO format (e.g., 2023-09-29T14:05:12)"""
         now_utc = datetime.now(timezone.utc)
-        seven_days_ago = now_utc - timedelta(days=self.moving_window_days)
-        self.data_start_time = seven_days_ago.strftime('%Y-%m-%dT%H:%M:%S')
+        n_days_ago = now_utc - timedelta(days=self.moving_window_days)
+        self.data_start_time = n_days_ago.strftime('%Y-%m-%dT%H:%M:%S')
         self.data_end_time = now_utc.strftime('%Y-%m-%dT%H:%M:%S')
 
 

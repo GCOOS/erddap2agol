@@ -556,6 +556,7 @@ class OptionsMenu:
     additional_tags: List[str] = None
     bounds: tuple = None
     mult_dim_bool: bool = True
+    mv_days: int = 7
     # share_to_group
 
     def customTitleMenu(self, dataset): 
@@ -627,6 +628,8 @@ def options_menu():
             print("9. Define bounds with Content Item ID (griddap only)")
 
         print("10. Toggle Multidimensional Imagery Option (currently: {})".format(user_options.mult_dim_bool))
+
+        print("10. Set moving window days for next NRT batch (currently: {})".format(user_options.mv_days))
         
         print("\nType **done** to save options and return to main menu")
         
