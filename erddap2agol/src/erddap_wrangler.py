@@ -28,7 +28,7 @@ def cleanTemp() -> None:
     filepath = os.path.join('/arcgis/home', 'e2a_temp')
     if os.path.exists(filepath):
         for filename in os.listdir(filepath):
-            if filename.endswith(".csv") or filename.endswith("geojson") or filename.endswith("nc"):
+            if filename.endswith(".csv") or filename.endswith("geojson") or filename.endswith("nc") or filename.endswith("xml"):
                 full_path = os.path.join(filepath, filename)
                 try:
                     os.remove(full_path)

@@ -442,7 +442,7 @@ class AgolWrangler:
                         else:
                             output_name = f"{ds.dataset_id}_{id_suffix}"
                         # try except catch for multidimensional
-                        raster_display_params = {"StretchType": "StdDev; -2; 2"}
+                        #raster_display_params = {"StretchType": "StdDev; -2; 2"}
                         img_item = _copy_raster_or_retry(
                             input_raster=fixed_raster,
                             raster_type_name="NetCDF",
@@ -451,7 +451,7 @@ class AgolWrangler:
                             process_as_multidimensional=multdim_proc,
                             output_name= output_name,
                             context=context,
-                            raster_type_params=raster_display_params
+                            #raster_type_params=raster_display_params
                         )
                         # copy_raster already returns the imagery layer item
                         img_item.update(item_properties=self.mapItemProperties(ds.dataset_id))
