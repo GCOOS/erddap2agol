@@ -406,11 +406,11 @@ class AgolWrangler:
                         # print(f"{r.spatial_reference}")
                         fixed_raster = self.changeArrayDims(path)
                         r2 = Raster(fixed_raster)
-                        # print(f"\n{r2.spatial_reference}")
+                        # print(f"\n{r2.raster_info}")
                         context = {
                             "upload_properties": {"displayProgress": True},
                             "defineNodata": True,
-                            "outSr":r.spatial_reference,
+                            "outSR":{"wkid": 4326},
                             "noDataArguments": {
                                 "noDataValues": [0],
                                 "numberOfBand": 99,
@@ -432,7 +432,10 @@ class AgolWrangler:
                         else:
                             output_name = f"{ds.dataset_id}_{id_suffix}"
                         # try except catch for multidimensional
-                        #raster_display_params = {"StretchType": "StdDev; -2; 2"}
+                        raster_geo_params = {
+                            "xDimension" : "longitude",   
+                            "yDimension" : "latitude",
+                        }
                         img_item = _copy_raster_or_retry(
                             input_raster=fixed_raster,
                             raster_type_name="NetCDF",
@@ -441,7 +444,7 @@ class AgolWrangler:
                             process_as_multidimensional=multdim_proc,
                             output_name= output_name,
                             context=context,
-                            #raster_type_params=raster_display_params
+                            raster_type_params=raster_geo_params
                         )
                         # copy_raster already returns the imagery layer item
                         img_item.update(item_properties=self.mapItemProperties(ds.dataset_id))
