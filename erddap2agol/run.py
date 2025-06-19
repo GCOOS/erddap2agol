@@ -90,15 +90,6 @@ def add_menu(menu_title:str, glider: bool = False, nrt: bool = False, protocol: 
     else:
         erddapObj.createDatasetObjects(dataset_ids)  
 
-    # if protocol == 'griddap':
-    #     dataset_list, griddap_args = core.selectDatasetFromList(erddapObj)
-    #     erddapObj.createDatasetObjects(dataset_list, griddap_args)
-    # else:
-    #     dataset_list = core.selectDatasetFromList(erddapObj)
-    # # Transforms list into dataset objects 
-    #     erddapObj.createDatasetObjects(dataset_list)
-    # erddapObj.createDatasetObjects(dataset_list, griddap_args)
-
     datasetObjlist = (erddapObj.datasets)
 
     for datasetObj in datasetObjlist:
@@ -122,7 +113,7 @@ def add_menu(menu_title:str, glider: bool = False, nrt: bool = False, protocol: 
     
     print("\nReturning to main menu...")
     erddapObj.reset()
-    ec.cleanTemp()
+    # ec.cleanTemp()
     cui()
 
 

@@ -195,17 +195,9 @@ class AgolWrangler:
 
             except Exception as e:
                 print(f"Error creating item properties for {dataset.dataset_title}: {e}")
-            
-            # if self.datasets:
-            #     if isinstance(self.datasets, dw.DatasetWrangler):
-            #         _buildProps(self.datasets)
-            #     else:
-            #         for dataset in self.datasets:
-            #             _buildProps(dataset)
-                
+                         
 
   
-
     def mapItemProperties(self, dataset_id) -> ItemProperties:
         """Map metadata to an item properties attribute of the item class"""
         new_tags = []
@@ -239,7 +231,7 @@ class AgolWrangler:
             license_info=props.get("licenseInfo", "")
         )
     
-    # --- add near the top of AgolWrangler (or in a utils module) -----------------
+    # modify array dims for proper handling on image server or agol
     def changeArrayDims(self, nc_path: str) -> str:
         """
         Returns a path to a NetCDF whose latitude coordinate runs
@@ -249,16 +241,16 @@ class AgolWrangler:
         """
         import xarray as xr, tempfile, os
 
-        ds = xr.open_dataset(nc_path, chunks={})  # lazy open – no big memory hit
+        ds = xr.open_dataset(nc_path, chunks={})  
         lat_name = next((n for n in ('latitude', 'lat', 'y')
                         if n in ds.coords), None)
         if lat_name is None:
             ds.close()
-            return nc_path                                # nothing to do
+            return nc_path                                
 
         if ds[lat_name][0] < ds[lat_name][-1]:
             ds.close()
-            return nc_path                                # already ascending
+            return nc_path                                
 
         # ---- flip latitude & all data variables ----
         ds_flipped = ds.reindex({lat_name: ds[lat_name][::-1]})
@@ -270,9 +262,7 @@ class AgolWrangler:
 
     def postAndPublishImagery(self, timeoutTime: int = 600) -> None:
         """Publish locally-downloaded rasters in ``self.datasets`` as **hosted imagery
-        layers** (Image Services) without any hard-coded folder names.
-
-        """
+        layers** (Image Services) without any hard-coded folder names."""
 
         # helper utilities
         def _try_rename(src: str, dst: str, attempts: int = 5, delay: float = 1):

@@ -122,16 +122,16 @@ class ERDDAPHandler:
             # will be filled in by setErddap()
             self.serverInfo = None
 
-        # per-query working copies ----------------------------------------------
+        # per-query working copies 
         self.datasets:       list[str]                  = []
         self.dataset_titles: dict[str, str]             = {}
         self.dataset_dates:  dict[str, tuple[str, str]] = {}
 
-        # one-time authoritative date cache -------------------------------------
+        # date cache
         self.date_range_cache: dict[str, tuple[str, str]] = {}
         self._date_cache_ready: bool                      = False
 
-        # NRT flags --------------------------------------------------------------
+        # NRT attributes
         self.is_nrt             = False
         self.moving_window_days = 7
 
@@ -436,17 +436,4 @@ class ERDDAPHandler:
         except Exception as err:
             print(f"Unexpected error occurred: {err}")
             return None, None
-
-# custom_server = ERDDAPHandler(
-#     server = None,
-#     serverInfo = None,
-#     datasetid = None,
-#     fileType = None,
-#     geoParams = {
-#     "locationType": "coordinates",
-#     "latitudeFieldName": "latitude__degrees_north_",
-#     "longitudeFieldName": "longitude__degrees_east_",
-#     "timeFieldName": "time__UTC_",
-#     },
-# )
 

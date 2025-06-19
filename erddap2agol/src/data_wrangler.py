@@ -219,17 +219,8 @@ class DatasetWrangler:
                 nxt = min(m_end, end)
                 yield cur, nxt, cur.strftime("%b-%Y")   # e.g. "Jan-2025"
                 cur = nxt + timedelta(days=1)
-    # def setGriddapTimes(self):
-    #     # user
-    #     # data
-    #     # req
-    #     if self.griddap_args["latest_bool"] == True:
-    #         self.user_start_time, self.user_end_time = None, None
-    #         self.req_start_time
-    #         self.req_end_time = self.data_end_time
 
-    #     elif self.griddap_args["user_data_end_time"] > self.data_end_time:
-    #         print(f"\nThe requested end time {self.griddap_args["user_data_end_time"]} exceeds the datasets end time")
+    # May want to add additional attributes for raster handling
     def getGeographicRange(self) -> None:
         self.lon_range = self.nc_global['geospatial_lon_min']["value"], self.nc_global['geospatial_lon_max']["value"]
         self.lat_range = self.nc_global['geospatial_lat_min']["value"], self.nc_global['geospatial_lat_max']["value"]

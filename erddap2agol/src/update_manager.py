@@ -21,7 +21,6 @@ class UpdateManager:
             self.gis = GIS("home")
             print(
                 f"\nSuccessfully connected to {self.gis.properties.portalName} "
-                # f"as {self.gis.users.me.username}."
             )
         except Exception as e:
             print(f"UH OH! AGOL connection error: {e}")
