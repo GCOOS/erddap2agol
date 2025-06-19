@@ -148,8 +148,8 @@ class AgolWrangler:
                 item_type = "imageCollection"
             try:
                 props = {
-                    "type": {self.filetype},
-                    "item_type": {item_type},
+                    "type": self.filetype,
+                    "item_type": item_type,
                     "tags": ["erddap2agol", f"did_{dataset.dataset_id}"]
                 }
                 
@@ -480,7 +480,8 @@ class AgolWrangler:
 
    
     @skipFromError
-    def postAndPublish(self, inputDataType, timeoutTime=300) -> None:
+    def postAndPublish(self, inputDataType="csv", timeoutTime=300) -> None:
+    
         """Publishes all datasets in self.datasets to ArcGIS, handling subsets if needed."""
         geom_params = self.geoParams.copy()
         geom_params.pop('hasStaticData', None)  # Remove if exists, as done in stable code
@@ -547,7 +548,8 @@ class AgolWrangler:
                 while attempt < max_attempts:
                     try:
                         print(f"Attempt {attempt+1}: Trying to add item with title: {props.get('title')} and file: {os.path.basename(file)}")
-                        item_future = user_root.add(item_properties=self.mapItemProperties(dataset_id=dataset.dataset_id), file=file)
+                        item_props= self.mapItemProperties(dataset_id=dataset.dataset_id)
+                        item_future = user_root.add(item_properties=item_props, file=file)
                         item = item_future.result()
                         return item
                     except Exception as e:
